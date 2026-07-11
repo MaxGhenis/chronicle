@@ -18,8 +18,9 @@ before merge:
   the later row's ``assertionVersion.supersedes`` must name the version ID
   of the row it replaces.
 - after witnessed genesis, every byte append carries exactly one next canonical
-  release manifest and two independently anchored RFC 3161 receipts; all prior
-  release files remain byte-immutable against the PR's base commit.
+  release manifest, its producer signature, and two independently anchored
+  RFC 3161 receipts; all prior release files remain byte-immutable against the
+  PR's base commit.
 
 Usage:
     python3 scripts/check_thesis_facts_append.py [--base-ref REF]
@@ -33,6 +34,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import pathlib
 import re
 import subprocess
@@ -43,6 +45,7 @@ from canonical_json import canonical_sha256
 from verify_release_chain import (
     ANCHORS,
     MANIFEST_RE,
+    PRODUCER_PUBLIC_KEY_FILENAME,
     ReleaseChainError,
     git_blob_bytes,
     git_file_entry,
@@ -51,14 +54,33 @@ from verify_release_chain import (
     verify_release_history_immutable,
 )
 
-ROOT = pathlib.Path(__file__).resolve().parents[1]
+CODE_ROOT = pathlib.Path(__file__).resolve().parents[1]
+ROOT = CODE_ROOT
 LEDGER_PATH = ROOT / "ledger" / "official_observations.jsonl"
 PREFIX_PATH = ROOT / "ledger" / "immutable_prefix.json"
 RELEASE_MANIFEST_PREFIX = "releases/manifests/"
 GENESIS_SUPPORT_FILES = {
     "releases/README.md",
     *(f"releases/anchors/{spec.filename}" for spec in ANCHORS.values()),
+    f"releases/anchors/{PRODUCER_PUBLIC_KEY_FILENAME}",
 }
+
+GATE_SURFACE = frozenset(
+    {
+        "scripts/check_thesis_facts_append.py",
+        "scripts/verify_release_chain.py",
+        "scripts/canonical_json.py",
+        "scripts/cut_release_manifest.py",
+        ".github/workflows/thesis-facts-append.yml",
+        "releases/anchors/**",
+    }
+)
+DATA_SURFACE = frozenset(
+    {
+        "ledger/**",
+        "releases/manifests/**",
+    }
+)
 
 ASSERTION_CONTENT_KEYS = (
     "source_record_id",
@@ -75,6 +97,106 @@ ASSERTION_CONTENT_KEYS = (
 
 class AppendError(ValueError):
     """The proposed ledger change violates an append invariant."""
+
+
+def _set_root(root: pathlib.Path) -> None:
+    """Select the candidate worktree without changing the trusted code root.
+
+    Pull-request CI executes this module from a detached checkout of the base
+    commit, while ``--root`` points at the checked-out PR merge tree. Imports
+    and production anchors therefore remain rooted at immutable ``CODE_ROOT``;
+    only candidate data paths and git comparisons use ``ROOT``.
+    """
+
+    global ROOT, LEDGER_PATH, PREFIX_PATH
+    ROOT = root.resolve()
+    LEDGER_PATH = ROOT / "ledger" / "official_observations.jsonl"
+    PREFIX_PATH = ROOT / "ledger" / "immutable_prefix.json"
+
+
+def _git_output(arguments: list[str]) -> bytes:
+    try:
+        completed = subprocess.run(
+            ["git", *arguments],
+            cwd=ROOT,
+            check=False,
+            capture_output=True,
+        )
+    except FileNotFoundError as exc:
+        raise AppendError("git is required for --base-ref verification") from exc
+    if completed.returncode != 0:
+        diagnostic = completed.stderr.decode(
+            "utf-8", errors="replace"
+        ).strip()
+        raise AppendError(
+            f"git {' '.join(arguments)} failed: {diagnostic}"
+        )
+    return completed.stdout
+
+
+def _resolve_base_commit(base_ref: str) -> str:
+    completed = _git_output(
+        ["rev-parse", "--verify", "--end-of-options", f"{base_ref}^{{commit}}"]
+    )
+    commit = completed.decode("ascii").strip()
+    _git_output(["merge-base", "--is-ancestor", commit, "HEAD"])
+    return commit
+
+
+def _nul_paths(payload: bytes) -> set[str]:
+    return {os.fsdecode(path) for path in payload.split(b"\0") if path}
+
+
+def _matches_surface(path: str, surface: frozenset[str]) -> bool:
+    for pattern in surface:
+        if pattern.endswith("/**"):
+            if path.startswith(pattern[:-2]):
+                return True
+        elif path == pattern:
+            return True
+    return False
+
+
+def check_surface_separation(base_ref: str) -> tuple[set[str], set[str]]:
+    """Return data/gate changes and reject a proposal that combines them."""
+
+    commit = _resolve_base_commit(base_ref)
+    changed = _nul_paths(
+        _git_output(
+            [
+                "diff",
+                "--name-only",
+                "-z",
+                "--no-renames",
+                "--no-ext-diff",
+                "--no-textconv",
+                commit,
+                "--",
+            ]
+        )
+    )
+    # ``git diff`` excludes untracked files. Tests mint release siblings before
+    # staging them, and a newly added anchor must still classify as gate code.
+    changed.update(
+        _nul_paths(
+            _git_output(
+                ["ls-files", "--others", "--exclude-standard", "-z", "--"]
+            )
+        )
+    )
+    data_changes = {
+        path for path in changed if _matches_surface(path, DATA_SURFACE)
+    }
+    gate_changes = {
+        path for path in changed if _matches_surface(path, GATE_SURFACE)
+    }
+    if data_changes and gate_changes:
+        raise AppendError(
+            "mixed data/gate proposal is forbidden: DATA_SURFACE changes="
+            f"{sorted(data_changes)}; GATE_SURFACE changes="
+            f"{sorted(gate_changes)}; split them into separate pull requests"
+        )
+    return data_changes, gate_changes
 
 
 def _lines(text: str) -> list[str]:
@@ -379,7 +501,7 @@ def _release_triple(
     *,
     allowed_support_files: set[str] | None = None,
 ) -> pathlib.Path:
-    """Require exactly one new manifest and its two mapped receipt files."""
+    """Require exactly one manifest, producer signature, and two receipts."""
 
     manifest_files = [
         relative
@@ -405,14 +527,16 @@ def _release_triple(
     expected = {
         manifest_relative,
         *(f"{RELEASE_MANIFEST_PREFIX}{stem}.{tsa}.tsr" for tsa in ANCHORS),
+        f"{RELEASE_MANIFEST_PREFIX}{stem}.producer.sig",
     }
     allowed = expected | (allowed_support_files or set())
     if new_files != expected and not (
         expected <= new_files and new_files <= allowed
     ):
         raise AppendError(
-            "release proposal must add its manifest and exactly the freetsa "
-            "and digicert receipts with no other releases/ changes; "
+            "release proposal must add its manifest, producer signature, and "
+            "exactly the freetsa and digicert receipts with no other releases/ "
+            "changes; "
             f"missing={sorted(expected - new_files)}, "
             f"extra={sorted(new_files - allowed)}"
         )
@@ -437,14 +561,15 @@ def check_release_proposal(
     base_ref: str,
     *,
     anchor_dir: pathlib.Path | None = None,
+    enforce_production_pins: bool | None = None,
 ) -> int | None:
     """Verify the base chain and the one allowed candidate transition.
 
     A pre-genesis base keeps legacy append proposals valid only while they do
-    not touch ``releases/``.  Genesis may add the two prescribed anchors and
-    README alongside its exact manifest/receipt triple.  Once genesis exists,
+    not touch ``releases/``.  Genesis may add the prescribed anchors and README
+    alongside its exact manifest/signature/receipt bundle.  Once genesis exists,
     all base release files are byte- and mode-immutable and a ledger byte
-    append must carry exactly one next release triple.
+    append must carry exactly one next release bundle.
     """
 
     try:
@@ -466,15 +591,17 @@ def check_release_proposal(
     candidate_bytes = LEDGER_PATH.read_bytes()
     appended_bytes = _check_exact_byte_append(base_bytes, candidate_bytes)
     ledger_changed = bool(appended_bytes)
-    enforce_production_pins = anchor_dir is None
+    if enforce_production_pins is None:
+        enforce_production_pins = anchor_dir is None
 
     if not base_has_chain:
         if not candidate_has_chain:
             if new_files:
                 raise AppendError(
                     "legacy pre-genesis proposal must not change releases/; "
-                    "add a complete genesis manifest and both receipts or no "
-                    f"release files at all (changed={sorted(new_files)})"
+                    "add a complete genesis manifest, producer signature, and "
+                    "both receipts or no release files at all "
+                    f"(changed={sorted(new_files)})"
                 )
             return None
         _release_triple(
@@ -539,20 +666,24 @@ def check_release_proposal(
 
 
 def check_release_chain_without_base(
-    *, anchor_dir: pathlib.Path | None = None
+    *,
+    anchor_dir: pathlib.Path | None = None,
+    enforce_production_pins: bool | None = None,
 ) -> int | None:
     """On push, verify any initialized chain against working-tree state."""
 
     manifest_directory = ROOT / "releases" / "manifests"
     if not manifest_directory.is_dir() or not any(manifest_directory.iterdir()):
         return None
+    if enforce_production_pins is None:
+        enforce_production_pins = anchor_dir is None
     try:
         verification = verify_release_chain(
             ROOT,
             anchor_dir=anchor_dir,
             require_chain=True,
             verify_state=True,
-            enforce_production_pins=anchor_dir is None,
+            enforce_production_pins=enforce_production_pins,
         )
     except ReleaseChainError as exc:
         raise AppendError(str(exc)) from exc
@@ -563,6 +694,12 @@ def check_release_chain_without_base(
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
+        "--root",
+        type=pathlib.Path,
+        default=CODE_ROOT,
+        help="candidate worktree root (defaults to the checker's repository)",
+    )
+    parser.add_argument(
         "--base-ref",
         help="enforce an append-only diff against this git ref",
     )
@@ -572,8 +709,19 @@ def main() -> int:
         help=argparse.SUPPRESS,
     )
     args = parser.parse_args()
-    text = LEDGER_PATH.read_text(encoding="utf-8")
     try:
+        _set_root(args.root)
+        if args.base_ref:
+            _data_changes, gate_changes = check_surface_separation(args.base_ref)
+            if gate_changes:
+                print(
+                    "thesis-facts append check OK: gate-only proposal; "
+                    "DATA_SURFACE unchanged; GATE_SURFACE changes="
+                    f"{sorted(gate_changes)}"
+                )
+                return 0
+
+        text = LEDGER_PATH.read_text(encoding="utf-8")
         reject_non_append_bytes(text)
         lines = _lines(text)
         prefix = check_prefix(lines)
@@ -588,14 +736,24 @@ def main() -> int:
             binding_boundary = check_prefix_anchored_to_base(args.base_ref, prefix)
             appended = check_append_only(args.base_ref, lines)
         check_rows(lines, binding_boundary)
+        # On the PR path, CODE_ROOT is the detached base checkout. Production
+        # verification must use those immutable anchors and the base verifier's
+        # pins, never files supplied by the candidate worktree. The hidden test
+        # override remains unpinned and continues to use generated test anchors.
+        production_pins = args.release_anchor_dir is None
+        anchor_dir = args.release_anchor_dir or (
+            CODE_ROOT / "releases" / "anchors"
+        )
         release_index = (
             check_release_proposal(
                 args.base_ref,
-                anchor_dir=args.release_anchor_dir,
+                anchor_dir=anchor_dir,
+                enforce_production_pins=production_pins,
             )
             if args.base_ref
             else check_release_chain_without_base(
-                anchor_dir=args.release_anchor_dir
+                anchor_dir=anchor_dir,
+                enforce_production_pins=production_pins,
             )
         )
     except AppendError as exc:

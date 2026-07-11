@@ -13,6 +13,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -173,6 +174,185 @@ def _extend_manifest_to_all_lines(lines: list[str]) -> dict:
         ("\n".join(lines) + "\n").encode("utf-8")
     ).hexdigest()
     return manifest
+
+
+def _initialize_surface_fixture(path: Path) -> tuple[list[str], str]:
+    lines = _read_lines()
+    manifest = json.loads(PREFIX_PATH.read_text(encoding="utf-8"))
+    _write_checker_fixture(path, "\n".join(lines) + "\n", manifest)
+    return lines, _init_fixture_repo(path)
+
+
+def _append_surface_fixture_row(path: Path, lines: list[str], identity: str) -> None:
+    row = _appended_row(
+        json.loads(lines[-1]),
+        value_delta=1,
+        source_record_id=identity,
+    )
+    (path / "ledger" / "official_observations.jsonl").write_text(
+        "\n".join([*lines, _json_line(row)]) + "\n",
+        encoding="utf-8",
+    )
+
+
+def _add_untracked_gate_anchor(path: Path) -> Path:
+    anchor = path / "releases" / "anchors" / "test-producer.pub"
+    anchor.parent.mkdir(parents=True, exist_ok=True)
+    anchor.write_text("test public key only\n", encoding="utf-8")
+    return anchor
+
+
+def test_two_class_data_only_proposal_passes(tmp_path):
+    lines, base = _initialize_surface_fixture(tmp_path)
+    _append_surface_fixture_row(
+        tmp_path,
+        lines,
+        "verification.surface.data-only",
+    )
+
+    completed = _run_checker(tmp_path, base)
+
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert "+1 appended vs base" in completed.stdout
+
+
+def test_two_class_gate_only_proposal_passes(tmp_path):
+    _lines, base = _initialize_surface_fixture(tmp_path)
+    _add_untracked_gate_anchor(tmp_path)
+
+    completed = _run_checker(tmp_path, base)
+
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert "gate-only proposal" in completed.stdout
+    assert "DATA_SURFACE unchanged" in completed.stdout
+    assert "releases/anchors/test-producer.pub" in completed.stdout
+
+
+def test_two_class_mixed_proposal_is_rejected_before_data_checks(tmp_path):
+    lines, base = _initialize_surface_fixture(tmp_path)
+    _append_surface_fixture_row(
+        tmp_path,
+        lines,
+        "verification.surface.mixed",
+    )
+    _add_untracked_gate_anchor(tmp_path)
+
+    completed = _run_checker(tmp_path, base)
+
+    assert completed.returncode == 1, completed.stdout + completed.stderr
+    assert (
+        "mixed data/gate proposal is forbidden: DATA_SURFACE changes="
+        "['ledger/official_observations.jsonl']; GATE_SURFACE changes="
+        "['releases/anchors/test-producer.pub']; split them into separate "
+        "pull requests"
+    ) in completed.stderr
+
+
+@pytest.mark.parametrize(
+    "dependency",
+    ["canonical_json.py", "verify_release_chain.py"],
+)
+def test_base_gate_uses_base_script_and_dependency_imports(
+    tmp_path,
+    dependency: str,
+):
+    candidate = tmp_path / "candidate"
+    candidate.mkdir()
+    _lines, base = _initialize_surface_fixture(candidate)
+
+    base_gate = tmp_path / "base-gate"
+    subprocess.run(
+        ["git", "clone", "--no-checkout", str(candidate), str(base_gate)],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(base_gate),
+            "fetch",
+            "--no-tags",
+            "--depth",
+            "1",
+            "origin",
+            base,
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(base_gate), "checkout", "--detach", base],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    candidate_gate_marker = tmp_path / "candidate-gate-executed"
+    candidate_dependency_marker = tmp_path / "candidate-dependency-imported"
+    (candidate / "scripts" / "check_thesis_facts_append.py").write_text(
+        "from pathlib import Path\n"
+        f"Path({str(candidate_gate_marker)!r}).write_text('executed')\n"
+        "raise SystemExit(97)\n",
+        encoding="utf-8",
+    )
+    (candidate / "scripts" / dependency).write_text(
+        "from pathlib import Path\n"
+        f"Path({str(candidate_dependency_marker)!r}).write_text('imported')\n"
+        "raise RuntimeError('candidate dependency imported')\n",
+        encoding="utf-8",
+    )
+
+    environment = os.environ.copy()
+    environment["PYTHONPATH"] = str(base_gate / "scripts")
+    environment["PYTHONNOUSERSITE"] = "1"
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(base_gate / "scripts" / "check_thesis_facts_append.py"),
+            "--root",
+            str(candidate),
+            "--base-ref",
+            base,
+        ],
+        cwd=tmp_path,
+        env=environment,
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert "gate-only proposal" in completed.stdout
+    assert not candidate_gate_marker.exists()
+    assert not candidate_dependency_marker.exists()
+
+
+def test_workflow_has_a_base_owned_trusted_pr_gate():
+    workflow = (
+        ROOT / ".github" / "workflows" / "thesis-facts-append.yml"
+    ).read_text(encoding="utf-8")
+
+    # A pull_request workflow is loaded from the candidate merge ref, so its
+    # detached base-script step can itself be replaced. Once installed on the
+    # default branch, the base-owned target event is not candidate-controlled;
+    # it fetches the merge ref as inert data and executes only base modules.
+    for required in (
+        "\n  pull_request_target:\n",
+        "permissions:\n  contents: read\n",
+        "trusted-base-append-gate:",
+        "name: Trusted base append gate",
+        '[[ "$BASE_SHA" =~ ^[0-9a-f]{40,64}$ ]]',
+        '[[ "$MERGE_SHA" =~ ^[0-9a-f]{40,64}$ ]]',
+        '[[ "$PR_NUMBER" =~ ^[0-9]+$ ]]',
+        '"+refs/pull/${PR_NUMBER}/merge:refs/remotes/origin/pr-merge"',
+        'PYTHONPATH="$base_gate/scripts"',
+        'python3 "$base_gate/scripts/check_thesis_facts_append.py"',
+        '--root "$candidate"',
+        '--base-ref "$BASE_SHA"',
+    ):
+        assert required in workflow
 
 
 def test_base_check_rejects_an_existing_line_rewrite():

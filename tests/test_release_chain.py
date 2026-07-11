@@ -34,16 +34,23 @@ from canonical_json import canonical_bytes  # noqa: E402
 from check_thesis_facts_append import (  # noqa: E402
     expected_assertion_version_id,
 )
+import cut_release_manifest as cutter_module  # noqa: E402
 from cut_release_manifest import (  # noqa: E402
     TSA_ENDPOINTS,
     ReleaseCutError,
+    _build_manifest,
     cut_release_manifest,
 )
 from verify_release_chain import (  # noqa: E402
+    ChainVerification,
+    PRODUCER_PUBLIC_KEY_FILENAME,
+    PRODUCER_SPKI_SHA256,
     ReleaseChainError,
     load_manifest,
     manifest_filename,
+    producer_signature_path_for_manifest,
     validate_manifest_schema,
+    verify_producer_signature_bytes,
 )
 
 
@@ -55,6 +62,10 @@ class ReleaseEnvironment:
     @property
     def anchors(self) -> Path:
         return self.tsa / "anchors"
+
+    @property
+    def producer_signing_key(self) -> Path:
+        return self.tsa / "producer-ed25519-private.pem"
 
 
 def _run(
@@ -115,6 +126,60 @@ def _created_at() -> str:
     # producer timestamp solely because the two clocks straddle a second.
     value = datetime.now(timezone.utc) - timedelta(seconds=1)
     return value.isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
+def _generate_producer_keypair(
+    directory: Path,
+    *,
+    public_key: Path | None = None,
+) -> Path:
+    directory.mkdir(parents=True, exist_ok=True)
+    private_key = directory / "producer-ed25519-private.pem"
+    _run(
+        [
+            "openssl",
+            "genpkey",
+            "-algorithm",
+            "ED25519",
+            "-out",
+            str(private_key),
+        ],
+        cwd=directory,
+    )
+    if public_key is not None:
+        public_key.parent.mkdir(parents=True, exist_ok=True)
+        _run(
+            [
+                "openssl",
+                "pkey",
+                "-in",
+                str(private_key),
+                "-pubout",
+                "-out",
+                str(public_key),
+            ],
+            cwd=directory,
+        )
+    return private_key
+
+
+def _sign_producer_payload(payload: Path, signature: Path, key: Path) -> None:
+    _run(
+        [
+            "openssl",
+            "pkeyutl",
+            "-sign",
+            "-inkey",
+            str(key),
+            "-rawin",
+            "-in",
+            str(payload),
+            "-out",
+            str(signature),
+        ],
+        cwd=payload.parent,
+    )
+    assert len(signature.read_bytes()) == 64
 
 
 def _release_manifest(
@@ -205,6 +270,9 @@ def _write_release(
     *,
     signers: dict[str, str] | None = None,
     signed_payloads: dict[str, Path] | None = None,
+    producer_key: Path | None = None,
+    producer_signed_payload: Path | None = None,
+    include_producer_signature: bool = True,
 ) -> Path:
     raw = canonical_bytes(manifest) + b"\n"
     directory = environment.repo / "releases" / "manifests"
@@ -216,6 +284,12 @@ def _write_release(
         payload = (signed_payloads or {}).get(slot, path)
         signer = (signers or {}).get(slot, slot)
         _mint_receipt(payload, receipt, tsa=environment.tsa, signer=signer)
+    if include_producer_signature:
+        _sign_producer_payload(
+            producer_signed_payload or path,
+            producer_signature_path_for_manifest(path),
+            producer_key or environment.producer_signing_key,
+        )
     return path
 
 
@@ -334,6 +408,10 @@ def pregenesis_template(tmp_path_factory: pytest.TempPathFactory) -> ReleaseEnvi
     repo.mkdir()
     tsa = root / "release_tsa"
     shutil.copytree(TSA_FIXTURE, tsa)
+    _generate_producer_keypair(
+        tsa,
+        public_key=tsa / "anchors" / PRODUCER_PUBLIC_KEY_FILENAME,
+    )
     _initialize_repo(repo)
     return ReleaseEnvironment(repo=repo, tsa=tsa)
 
@@ -614,6 +692,121 @@ def test_verifier_cli_full_chain_passes(
     assert "release chain OK: 2 releases" in completed.stdout
 
 
+@pytest.mark.parametrize("index", [0, 1])
+def test_verifier_requires_producer_signature_for_every_release(
+    full_chain_environment: ReleaseEnvironment,
+    index: int,
+):
+    manifest = next(
+        (full_chain_environment.repo / "releases" / "manifests").glob(
+            f"{index:04d}-*.json"
+        )
+    )
+    producer_signature_path_for_manifest(manifest).unlink()
+
+    completed = _run_verifier(full_chain_environment)
+
+    assert completed.returncode == 1
+    assert "missing its producer signature" in completed.stderr
+
+
+def test_verifier_rejects_wrong_producer_key_signature(
+    full_chain_environment: ReleaseEnvironment,
+):
+    head = next(
+        (full_chain_environment.repo / "releases" / "manifests").glob(
+            "0001-*.json"
+        )
+    )
+    wrong_key = _generate_producer_keypair(full_chain_environment.tsa / "wrong-key")
+    _sign_producer_payload(
+        head,
+        producer_signature_path_for_manifest(head),
+        wrong_key,
+    )
+
+    completed = _run_verifier(full_chain_environment)
+
+    assert completed.returncode == 1
+    assert "producer Ed25519 signature verification failed" in completed.stderr
+
+
+def test_verifier_rejects_producer_signature_over_different_bytes(
+    full_chain_environment: ReleaseEnvironment,
+):
+    head = next(
+        (full_chain_environment.repo / "releases" / "manifests").glob(
+            "0001-*.json"
+        )
+    )
+    different = full_chain_environment.tsa / "different-producer-payload.json"
+    different.write_bytes(b'{"different":true}\n')
+    _sign_producer_payload(
+        different,
+        producer_signature_path_for_manifest(head),
+        full_chain_environment.producer_signing_key,
+    )
+
+    completed = _run_verifier(full_chain_environment)
+
+    assert completed.returncode == 1
+    assert "producer Ed25519 signature verification failed" in completed.stderr
+
+
+def test_verifier_rejects_non_raw_producer_signature_size(
+    full_chain_environment: ReleaseEnvironment,
+):
+    head = next(
+        (full_chain_environment.repo / "releases" / "manifests").glob(
+            "0001-*.json"
+        )
+    )
+    producer_signature_path_for_manifest(head).write_bytes(b"not-64-bytes")
+
+    completed = _run_verifier(full_chain_environment)
+
+    assert completed.returncode == 1
+    assert "must be exactly 64 raw bytes" in completed.stderr
+
+
+def test_verifier_rejects_unpinned_producer_public_key(
+    tmp_path: Path,
+):
+    anchors = tmp_path / "anchors"
+    _generate_producer_keypair(
+        tmp_path / "wrong-production-key",
+        public_key=anchors / PRODUCER_PUBLIC_KEY_FILENAME,
+    )
+
+    with pytest.raises(ReleaseChainError, match="SPKI is not code-pinned"):
+        verify_producer_signature_bytes(
+            b'{"manifest":true}\n',
+            b"\0" * 64,
+            anchor_dir=anchors,
+            enforce_production_pin=True,
+            label="tampered-key.producer.sig",
+        )
+
+
+def test_committed_producer_public_key_matches_spki_pin():
+    completed = subprocess.run(
+        [
+            "openssl",
+            "pkey",
+            "-pubin",
+            "-in",
+            str(ROOT / "releases" / "anchors" / PRODUCER_PUBLIC_KEY_FILENAME),
+            "-outform",
+            "DER",
+        ],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+    )
+
+    assert _sha256(completed.stdout) == PRODUCER_SPKI_SHA256
+
+
 def test_cutter_no_tsa_writes_only_canonical_genesis(
     pregenesis_environment: ReleaseEnvironment,
 ):
@@ -622,6 +815,7 @@ def test_cutter_no_tsa_writes_only_canonical_genesis(
         repo="PolicyEngine/ledger",
         branch="release-chain-test",
         no_tsa=True,
+        no_sign=True,
         anchor_dir=pregenesis_environment.anchors,
     )
 
@@ -633,6 +827,7 @@ def test_cutter_no_tsa_writes_only_canonical_genesis(
     assert digest == _sha256(raw)
     assert not path.with_name(f"{path.stem}.freetsa.tsr").exists()
     assert not path.with_name(f"{path.stem}.digicert.tsr").exists()
+    assert not producer_signature_path_for_manifest(path).exists()
 
 
 def test_cutter_builds_and_verifies_exact_next_append(
@@ -647,6 +842,7 @@ def test_cutter_builds_and_verifies_exact_next_append(
         chain_environment.repo,
         repo="PolicyEngine/ledger",
         branch="release-chain-test",
+        signing_key=chain_environment.producer_signing_key,
         anchor_dir=chain_environment.anchors,
         requester=_local_timestamp_requester(chain_environment),
     )
@@ -657,6 +853,7 @@ def test_cutter_builds_and_verifies_exact_next_append(
     assert manifest["releaseIndex"] == 1
     assert manifest["append"]["appendedRowCount"] == 1
     assert manifest["append"]["appendedBytesSha256"] == _sha256(suffix)
+    assert len(producer_signature_path_for_manifest(path).read_bytes()) == 64
 
 
 def test_cutter_rejects_wrong_second_tsa_without_partial_files(
@@ -667,6 +864,7 @@ def test_cutter_rejects_wrong_second_tsa_without_partial_files(
             pregenesis_environment.repo,
             repo="PolicyEngine/ledger",
             branch="release-chain-test",
+            signing_key=pregenesis_environment.producer_signing_key,
             anchor_dir=pregenesis_environment.anchors,
             requester=_local_timestamp_requester(
                 pregenesis_environment,
@@ -678,6 +876,532 @@ def test_cutter_rejects_wrong_second_tsa_without_partial_files(
         pregenesis_environment.repo / "releases" / "manifests"
     )
     assert not manifest_directory.exists() or not any(manifest_directory.iterdir())
+
+
+def test_cutter_no_sign_writes_receipt_only_release(
+    pregenesis_environment: ReleaseEnvironment,
+):
+    path = cut_release_manifest(
+        pregenesis_environment.repo,
+        repo="PolicyEngine/ledger",
+        branch="release-chain-test",
+        no_sign=True,
+        anchor_dir=pregenesis_environment.anchors,
+        requester=_local_timestamp_requester(pregenesis_environment),
+    )
+
+    assert path.is_file()
+    assert path.with_name(f"{path.stem}.freetsa.tsr").is_file()
+    assert path.with_name(f"{path.stem}.digicert.tsr").is_file()
+    assert not producer_signature_path_for_manifest(path).exists()
+
+
+def test_cutter_signed_no_tsa_writes_signature_only_release(
+    pregenesis_environment: ReleaseEnvironment,
+):
+    path = cut_release_manifest(
+        pregenesis_environment.repo,
+        repo="PolicyEngine/ledger",
+        branch="release-chain-test",
+        no_tsa=True,
+        signing_key=pregenesis_environment.producer_signing_key,
+        anchor_dir=pregenesis_environment.anchors,
+    )
+
+    _manifest, raw, _digest = load_manifest(path)
+    signature_path = producer_signature_path_for_manifest(path)
+    assert signature_path.is_file()
+    assert len(signature_path.read_bytes()) == 64
+    assert not path.with_name(f"{path.stem}.freetsa.tsr").exists()
+    assert not path.with_name(f"{path.stem}.digicert.tsr").exists()
+    verify_producer_signature_bytes(
+        raw,
+        signature_path.read_bytes(),
+        anchor_dir=pregenesis_environment.anchors,
+        enforce_production_pin=False,
+        label=signature_path.name,
+    )
+
+
+def test_cutter_self_verification_rejects_wrong_signing_key_without_outputs(
+    pregenesis_environment: ReleaseEnvironment,
+):
+    wrong_key = _generate_producer_keypair(
+        pregenesis_environment.tsa / "wrong-cutter-key"
+    )
+
+    with pytest.raises(ReleaseChainError, match="producer Ed25519 signature"):
+        cut_release_manifest(
+            pregenesis_environment.repo,
+            repo="PolicyEngine/ledger",
+            branch="release-chain-test",
+            no_tsa=True,
+            signing_key=wrong_key,
+            anchor_dir=pregenesis_environment.anchors,
+        )
+
+    manifest_directory = (
+        pregenesis_environment.repo / "releases" / "manifests"
+    )
+    assert not manifest_directory.exists() or not any(manifest_directory.iterdir())
+
+
+def test_cutter_refuses_concurrent_signature_overwrite(
+    pregenesis_environment: ReleaseEnvironment,
+):
+    now = datetime.now(timezone.utc) - timedelta(seconds=1)
+    ledger = (
+        pregenesis_environment.repo
+        / "ledger"
+        / "official_observations.jsonl"
+    ).read_bytes()
+    immutable_prefix = (
+        pregenesis_environment.repo / "ledger" / "immutable_prefix.json"
+    ).read_bytes()
+    producer = {
+        "repo": "PolicyEngine/ledger",
+        "branch": "release-chain-test",
+    }
+    manifest, raw = _build_manifest(
+        ledger,
+        immutable_prefix,
+        ChainVerification(()),
+        producer,
+        now=now,
+    )
+    filename = manifest_filename(manifest["releaseIndex"], raw)
+    manifest_path = (
+        pregenesis_environment.repo / "releases" / "manifests" / filename
+    )
+    signature_path = producer_signature_path_for_manifest(manifest_path)
+    sentinel = b"concurrent-writer-owned-this-path"
+    local_request = _local_timestamp_requester(pregenesis_environment)
+    injected = False
+
+    def racing_request(endpoint: str, query: bytes, timeout_seconds: float) -> bytes:
+        nonlocal injected
+        if not injected:
+            signature_path.parent.mkdir(parents=True)
+            signature_path.write_bytes(sentinel)
+            injected = True
+        return local_request(endpoint, query, timeout_seconds)
+
+    with pytest.raises(ReleaseCutError, match="refusing to overwrite"):
+        cut_release_manifest(
+            pregenesis_environment.repo,
+            repo=producer["repo"],
+            branch=producer["branch"],
+            signing_key=pregenesis_environment.producer_signing_key,
+            anchor_dir=pregenesis_environment.anchors,
+            requester=racing_request,
+            now=now,
+        )
+
+    assert signature_path.read_bytes() == sentinel
+    assert not manifest_path.exists()
+    for receipt in (
+        manifest_path.with_name(f"{manifest_path.stem}.freetsa.tsr"),
+        manifest_path.with_name(f"{manifest_path.stem}.digicert.tsr"),
+    ):
+        assert not receipt.exists()
+
+
+def test_cutter_no_sign_reserves_omitted_signature_during_tsa_requests(
+    pregenesis_environment: ReleaseEnvironment,
+):
+    now = datetime.now(timezone.utc) - timedelta(seconds=1)
+    ledger = (
+        pregenesis_environment.repo
+        / "ledger"
+        / "official_observations.jsonl"
+    ).read_bytes()
+    immutable_prefix = (
+        pregenesis_environment.repo / "ledger" / "immutable_prefix.json"
+    ).read_bytes()
+    producer = {
+        "repo": "PolicyEngine/ledger",
+        "branch": "release-chain-test",
+    }
+    manifest, raw = _build_manifest(
+        ledger,
+        immutable_prefix,
+        ChainVerification(()),
+        producer,
+        now=now,
+    )
+    filename = manifest_filename(manifest["releaseIndex"], raw)
+    manifest_path = (
+        pregenesis_environment.repo / "releases" / "manifests" / filename
+    )
+    signature_path = producer_signature_path_for_manifest(manifest_path)
+    sentinel = b"concurrent-omitted-signature"
+    local_request = _local_timestamp_requester(pregenesis_environment)
+    injected = False
+
+    def racing_request(endpoint: str, query: bytes, timeout_seconds: float) -> bytes:
+        nonlocal injected
+        if not injected:
+            signature_path.parent.mkdir(parents=True)
+            signature_path.write_bytes(sentinel)
+            injected = True
+        return local_request(endpoint, query, timeout_seconds)
+
+    with pytest.raises(ReleaseCutError, match="refusing to overwrite"):
+        cut_release_manifest(
+            pregenesis_environment.repo,
+            repo=producer["repo"],
+            branch=producer["branch"],
+            no_sign=True,
+            anchor_dir=pregenesis_environment.anchors,
+            requester=racing_request,
+            now=now,
+        )
+
+    assert signature_path.read_bytes() == sentinel
+    assert not manifest_path.exists()
+    assert not manifest_path.with_name(f"{manifest_path.stem}.freetsa.tsr").exists()
+    assert not manifest_path.with_name(f"{manifest_path.stem}.digicert.tsr").exists()
+
+
+def test_cutter_no_tsa_reserves_omitted_receipts_during_signing(
+    pregenesis_environment: ReleaseEnvironment,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    now = datetime.now(timezone.utc) - timedelta(seconds=1)
+    ledger = (
+        pregenesis_environment.repo
+        / "ledger"
+        / "official_observations.jsonl"
+    ).read_bytes()
+    immutable_prefix = (
+        pregenesis_environment.repo / "ledger" / "immutable_prefix.json"
+    ).read_bytes()
+    producer = {
+        "repo": "PolicyEngine/ledger",
+        "branch": "release-chain-test",
+    }
+    manifest, raw = _build_manifest(
+        ledger,
+        immutable_prefix,
+        ChainVerification(()),
+        producer,
+        now=now,
+    )
+    filename = manifest_filename(manifest["releaseIndex"], raw)
+    manifest_path = (
+        pregenesis_environment.repo / "releases" / "manifests" / filename
+    )
+    receipt_path = manifest_path.with_name(f"{manifest_path.stem}.freetsa.tsr")
+    signature_path = producer_signature_path_for_manifest(manifest_path)
+    sentinel = b"concurrent-omitted-receipt"
+    real_sign = cutter_module._sign_manifest
+
+    def racing_sign(*args, **kwargs):
+        signature = real_sign(*args, **kwargs)
+        receipt_path.parent.mkdir(parents=True)
+        receipt_path.write_bytes(sentinel)
+        return signature
+
+    monkeypatch.setattr(cutter_module, "_sign_manifest", racing_sign)
+
+    with pytest.raises(ReleaseCutError, match="refusing to overwrite"):
+        cut_release_manifest(
+            pregenesis_environment.repo,
+            repo=producer["repo"],
+            branch=producer["branch"],
+            no_tsa=True,
+            signing_key=pregenesis_environment.producer_signing_key,
+            anchor_dir=pregenesis_environment.anchors,
+            now=now,
+        )
+
+    assert receipt_path.read_bytes() == sentinel
+    assert not manifest_path.exists()
+    assert not signature_path.exists()
+    assert not manifest_path.with_name(f"{manifest_path.stem}.digicert.tsr").exists()
+
+
+def test_cutter_rolls_back_signature_with_batch_on_postwrite_failure(
+    pregenesis_environment: ReleaseEnvironment,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    real_verify = cutter_module.verify_release_chain
+    calls = 0
+
+    def fail_committed_verification(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 3:
+            raise ReleaseChainError("forced post-write verification failure")
+        return real_verify(*args, **kwargs)
+
+    monkeypatch.setattr(
+        cutter_module,
+        "verify_release_chain",
+        fail_committed_verification,
+    )
+
+    with pytest.raises(ReleaseChainError, match="forced post-write"):
+        cut_release_manifest(
+            pregenesis_environment.repo,
+            repo="PolicyEngine/ledger",
+            branch="release-chain-test",
+            signing_key=pregenesis_environment.producer_signing_key,
+            anchor_dir=pregenesis_environment.anchors,
+            requester=_local_timestamp_requester(pregenesis_environment),
+        )
+
+    manifest_directory = (
+        pregenesis_environment.repo / "releases" / "manifests"
+    )
+    assert calls == 3
+    assert not manifest_directory.exists() or not any(manifest_directory.iterdir())
+
+
+def test_cutter_rollback_preserves_concurrent_replacement(
+    pregenesis_environment: ReleaseEnvironment,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    real_verify = cutter_module.verify_release_chain
+    calls = 0
+    replacement_path: Path | None = None
+    replacement = b"concurrent-replacement-must-survive"
+
+    def replace_then_fail(*args, **kwargs):
+        nonlocal calls, replacement_path
+        calls += 1
+        if calls == 3:
+            manifest_directory = (
+                pregenesis_environment.repo / "releases" / "manifests"
+            )
+            replacement_path = next(manifest_directory.glob("*.producer.sig"))
+            replacement_path.unlink()
+            replacement_path.write_bytes(replacement)
+            raise ReleaseChainError("forced verification after replacement")
+        return real_verify(*args, **kwargs)
+
+    monkeypatch.setattr(
+        cutter_module,
+        "verify_release_chain",
+        replace_then_fail,
+    )
+
+    with pytest.raises(ReleaseCutError, match="rollback could not remove"):
+        cut_release_manifest(
+            pregenesis_environment.repo,
+            repo="PolicyEngine/ledger",
+            branch="release-chain-test",
+            signing_key=pregenesis_environment.producer_signing_key,
+            anchor_dir=pregenesis_environment.anchors,
+            requester=_local_timestamp_requester(pregenesis_environment),
+        )
+
+    assert calls == 3
+    assert replacement_path is not None
+    assert replacement_path.read_bytes() == replacement
+    remaining = list(replacement_path.parent.iterdir())
+    assert remaining == [replacement_path]
+
+
+def test_batch_write_refuses_intermediate_parent_symlink_swap(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    root = tmp_path / "repo"
+    root.mkdir()
+    external_releases = tmp_path / "external" / "releases"
+    (external_releases / "manifests").mkdir(parents=True)
+    displaced_releases = root / "releases-owned-by-cutter"
+    target = root / "releases" / "manifests" / "candidate.json"
+    real_mkdir = cutter_module.os.mkdir
+    swapped = False
+
+    def racing_mkdir(path, mode=0o777, *, dir_fd=None):
+        nonlocal swapped
+        result = real_mkdir(path, mode, dir_fd=dir_fd)
+        if path == "releases" and dir_fd is not None and not swapped:
+            (root / "releases").rename(displaced_releases)
+            (root / "releases").symlink_to(
+                external_releases,
+                target_is_directory=True,
+            )
+            swapped = True
+        return result
+
+    monkeypatch.setattr(cutter_module.os, "mkdir", racing_mkdir)
+
+    with pytest.raises(ReleaseCutError, match="stable real directory"):
+        cutter_module._exclusive_batch_write(
+            root,
+            {target: b"must-stay-inside-repository"},
+            reserved_paths=[target],
+            verify_written=lambda: None,
+        )
+
+    assert swapped
+    assert (root / "releases").is_symlink()
+    assert not (external_releases / "manifests" / target.name).exists()
+    assert not (displaced_releases / "manifests" / target.name).exists()
+
+
+def test_batch_write_detects_parent_swap_during_verification(tmp_path: Path):
+    root = tmp_path / "repo"
+    manifest_directory = root / "releases" / "manifests"
+    manifest_directory.mkdir(parents=True)
+    external_releases = tmp_path / "external" / "releases"
+    (external_releases / "manifests").mkdir(parents=True)
+    displaced_releases = root / "releases-displaced-during-verification"
+    target = manifest_directory / "candidate.json"
+
+    def swap_parent() -> None:
+        (root / "releases").rename(displaced_releases)
+        (root / "releases").symlink_to(
+            external_releases,
+            target_is_directory=True,
+        )
+
+    with pytest.raises(ReleaseCutError, match="stable real directory"):
+        cutter_module._exclusive_batch_write(
+            root,
+            {target: b"verified-candidate"},
+            reserved_paths=[target],
+            verify_written=swap_parent,
+        )
+
+    assert (root / "releases").is_symlink()
+    assert not (external_releases / "manifests" / target.name).exists()
+    assert not (
+        displaced_releases / "manifests" / target.name
+    ).exists()
+
+
+def test_batch_rollback_preserves_replacement_manifest_directory(tmp_path: Path):
+    root = tmp_path / "repo"
+    root.mkdir()
+    manifest_directory = root / "releases" / "manifests"
+    displaced_directory = root / "releases" / "manifests-owned-by-cutter"
+    target = manifest_directory / "candidate.json"
+
+    def replace_manifest_directory() -> None:
+        manifest_directory.rename(displaced_directory)
+        manifest_directory.mkdir()
+
+    with pytest.raises(ReleaseCutError, match="manifest directory was replaced"):
+        cutter_module._exclusive_batch_write(
+            root,
+            {target: b"owned-candidate"},
+            reserved_paths=[target],
+            verify_written=replace_manifest_directory,
+        )
+
+    assert manifest_directory.is_dir()
+    assert not any(manifest_directory.iterdir())
+    assert displaced_directory.is_dir()
+    assert not (displaced_directory / target.name).exists()
+
+
+def test_batch_rollback_preserves_replacement_releases_directory(tmp_path: Path):
+    root = tmp_path / "repo"
+    root.mkdir()
+    manifest_directory = root / "releases" / "manifests"
+    displaced_releases = root / "releases-owned-by-cutter"
+    target = manifest_directory / "candidate.json"
+
+    def replace_releases_directory() -> None:
+        (root / "releases").rename(displaced_releases)
+        (root / "releases").mkdir()
+
+    with pytest.raises(ReleaseCutError, match="output parent was replaced"):
+        cutter_module._exclusive_batch_write(
+            root,
+            {target: b"owned-candidate"},
+            reserved_paths=[target],
+            verify_written=replace_releases_directory,
+        )
+
+    replacement_releases = root / "releases"
+    assert replacement_releases.is_dir()
+    assert not any(replacement_releases.iterdir())
+    assert displaced_releases.is_dir()
+    assert not (displaced_releases / "manifests" / target.name).exists()
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        [],
+        ["--signing-key", "test-private.pem", "--no-sign"],
+    ],
+)
+def test_cutter_cli_requires_exactly_one_signing_mode(
+    arguments: list[str],
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr(sys, "argv", ["cut_release_manifest.py", *arguments])
+
+    with pytest.raises(SystemExit) as raised:
+        cutter_module.main()
+
+    assert raised.value.code == 2
+
+
+@pytest.mark.parametrize(
+    ("signing_arguments", "expected"),
+    [
+        (
+            ["--signing-key", "runtime-test-private.pem", "--no-tsa"],
+            {
+                "signing_key": Path("runtime-test-private.pem"),
+                "no_sign": False,
+                "no_tsa": True,
+                "message": "producer-signed release written without TSA receipts",
+            },
+        ),
+        (
+            ["--no-sign"],
+            {
+                "signing_key": None,
+                "no_sign": True,
+                "no_tsa": False,
+                "message": "timestamped release written without producer signature",
+            },
+        ),
+    ],
+)
+def test_cutter_cli_forwards_explicit_signing_mode_and_reports_output(
+    signing_arguments: list[str],
+    expected: dict[str, Any],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+):
+    captured: dict[str, Any] = {}
+    returned = tmp_path / "releases" / "manifests" / "0000-test.json"
+
+    def fake_cut(root: Path, **kwargs: Any) -> Path:
+        captured["root"] = root
+        captured.update(kwargs)
+        return returned
+
+    monkeypatch.setattr(cutter_module, "cut_release_manifest", fake_cut)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "cut_release_manifest.py",
+            "--root",
+            str(tmp_path),
+            *signing_arguments,
+        ],
+    )
+
+    assert cutter_module.main() == 0
+
+    assert captured["root"] == tmp_path
+    assert captured["signing_key"] == expected["signing_key"]
+    assert captured["no_sign"] is expected["no_sign"]
+    assert captured["no_tsa"] is expected["no_tsa"]
+    assert expected["message"] in capsys.readouterr().out
 
 
 @pytest.mark.parametrize(
@@ -732,6 +1456,7 @@ def test_verifier_cli_catches_manifest_and_receipt_tampering(
             head,
             head.with_name(f"{head.stem}.freetsa.tsr"),
             head.with_name(f"{head.stem}.digicert.tsr"),
+            producer_signature_path_for_manifest(head),
         ):
             path.unlink()
         if tamper == "wrong-previous":

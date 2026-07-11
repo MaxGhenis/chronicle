@@ -2,9 +2,11 @@
 
 In the gated append flow, each proposed state of
 `ledger/official_observations.jsonl` is committed by a canonical release manifest
-and witnessed by two RFC 3161 timestamp authorities. The manifests form an
+and witnessed by two RFC 3161 timestamp authorities. The producer also signs the
+manifest's exact bytes with the pinned Ed25519 release key. The manifests form an
 append-only hash chain. The receipts let a verifier show that the exact manifest
-bytes existed no later than each receipt's `genTime`.
+bytes existed no later than each receipt's `genTime`; the producer signature
+shows that the pinned release key signed those bytes.
 
 ## Files
 
@@ -15,17 +17,22 @@ the manifest file's SHA-256 digest, a release consists of exactly these files:
 - `releases/manifests/<stem>.json`
 - `releases/manifests/<stem>.freetsa.tsr`
 - `releases/manifests/<stem>.digicert.tsr`
+- `releases/manifests/<stem>.producer.sig`
 
 For example, the receipt for manifest `0007-0123456789abcdef.json` is named
 `0007-0123456789abcdef.freetsa.tsr`, not
 `0007-0123456789abcdef.json.freetsa.tsr`. Receipts are DER-encoded RFC 3161
 responses whose SHA-256 message imprint covers the manifest file's exact bytes.
 Those bytes are canonical JSON produced by `scripts/canonical_json.py`, followed
-by one newline.
+by one newline. The producer sibling is a raw, DER-free 64-byte Ed25519 signature
+over those same exact bytes.
 
 The pinned TSA verification chains are committed as PEM files under
-`releases/anchors/`. Verification does not contact either TSA or any other
-network service.
+`releases/anchors/`. The producer public key is committed there as
+`producer-ed25519.pub`; the verifier pins the SHA-256 digest of its DER
+SubjectPublicKeyInfo to
+`4a90eff40455ce0d853d4bab1608efbdae1efaf8c06054ead6e396c5b0c4846e`.
+Verification does not contact either TSA or any other network service.
 
 ## Manifest schema
 
@@ -57,7 +64,9 @@ Genesis has index zero, a null previous hash, and a null append block. Every
 later release increments the index by one, hashes the preceding manifest file,
 increases the line count, and binds both the row-count delta and the exact byte
 suffix in its append block. Both receipts must verify against their separately
-pinned anchor chain and cover that release's exact manifest bytes.
+pinned anchor chain and cover that release's exact manifest bytes. Every release,
+including genesis, must also carry a valid signature from the pinned producer
+key.
 
 ## Offline verification
 
@@ -67,11 +76,15 @@ Clone the repository at the state you want to inspect and run:
 python3 scripts/verify_release_chain.py --full
 ```
 
-The verifier needs only Python, OpenSSL, the committed manifests and receipts,
-the committed TSA anchors, and the ledger files. It checks canonical bytes,
+The verifier needs Python, OpenSSL, the committed manifests, signatures and
+receipts, the committed anchors, and the ledger files. The project environment's
+`cryptography` dependency provides portable Ed25519 verification; when that
+package is unavailable, the verifier falls back to OpenSSL 3.0 or newer because
+Ed25519 is a one-shot `pkeyutl -rawin` operation. It checks canonical bytes,
 filenames, contiguous indices, previous-manifest links, state and append
-commitments, both timestamp receipts, and timestamp ordering. Any mismatch exits
-nonzero with an error identifying the failed invariant.
+commitments, the producer signature, both timestamp receipts, and timestamp
+ordering. Any mismatch exits nonzero with an error identifying the failed
+invariant.
 
 Retain a trusted checkpoint outside this repository, at minimum the full SHA-256
 digest of a previously accepted head manifest, and compare it with later clones.
@@ -83,11 +96,12 @@ do not publish a uniqueness-enforcing append-only ledger for this repository.
 ## Security properties and limits
 
 Under the configured proposal gate, every ledger append arrives with the next
-manifest and both receipts. This binds the proposed ledger state, immutable
-prefix, previous release, row-count change, and exact appended byte suffix into a
-witnessed chain. Rewriting a checkpointed manifest or producing an unwitnessed or
-internally inconsistent state is therefore detectable by any verifier holding
-that checkpoint.
+manifest, both receipts, and its producer signature. This binds the proposed
+ledger state, immutable prefix, previous release, row-count change, and exact
+appended byte suffix into a witnessed and producer-authenticated chain. Rewriting
+a checkpointed manifest or producing an unwitnessed, unsigned, or internally
+inconsistent state is therefore detectable by any verifier holding that
+checkpoint.
 
 An RFC 3161 `genTime` establishes that the manifest existed no later than that
 time. It does **not** timestamp GitHub's merge or prove when the organization
@@ -95,25 +109,39 @@ accepted the proposal. In the intended pull-request flow the receipts are create
 before the gate can pass and therefore before merge; their times do not upper-bound
 the later acceptance time.
 
-This mechanism provides tamper evidence, not multi-party authorization or admin
-non-repudiation. Governance remains within one GitHub organization:
+The Ed25519 signature proves that the pinned producer key signed the manifest. It
+does not prove that the manifest's claims are correct, that the ledger append was
+properly reviewed, or that GitHub accepted it at a particular time. The overall
+mechanism provides tamper evidence and producer identity, not multi-party
+authorization. Governance remains within one GitHub organization:
 
 - It does not require approval by an independent institution or a second party.
 - An unwitnessed or inconsistent admin direct push turns verification and CI red,
   but repository controls cannot prevent every admin bypass.
-- An admin direct push that includes a valid next manifest and both valid receipts
-  is neither prevented nor distinguishable by offline cryptographic verification
-  from an append merged through the intended pull-request path.
-- The verifier, workflows, and anchors live in the repository they verify. Running
-  the verifier from a clone assumes those security files were not weakened in the
-  same rewrite; independent verification should pin or audit them separately as
-  well as retaining a manifest checkpoint.
+- An admin direct push that includes a valid next manifest, receipts, and producer
+  signature is neither prevented nor distinguishable by offline cryptographic
+  verification from an append merged through the intended pull-request path.
+- Pull requests are split into data and gate classes. A data pull request cannot
+  change the verifier, cutter, canonicalizer, append workflow, or anchors. The
+  ordinary pull-request job runs the base commit's copies of those files against
+  the proposed merge tree, but its workflow definition is candidate-controlled
+  and is therefore test feedback rather than a complete trust root. The
+  `Trusted base append gate` uses `pull_request_target` without executing
+  candidate code. GitHub loads that event's workflow from the repository default
+  branch, so this workflow must also be installed there, or bound as an
+  organization ruleset's required workflow, before that check is active. Do not
+  rely only on a name-based required status: candidate workflow YAML can emit a
+  job with the same display name. A gate-only pull request can change the judge
+  only for later data pull requests. Review controls and external checkpoints
+  therefore remain necessary: a later gate change or an admin rewrite can still
+  weaken future enforcement.
 - The manifest chain hashes manifests, not receipt files. A receipt can be
   replaced by a newer valid receipt over the same manifest without changing later
   manifest hashes unless its exact bytes or digest were retained externally.
-- The production anchors are fixed. There is no in-schema anchor-rotation
-  protocol, so a TSA chain change requires an explicit verifier/schema migration
-  that continues to preserve verification of the old chain.
+- The production anchors and producer key are fixed. There is no in-schema key- or
+  anchor-rotation protocol, so a producer-key or TSA-chain change requires an
+  explicit verifier/schema migration that continues to preserve verification of
+  the old chain.
 - Four-digit indices cap this filename format at release 9999; the current schema
   does not define a rollover.
 

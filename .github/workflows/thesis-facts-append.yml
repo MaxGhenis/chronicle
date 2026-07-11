@@ -19,6 +19,22 @@ on:
       - "scripts/cut_release_manifest.py"
       - "scripts/verify_release_chain.py"
       - ".github/workflows/thesis-facts-append.yml"
+  # When this definition is installed on the repository default branch, this
+  # base-owned event can be the trust root for a required PR workflow. The
+  # ordinary pull_request workflow below still tests the merge ref, but its YAML
+  # is candidate-controlled and cannot by itself prevent a PR from stubbing the
+  # job that invokes the detached base gate.
+  pull_request_target:
+    branches:
+      - codex/thesis-ledger-facts
+    paths:
+      - "ledger/**"
+      - "releases/**"
+      - "scripts/check_thesis_facts_append.py"
+      - "scripts/canonical_json.py"
+      - "scripts/cut_release_manifest.py"
+      - "scripts/verify_release_chain.py"
+      - ".github/workflows/thesis-facts-append.yml"
   push:
     branches:
       - codex/thesis-ledger-facts
@@ -31,9 +47,53 @@ on:
       - "scripts/verify_release_chain.py"
       - ".github/workflows/thesis-facts-append.yml"
 
+permissions:
+  contents: read
+
 jobs:
+  trusted-base-append-gate:
+    name: Trusted base append gate
+    if: github.event_name == 'pull_request_target'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Judge the PR merge tree with the base gate
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          [[ "$BASE_SHA" =~ ^[0-9a-f]{40,64}$ ]]
+          [[ "$MERGE_SHA" =~ ^[0-9a-f]{40,64}$ ]]
+          [[ "$PR_NUMBER" =~ ^[0-9]+$ ]]
+
+          repository_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
+          candidate="$RUNNER_TEMP/thesis-facts-candidate"
+          base_gate="$RUNNER_TEMP/thesis-facts-base-gate"
+
+          git clone --no-checkout "$repository_url" "$candidate"
+          git -C "$candidate" fetch --no-tags origin \
+            "+refs/pull/${PR_NUMBER}/merge:refs/remotes/origin/pr-merge"
+          git -C "$candidate" checkout --detach refs/remotes/origin/pr-merge
+          test "$(git -C "$candidate" rev-parse HEAD)" = "$MERGE_SHA"
+          git -C "$candidate" cat-file -e "${BASE_SHA}^{commit}"
+
+          git clone --no-checkout "$repository_url" "$base_gate"
+          git -C "$base_gate" fetch --no-tags origin "$BASE_SHA"
+          git -C "$base_gate" checkout --detach "$BASE_SHA"
+          test "$(git -C "$base_gate" rev-parse HEAD)" = "$BASE_SHA"
+
+          cd "$RUNNER_TEMP"
+          PYTHONPATH="$base_gate/scripts" \
+            PYTHONNOUSERSITE=1 \
+            python3 "$base_gate/scripts/check_thesis_facts_append.py" \
+              --root "$candidate" \
+              --base-ref "$BASE_SHA"
+
   append-gate:
     name: Append gate
+    if: github.event_name != 'pull_request_target'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -47,9 +107,22 @@ jobs:
           set -euo pipefail
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             base_sha="${{ github.event.pull_request.base.sha }}"
-            git cat-file -e "${base_sha}^{commit}"
-            python3 scripts/check_thesis_facts_append.py \
-              --base-ref "$base_sha"
+            base_gate="$RUNNER_TEMP/thesis-facts-base-gate"
+
+            git -C "$GITHUB_WORKSPACE" cat-file -e "${base_sha}^{commit}"
+            git clone --no-checkout \
+              "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git" \
+              "$base_gate"
+            git -C "$base_gate" fetch --no-tags --depth 1 origin "$base_sha"
+            git -C "$base_gate" checkout --detach "$base_sha"
+            test "$(git -C "$base_gate" rev-parse HEAD)" = "$base_sha"
+
+            cd "$RUNNER_TEMP"
+            PYTHONPATH="$base_gate/scripts" \
+              PYTHONNOUSERSITE=1 \
+              python3 "$base_gate/scripts/check_thesis_facts_append.py" \
+                --root "$GITHUB_WORKSPACE" \
+                --base-ref "$base_sha"
           else
             python3 scripts/check_thesis_facts_append.py
           fi

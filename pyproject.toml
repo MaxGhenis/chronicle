@@ -10,6 +10,7 @@ authors = [
 ]
 
 dependencies = [
+    "cryptography>=46.0.3",
     "sqlmodel>=0.0.22",
     "supabase>=2.0.0",  # Supabase Python client
     "pyyaml>=6.0",
