@@ -1,0 +1,15 @@
+source_id: census_acs
+package_id: census-acs-s0101-sld-lower-utah-age-2024
+dataset: census_acs_s0101_sldl_ut_2024
+source_page: https://api.census.gov/data/2024/acs/acs5/subject.html
+vintage: 2020-2024 ACS 5-year tables
+table: S0101 at summary level 620
+files:
+  2024:
+    filename: acs_S0101_sldl_ut_2024.json
+    source_url: https://api.census.gov/data/2024/acs/acs5/subject?get=GEO_ID,NAME,S0101_C01_001E,S0101_C01_002E,S0101_C01_003E,S0101_C01_004E,S0101_C01_005E,S0101_C01_006E,S0101_C01_007E,S0101_C01_008E,S0101_C01_009E,S0101_C01_010E,S0101_C01_011E,S0101_C01_012E,S0101_C01_013E,S0101_C01_014E,S0101_C01_015E,S0101_C01_016E,S0101_C01_017E,S0101_C01_018E,S0101_C01_019E,S0101_C01_001M,S0101_C01_002M,S0101_C01_003M,S0101_C01_004M,S0101_C01_005M,S0101_C01_006M,S0101_C01_007M,S0101_C01_008M,S0101_C01_009M,S0101_C01_010M,S0101_C01_011M,S0101_C01_012M,S0101_C01_013M,S0101_C01_014M,S0101_C01_015M,S0101_C01_016M,S0101_C01_017M,S0101_C01_018M,S0101_C01_019M&for=state%20legislative%20district%20(lower%20chamber):*&in=state:49
+    sha256: 685b8b441150af0ad0267f5626cb1c22f4029fef9d3036453b27f458e9e79a13
+    size_bytes: 24387
+    source_table: ACS 2024 5-year table S0101 Utah state legislative district (lower chamber)
+      population by age band
+    year: 2024

@@ -1,0 +1,15 @@
+source_id: census_acs
+package_id: census-acs-b19013-sld-lower-utah-median-household-income-2024
+dataset: census_acs_b19013_sldl_ut_2024
+source_page: https://api.census.gov/data/2024/acs/acs5.html
+vintage: 2020-2024 ACS 5-year tables
+table: B19013 at summary level 620
+files:
+  2024:
+    filename: acs_B19013_sldl_ut_2024.json
+    source_url: https://api.census.gov/data/2024/acs/acs5?get=GEO_ID,NAME,B19013_001E,B19013_001M&for=state%20legislative%20district%20(lower%20chamber):*&in=state:49
+    sha256: c992dddf1332eea765257784a3eeeafeefadaddcc657fc0ab7d624a1ad4cf213
+    size_bytes: 6503
+    source_table: ACS 2024 5-year table B19013 Utah state legislative district (lower chamber)
+      median household income
+    year: 2024

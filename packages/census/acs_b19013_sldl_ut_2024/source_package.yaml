@@ -1,0 +1,1402 @@
+schema_version: ledger.source_package.v1
+package_id: census-acs-b19013-sld-lower-utah-median-household-income-2024
+label: Census ACS 2020-2024 5-year B19013 Utah state legislative district (lower chamber)
+  median household income
+artifact:
+  source_name: census_acs
+  source_table: ACS 2024 5-year table B19013 Utah state legislative district (lower chamber)
+    median household income
+  resource_package: db
+  resource_directory: data/census/acs_b19013_sldl_ut_2024
+  manifest: manifest.yaml
+  vintage: acs_5_year_{year}
+  extracted_at: '2026-08-05'
+  extraction_method: Census API JSON table parsed to one source row per district
+  parser: json_table_full_rows
+  sheet_name: api_response
+record_sets:
+- record_set_id: census_acs.acs5_{year}.b19013.sld_lower_ut.median_household_income
+  provenance_class: survey_aggregate
+  survey_instrument: ACS 5-year
+  record_set_spec_id: census_acs.b19013.sld_lower_median_household_income.v1
+  source_record_id_prefix: census_acs.acs5_{year}.b19013.sld_lower_ut.median_household_income
+  sheet_name: api_response
+  period_type: calendar_year
+  period: '{year}'
+  period_coverage:
+    start_date: '2020-01-01'
+    end_date: '2024-12-31'
+    basis: survey_reference
+    source_period_label: 2020-2024 ACS 5-year estimates
+  geography_id: 0400000US49
+  geography_level: state
+  geography_name: Utah
+  geography_vintage: current
+  entity: household
+  entity_role: resident_household
+  domain: households
+  groupby_dimension: census_acs.state_legislative_district
+  rows:
+  - value_id: district_001
+    label: State House District 1 (2024); Utah
+    ordinal: 0
+    row_number: 2
+    geography_id: 620L900US49001
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 1 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49001
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49001
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 1 (2024); Utah
+      label: District name
+  - value_id: district_002
+    label: State House District 2 (2024); Utah
+    ordinal: 1
+    row_number: 3
+    geography_id: 620L900US49002
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 2 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49002
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49002
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 2 (2024); Utah
+      label: District name
+  - value_id: district_003
+    label: State House District 3 (2024); Utah
+    ordinal: 2
+    row_number: 4
+    geography_id: 620L900US49003
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 3 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49003
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49003
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 3 (2024); Utah
+      label: District name
+  - value_id: district_004
+    label: State House District 4 (2024); Utah
+    ordinal: 3
+    row_number: 5
+    geography_id: 620L900US49004
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 4 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49004
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49004
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 4 (2024); Utah
+      label: District name
+  - value_id: district_005
+    label: State House District 5 (2024); Utah
+    ordinal: 4
+    row_number: 6
+    geography_id: 620L900US49005
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 5 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49005
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49005
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 5 (2024); Utah
+      label: District name
+  - value_id: district_006
+    label: State House District 6 (2024); Utah
+    ordinal: 5
+    row_number: 7
+    geography_id: 620L900US49006
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 6 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49006
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49006
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 6 (2024); Utah
+      label: District name
+  - value_id: district_007
+    label: State House District 7 (2024); Utah
+    ordinal: 6
+    row_number: 8
+    geography_id: 620L900US49007
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 7 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49007
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49007
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 7 (2024); Utah
+      label: District name
+  - value_id: district_008
+    label: State House District 8 (2024); Utah
+    ordinal: 7
+    row_number: 9
+    geography_id: 620L900US49008
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 8 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49008
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49008
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 8 (2024); Utah
+      label: District name
+  - value_id: district_009
+    label: State House District 9 (2024); Utah
+    ordinal: 8
+    row_number: 10
+    geography_id: 620L900US49009
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 9 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49009
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49009
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 9 (2024); Utah
+      label: District name
+  - value_id: district_010
+    label: State House District 10 (2024); Utah
+    ordinal: 9
+    row_number: 11
+    geography_id: 620L900US49010
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 10 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49010
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49010
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 10 (2024); Utah
+      label: District name
+  - value_id: district_011
+    label: State House District 11 (2024); Utah
+    ordinal: 10
+    row_number: 12
+    geography_id: 620L900US49011
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 11 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49011
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49011
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 11 (2024); Utah
+      label: District name
+  - value_id: district_012
+    label: State House District 12 (2024); Utah
+    ordinal: 11
+    row_number: 13
+    geography_id: 620L900US49012
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 12 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49012
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49012
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 12 (2024); Utah
+      label: District name
+  - value_id: district_013
+    label: State House District 13 (2024); Utah
+    ordinal: 12
+    row_number: 14
+    geography_id: 620L900US49013
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 13 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49013
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49013
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 13 (2024); Utah
+      label: District name
+  - value_id: district_014
+    label: State House District 14 (2024); Utah
+    ordinal: 13
+    row_number: 15
+    geography_id: 620L900US49014
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 14 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49014
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49014
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 14 (2024); Utah
+      label: District name
+  - value_id: district_015
+    label: State House District 15 (2024); Utah
+    ordinal: 14
+    row_number: 16
+    geography_id: 620L900US49015
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 15 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49015
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49015
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 15 (2024); Utah
+      label: District name
+  - value_id: district_016
+    label: State House District 16 (2024); Utah
+    ordinal: 15
+    row_number: 17
+    geography_id: 620L900US49016
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 16 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49016
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49016
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 16 (2024); Utah
+      label: District name
+  - value_id: district_017
+    label: State House District 17 (2024); Utah
+    ordinal: 16
+    row_number: 18
+    geography_id: 620L900US49017
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 17 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49017
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49017
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 17 (2024); Utah
+      label: District name
+  - value_id: district_018
+    label: State House District 18 (2024); Utah
+    ordinal: 17
+    row_number: 19
+    geography_id: 620L900US49018
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 18 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49018
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49018
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 18 (2024); Utah
+      label: District name
+  - value_id: district_019
+    label: State House District 19 (2024); Utah
+    ordinal: 18
+    row_number: 20
+    geography_id: 620L900US49019
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 19 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49019
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49019
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 19 (2024); Utah
+      label: District name
+  - value_id: district_020
+    label: State House District 20 (2024); Utah
+    ordinal: 19
+    row_number: 21
+    geography_id: 620L900US49020
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 20 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49020
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49020
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 20 (2024); Utah
+      label: District name
+  - value_id: district_021
+    label: State House District 21 (2024); Utah
+    ordinal: 20
+    row_number: 22
+    geography_id: 620L900US49021
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 21 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49021
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49021
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 21 (2024); Utah
+      label: District name
+  - value_id: district_022
+    label: State House District 22 (2024); Utah
+    ordinal: 21
+    row_number: 23
+    geography_id: 620L900US49022
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 22 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49022
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49022
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 22 (2024); Utah
+      label: District name
+  - value_id: district_023
+    label: State House District 23 (2024); Utah
+    ordinal: 22
+    row_number: 24
+    geography_id: 620L900US49023
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 23 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49023
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49023
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 23 (2024); Utah
+      label: District name
+  - value_id: district_024
+    label: State House District 24 (2024); Utah
+    ordinal: 23
+    row_number: 25
+    geography_id: 620L900US49024
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 24 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49024
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49024
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 24 (2024); Utah
+      label: District name
+  - value_id: district_025
+    label: State House District 25 (2024); Utah
+    ordinal: 24
+    row_number: 26
+    geography_id: 620L900US49025
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 25 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49025
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49025
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 25 (2024); Utah
+      label: District name
+  - value_id: district_026
+    label: State House District 26 (2024); Utah
+    ordinal: 25
+    row_number: 27
+    geography_id: 620L900US49026
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 26 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49026
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49026
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 26 (2024); Utah
+      label: District name
+  - value_id: district_027
+    label: State House District 27 (2024); Utah
+    ordinal: 26
+    row_number: 28
+    geography_id: 620L900US49027
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 27 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49027
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49027
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 27 (2024); Utah
+      label: District name
+  - value_id: district_028
+    label: State House District 28 (2024); Utah
+    ordinal: 27
+    row_number: 29
+    geography_id: 620L900US49028
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 28 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49028
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49028
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 28 (2024); Utah
+      label: District name
+  - value_id: district_029
+    label: State House District 29 (2024); Utah
+    ordinal: 28
+    row_number: 30
+    geography_id: 620L900US49029
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 29 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49029
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49029
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 29 (2024); Utah
+      label: District name
+  - value_id: district_030
+    label: State House District 30 (2024); Utah
+    ordinal: 29
+    row_number: 31
+    geography_id: 620L900US49030
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 30 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49030
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49030
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 30 (2024); Utah
+      label: District name
+  - value_id: district_031
+    label: State House District 31 (2024); Utah
+    ordinal: 30
+    row_number: 32
+    geography_id: 620L900US49031
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 31 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49031
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49031
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 31 (2024); Utah
+      label: District name
+  - value_id: district_032
+    label: State House District 32 (2024); Utah
+    ordinal: 31
+    row_number: 33
+    geography_id: 620L900US49032
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 32 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49032
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49032
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 32 (2024); Utah
+      label: District name
+  - value_id: district_033
+    label: State House District 33 (2024); Utah
+    ordinal: 32
+    row_number: 34
+    geography_id: 620L900US49033
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 33 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49033
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49033
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 33 (2024); Utah
+      label: District name
+  - value_id: district_034
+    label: State House District 34 (2024); Utah
+    ordinal: 33
+    row_number: 35
+    geography_id: 620L900US49034
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 34 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49034
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49034
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 34 (2024); Utah
+      label: District name
+  - value_id: district_035
+    label: State House District 35 (2024); Utah
+    ordinal: 34
+    row_number: 36
+    geography_id: 620L900US49035
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 35 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49035
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49035
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 35 (2024); Utah
+      label: District name
+  - value_id: district_036
+    label: State House District 36 (2024); Utah
+    ordinal: 35
+    row_number: 37
+    geography_id: 620L900US49036
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 36 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49036
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49036
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 36 (2024); Utah
+      label: District name
+  - value_id: district_037
+    label: State House District 37 (2024); Utah
+    ordinal: 36
+    row_number: 38
+    geography_id: 620L900US49037
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 37 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49037
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49037
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 37 (2024); Utah
+      label: District name
+  - value_id: district_038
+    label: State House District 38 (2024); Utah
+    ordinal: 37
+    row_number: 39
+    geography_id: 620L900US49038
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 38 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49038
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49038
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 38 (2024); Utah
+      label: District name
+  - value_id: district_039
+    label: State House District 39 (2024); Utah
+    ordinal: 38
+    row_number: 40
+    geography_id: 620L900US49039
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 39 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49039
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49039
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 39 (2024); Utah
+      label: District name
+  - value_id: district_040
+    label: State House District 40 (2024); Utah
+    ordinal: 39
+    row_number: 41
+    geography_id: 620L900US49040
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 40 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49040
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49040
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 40 (2024); Utah
+      label: District name
+  - value_id: district_041
+    label: State House District 41 (2024); Utah
+    ordinal: 40
+    row_number: 42
+    geography_id: 620L900US49041
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 41 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49041
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49041
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 41 (2024); Utah
+      label: District name
+  - value_id: district_042
+    label: State House District 42 (2024); Utah
+    ordinal: 41
+    row_number: 43
+    geography_id: 620L900US49042
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 42 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49042
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49042
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 42 (2024); Utah
+      label: District name
+  - value_id: district_043
+    label: State House District 43 (2024); Utah
+    ordinal: 42
+    row_number: 44
+    geography_id: 620L900US49043
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 43 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49043
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49043
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 43 (2024); Utah
+      label: District name
+  - value_id: district_044
+    label: State House District 44 (2024); Utah
+    ordinal: 43
+    row_number: 45
+    geography_id: 620L900US49044
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 44 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49044
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49044
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 44 (2024); Utah
+      label: District name
+  - value_id: district_045
+    label: State House District 45 (2024); Utah
+    ordinal: 44
+    row_number: 46
+    geography_id: 620L900US49045
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 45 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49045
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49045
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 45 (2024); Utah
+      label: District name
+  - value_id: district_046
+    label: State House District 46 (2024); Utah
+    ordinal: 45
+    row_number: 47
+    geography_id: 620L900US49046
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 46 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49046
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49046
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 46 (2024); Utah
+      label: District name
+  - value_id: district_047
+    label: State House District 47 (2024); Utah
+    ordinal: 46
+    row_number: 48
+    geography_id: 620L900US49047
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 47 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49047
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49047
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 47 (2024); Utah
+      label: District name
+  - value_id: district_048
+    label: State House District 48 (2024); Utah
+    ordinal: 47
+    row_number: 49
+    geography_id: 620L900US49048
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 48 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49048
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49048
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 48 (2024); Utah
+      label: District name
+  - value_id: district_049
+    label: State House District 49 (2024); Utah
+    ordinal: 48
+    row_number: 50
+    geography_id: 620L900US49049
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 49 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49049
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49049
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 49 (2024); Utah
+      label: District name
+  - value_id: district_050
+    label: State House District 50 (2024); Utah
+    ordinal: 49
+    row_number: 51
+    geography_id: 620L900US49050
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 50 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49050
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49050
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 50 (2024); Utah
+      label: District name
+  - value_id: district_051
+    label: State House District 51 (2024); Utah
+    ordinal: 50
+    row_number: 52
+    geography_id: 620L900US49051
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 51 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49051
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49051
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 51 (2024); Utah
+      label: District name
+  - value_id: district_052
+    label: State House District 52 (2024); Utah
+    ordinal: 51
+    row_number: 53
+    geography_id: 620L900US49052
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 52 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49052
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49052
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 52 (2024); Utah
+      label: District name
+  - value_id: district_053
+    label: State House District 53 (2024); Utah
+    ordinal: 52
+    row_number: 54
+    geography_id: 620L900US49053
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 53 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49053
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49053
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 53 (2024); Utah
+      label: District name
+  - value_id: district_054
+    label: State House District 54 (2024); Utah
+    ordinal: 53
+    row_number: 55
+    geography_id: 620L900US49054
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 54 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49054
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49054
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 54 (2024); Utah
+      label: District name
+  - value_id: district_055
+    label: State House District 55 (2024); Utah
+    ordinal: 54
+    row_number: 56
+    geography_id: 620L900US49055
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 55 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49055
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49055
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 55 (2024); Utah
+      label: District name
+  - value_id: district_056
+    label: State House District 56 (2024); Utah
+    ordinal: 55
+    row_number: 57
+    geography_id: 620L900US49056
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 56 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49056
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49056
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 56 (2024); Utah
+      label: District name
+  - value_id: district_057
+    label: State House District 57 (2024); Utah
+    ordinal: 56
+    row_number: 58
+    geography_id: 620L900US49057
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 57 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49057
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49057
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 57 (2024); Utah
+      label: District name
+  - value_id: district_058
+    label: State House District 58 (2024); Utah
+    ordinal: 57
+    row_number: 59
+    geography_id: 620L900US49058
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 58 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49058
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49058
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 58 (2024); Utah
+      label: District name
+  - value_id: district_059
+    label: State House District 59 (2024); Utah
+    ordinal: 58
+    row_number: 60
+    geography_id: 620L900US49059
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 59 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49059
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49059
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 59 (2024); Utah
+      label: District name
+  - value_id: district_060
+    label: State House District 60 (2024); Utah
+    ordinal: 59
+    row_number: 61
+    geography_id: 620L900US49060
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 60 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49060
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49060
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 60 (2024); Utah
+      label: District name
+  - value_id: district_061
+    label: State House District 61 (2024); Utah
+    ordinal: 60
+    row_number: 62
+    geography_id: 620L900US49061
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 61 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49061
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49061
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 61 (2024); Utah
+      label: District name
+  - value_id: district_062
+    label: State House District 62 (2024); Utah
+    ordinal: 61
+    row_number: 63
+    geography_id: 620L900US49062
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 62 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49062
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49062
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 62 (2024); Utah
+      label: District name
+  - value_id: district_063
+    label: State House District 63 (2024); Utah
+    ordinal: 62
+    row_number: 64
+    geography_id: 620L900US49063
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 63 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49063
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49063
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 63 (2024); Utah
+      label: District name
+  - value_id: district_064
+    label: State House District 64 (2024); Utah
+    ordinal: 63
+    row_number: 65
+    geography_id: 620L900US49064
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 64 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49064
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49064
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 64 (2024); Utah
+      label: District name
+  - value_id: district_065
+    label: State House District 65 (2024); Utah
+    ordinal: 64
+    row_number: 66
+    geography_id: 620L900US49065
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 65 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49065
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49065
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 65 (2024); Utah
+      label: District name
+  - value_id: district_066
+    label: State House District 66 (2024); Utah
+    ordinal: 65
+    row_number: 67
+    geography_id: 620L900US49066
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 66 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49066
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49066
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 66 (2024); Utah
+      label: District name
+  - value_id: district_067
+    label: State House District 67 (2024); Utah
+    ordinal: 66
+    row_number: 68
+    geography_id: 620L900US49067
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 67 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49067
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49067
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 67 (2024); Utah
+      label: District name
+  - value_id: district_068
+    label: State House District 68 (2024); Utah
+    ordinal: 67
+    row_number: 69
+    geography_id: 620L900US49068
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 68 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49068
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49068
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 68 (2024); Utah
+      label: District name
+  - value_id: district_069
+    label: State House District 69 (2024); Utah
+    ordinal: 68
+    row_number: 70
+    geography_id: 620L900US49069
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 69 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49069
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49069
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 69 (2024); Utah
+      label: District name
+  - value_id: district_070
+    label: State House District 70 (2024); Utah
+    ordinal: 69
+    row_number: 71
+    geography_id: 620L900US49070
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 70 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49070
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49070
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 70 (2024); Utah
+      label: District name
+  - value_id: district_071
+    label: State House District 71 (2024); Utah
+    ordinal: 70
+    row_number: 72
+    geography_id: 620L900US49071
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 71 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49071
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49071
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 71 (2024); Utah
+      label: District name
+  - value_id: district_072
+    label: State House District 72 (2024); Utah
+    ordinal: 71
+    row_number: 73
+    geography_id: 620L900US49072
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 72 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49072
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49072
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 72 (2024); Utah
+      label: District name
+  - value_id: district_073
+    label: State House District 73 (2024); Utah
+    ordinal: 72
+    row_number: 74
+    geography_id: 620L900US49073
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 73 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49073
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49073
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 73 (2024); Utah
+      label: District name
+  - value_id: district_074
+    label: State House District 74 (2024); Utah
+    ordinal: 73
+    row_number: 75
+    geography_id: 620L900US49074
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 74 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49074
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49074
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 74 (2024); Utah
+      label: District name
+  - value_id: district_075
+    label: State House District 75 (2024); Utah
+    ordinal: 74
+    row_number: 76
+    geography_id: 620L900US49075
+    geography_level: state_legislative_district_lower
+    geography_name: State House District 75 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 620L900US49075
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 620L900US49075
+      label: GEO_ID
+    - column: B
+      expected_value: State House District 75 (2024); Utah
+      label: District name
+  measures:
+  - measure_id: median_household_income
+    label: Median household income
+    ordinal: 0
+    column: C
+    source_column_id: B19013_001E
+    concept: census_acs.median_household_income
+    source_concept: ACS B19013 median household income in the past 12 months (inflation-adjusted
+      dollars)
+    concept_relation: source_label
+    unit: usd
+    aggregation: median
+    expected_cell_type: number

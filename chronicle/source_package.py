@@ -158,6 +158,24 @@ SOURCE_PACKAGE_ALIASES = {
     "census-acs-s2201-congressional-district-snap-2024": Path(
         "census/acs_s2201_district_2024"
     ),
+    "census-acs-s0101-sld-upper-utah-age-2024": Path(
+        "census/acs_s0101_sldu_ut_2024"
+    ),
+    "census-acs-s0101-sld-lower-utah-age-2024": Path(
+        "census/acs_s0101_sldl_ut_2024"
+    ),
+    "census-acs-b19001-sld-upper-utah-household-income-2024": Path(
+        "census/acs_b19001_sldu_ut_2024"
+    ),
+    "census-acs-b19001-sld-lower-utah-household-income-2024": Path(
+        "census/acs_b19001_sldl_ut_2024"
+    ),
+    "census-acs-b19013-sld-upper-utah-median-household-income-2024": Path(
+        "census/acs_b19013_sldu_ut_2024"
+    ),
+    "census-acs-b19013-sld-lower-utah-median-household-income-2024": Path(
+        "census/acs_b19013_sldl_ut_2024"
+    ),
     "census-b01001-female-age-2023": Path("census/b01001_female_15_44_2023"),
     "census-pep-2024-national-age-sex": Path("census/pep_2024_national_age_sex"),
     "census-pep-2024-state-age-sex": Path("census/pep_2024_state_age_sex"),

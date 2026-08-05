@@ -1,0 +1,953 @@
+schema_version: ledger.source_package.v1
+package_id: census-acs-s0101-sld-upper-utah-age-2024
+label: Census ACS 2020-2024 5-year S0101 Utah state legislative district (upper chamber) population
+  by age band
+artifact:
+  source_name: census_acs
+  source_table: ACS 2024 5-year table S0101 Utah state legislative district (upper chamber)
+    population by age band
+  resource_package: db
+  resource_directory: data/census/acs_s0101_sldu_ut_2024
+  manifest: manifest.yaml
+  vintage: acs_5_year_{year}
+  extracted_at: '2026-08-05'
+  extraction_method: Census API JSON table parsed to one source row per district
+  parser: json_table_full_rows
+  sheet_name: api_response
+record_sets:
+- record_set_id: census_acs.acs5_{year}.s0101.sld_upper_ut.age
+  provenance_class: survey_aggregate
+  survey_instrument: ACS 5-year
+  record_set_spec_id: census_acs.s0101.sld_upper_age.v1
+  source_record_id_prefix: census_acs.acs5_{year}.s0101.sld_upper_ut.age
+  sheet_name: api_response
+  period_type: calendar_year
+  period: '{year}'
+  period_coverage:
+    start_date: '2020-01-01'
+    end_date: '2024-12-31'
+    basis: survey_reference
+    source_period_label: 2020-2024 ACS 5-year estimates
+  geography_id: 0400000US49
+  geography_level: state
+  geography_name: Utah
+  geography_vintage: current
+  entity: person
+  entity_role: resident_population
+  domain: total_population
+  groupby_dimension: census_acs.state_legislative_district
+  rows:
+  - value_id: district_001
+    label: State Senate District 1 (2024); Utah
+    ordinal: 0
+    row_number: 2
+    geography_id: 610U900US49001
+    geography_level: state_legislative_district_upper
+    geography_name: State Senate District 1 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 610U900US49001
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 610U900US49001
+      label: GEO_ID
+    - column: B
+      expected_value: State Senate District 1 (2024); Utah
+      label: District name
+  - value_id: district_002
+    label: State Senate District 2 (2024); Utah
+    ordinal: 1
+    row_number: 3
+    geography_id: 610U900US49002
+    geography_level: state_legislative_district_upper
+    geography_name: State Senate District 2 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 610U900US49002
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 610U900US49002
+      label: GEO_ID
+    - column: B
+      expected_value: State Senate District 2 (2024); Utah
+      label: District name
+  - value_id: district_003
+    label: State Senate District 3 (2024); Utah
+    ordinal: 2
+    row_number: 4
+    geography_id: 610U900US49003
+    geography_level: state_legislative_district_upper
+    geography_name: State Senate District 3 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 610U900US49003
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 610U900US49003
+      label: GEO_ID
+    - column: B
+      expected_value: State Senate District 3 (2024); Utah
+      label: District name
+  - value_id: district_004
+    label: State Senate District 4 (2024); Utah
+    ordinal: 3
+    row_number: 5
+    geography_id: 610U900US49004
+    geography_level: state_legislative_district_upper
+    geography_name: State Senate District 4 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 610U900US49004
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 610U900US49004
+      label: GEO_ID
+    - column: B
+      expected_value: State Senate District 4 (2024); Utah
+      label: District name
+  - value_id: district_005
+    label: State Senate District 5 (2024); Utah
+    ordinal: 4
+    row_number: 6
+    geography_id: 610U900US49005
+    geography_level: state_legislative_district_upper
+    geography_name: State Senate District 5 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 610U900US49005
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 610U900US49005
+      label: GEO_ID
+    - column: B
+      expected_value: State Senate District 5 (2024); Utah
+      label: District name
+  - value_id: district_006
+    label: State Senate District 6 (2024); Utah
+    ordinal: 5
+    row_number: 7
+    geography_id: 610U900US49006
+    geography_level: state_legislative_district_upper
+    geography_name: State Senate District 6 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 610U900US49006
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 610U900US49006
+      label: GEO_ID
+    - column: B
+      expected_value: State Senate District 6 (2024); Utah
+      label: District name
+  - value_id: district_007
+    label: State Senate District 7 (2024); Utah
+    ordinal: 6
+    row_number: 8
+    geography_id: 610U900US49007
+    geography_level: state_legislative_district_upper
+    geography_name: State Senate District 7 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 610U900US49007
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 610U900US49007
+      label: GEO_ID
+    - column: B
+      expected_value: State Senate District 7 (2024); Utah
+      label: District name
+  - value_id: district_008
+    label: State Senate District 8 (2024); Utah
+    ordinal: 7
+    row_number: 9
+    geography_id: 610U900US49008
+    geography_level: state_legislative_district_upper
+    geography_name: State Senate District 8 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 610U900US49008
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 610U900US49008
+      label: GEO_ID
+    - column: B
+      expected_value: State Senate District 8 (2024); Utah
+      label: District name
+  - value_id: district_009
+    label: State Senate District 9 (2024); Utah
+    ordinal: 8
+    row_number: 10
+    geography_id: 610U900US49009
+    geography_level: state_legislative_district_upper
+    geography_name: State Senate District 9 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 610U900US49009
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 610U900US49009
+      label: GEO_ID
+    - column: B
+      expected_value: State Senate District 9 (2024); Utah
+      label: District name
+  - value_id: district_010
+    label: State Senate District 10 (2024); Utah
+    ordinal: 9
+    row_number: 11
+    geography_id: 610U900US49010
+    geography_level: state_legislative_district_upper
+    geography_name: State Senate District 10 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 610U900US49010
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 610U900US49010
+      label: GEO_ID
+    - column: B
+      expected_value: State Senate District 10 (2024); Utah
+      label: District name
+  - value_id: district_011
+    label: State Senate District 11 (2024); Utah
+    ordinal: 10
+    row_number: 12
+    geography_id: 610U900US49011
+    geography_level: state_legislative_district_upper
+    geography_name: State Senate District 11 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 610U900US49011
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 610U900US49011
+      label: GEO_ID
+    - column: B
+      expected_value: State Senate District 11 (2024); Utah
+      label: District name
+  - value_id: district_012
+    label: State Senate District 12 (2024); Utah
+    ordinal: 11
+    row_number: 13
+    geography_id: 610U900US49012
+    geography_level: state_legislative_district_upper
+    geography_name: State Senate District 12 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 610U900US49012
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 610U900US49012
+      label: GEO_ID
+    - column: B
+      expected_value: State Senate District 12 (2024); Utah
+      label: District name
+  - value_id: district_013
+    label: State Senate District 13 (2024); Utah
+    ordinal: 12
+    row_number: 14
+    geography_id: 610U900US49013
+    geography_level: state_legislative_district_upper
+    geography_name: State Senate District 13 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 610U900US49013
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 610U900US49013
+      label: GEO_ID
+    - column: B
+      expected_value: State Senate District 13 (2024); Utah
+      label: District name
+  - value_id: district_014
+    label: State Senate District 14 (2024); Utah
+    ordinal: 13
+    row_number: 15
+    geography_id: 610U900US49014
+    geography_level: state_legislative_district_upper
+    geography_name: State Senate District 14 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 610U900US49014
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 610U900US49014
+      label: GEO_ID
+    - column: B
+      expected_value: State Senate District 14 (2024); Utah
+      label: District name
+  - value_id: district_015
+    label: State Senate District 15 (2024); Utah
+    ordinal: 14
+    row_number: 16
+    geography_id: 610U900US49015
+    geography_level: state_legislative_district_upper
+    geography_name: State Senate District 15 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 610U900US49015
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 610U900US49015
+      label: GEO_ID
+    - column: B
+      expected_value: State Senate District 15 (2024); Utah
+      label: District name
+  - value_id: district_016
+    label: State Senate District 16 (2024); Utah
+    ordinal: 15
+    row_number: 17
+    geography_id: 610U900US49016
+    geography_level: state_legislative_district_upper
+    geography_name: State Senate District 16 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 610U900US49016
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 610U900US49016
+      label: GEO_ID
+    - column: B
+      expected_value: State Senate District 16 (2024); Utah
+      label: District name
+  - value_id: district_017
+    label: State Senate District 17 (2024); Utah
+    ordinal: 16
+    row_number: 18
+    geography_id: 610U900US49017
+    geography_level: state_legislative_district_upper
+    geography_name: State Senate District 17 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 610U900US49017
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 610U900US49017
+      label: GEO_ID
+    - column: B
+      expected_value: State Senate District 17 (2024); Utah
+      label: District name
+  - value_id: district_018
+    label: State Senate District 18 (2024); Utah
+    ordinal: 17
+    row_number: 19
+    geography_id: 610U900US49018
+    geography_level: state_legislative_district_upper
+    geography_name: State Senate District 18 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 610U900US49018
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 610U900US49018
+      label: GEO_ID
+    - column: B
+      expected_value: State Senate District 18 (2024); Utah
+      label: District name
+  - value_id: district_019
+    label: State Senate District 19 (2024); Utah
+    ordinal: 18
+    row_number: 20
+    geography_id: 610U900US49019
+    geography_level: state_legislative_district_upper
+    geography_name: State Senate District 19 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 610U900US49019
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 610U900US49019
+      label: GEO_ID
+    - column: B
+      expected_value: State Senate District 19 (2024); Utah
+      label: District name
+  - value_id: district_020
+    label: State Senate District 20 (2024); Utah
+    ordinal: 19
+    row_number: 21
+    geography_id: 610U900US49020
+    geography_level: state_legislative_district_upper
+    geography_name: State Senate District 20 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 610U900US49020
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 610U900US49020
+      label: GEO_ID
+    - column: B
+      expected_value: State Senate District 20 (2024); Utah
+      label: District name
+  - value_id: district_021
+    label: State Senate District 21 (2024); Utah
+    ordinal: 20
+    row_number: 22
+    geography_id: 610U900US49021
+    geography_level: state_legislative_district_upper
+    geography_name: State Senate District 21 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 610U900US49021
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 610U900US49021
+      label: GEO_ID
+    - column: B
+      expected_value: State Senate District 21 (2024); Utah
+      label: District name
+  - value_id: district_022
+    label: State Senate District 22 (2024); Utah
+    ordinal: 21
+    row_number: 23
+    geography_id: 610U900US49022
+    geography_level: state_legislative_district_upper
+    geography_name: State Senate District 22 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 610U900US49022
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 610U900US49022
+      label: GEO_ID
+    - column: B
+      expected_value: State Senate District 22 (2024); Utah
+      label: District name
+  - value_id: district_023
+    label: State Senate District 23 (2024); Utah
+    ordinal: 22
+    row_number: 24
+    geography_id: 610U900US49023
+    geography_level: state_legislative_district_upper
+    geography_name: State Senate District 23 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 610U900US49023
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 610U900US49023
+      label: GEO_ID
+    - column: B
+      expected_value: State Senate District 23 (2024); Utah
+      label: District name
+  - value_id: district_024
+    label: State Senate District 24 (2024); Utah
+    ordinal: 23
+    row_number: 25
+    geography_id: 610U900US49024
+    geography_level: state_legislative_district_upper
+    geography_name: State Senate District 24 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 610U900US49024
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 610U900US49024
+      label: GEO_ID
+    - column: B
+      expected_value: State Senate District 24 (2024); Utah
+      label: District name
+  - value_id: district_025
+    label: State Senate District 25 (2024); Utah
+    ordinal: 24
+    row_number: 26
+    geography_id: 610U900US49025
+    geography_level: state_legislative_district_upper
+    geography_name: State Senate District 25 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 610U900US49025
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 610U900US49025
+      label: GEO_ID
+    - column: B
+      expected_value: State Senate District 25 (2024); Utah
+      label: District name
+  - value_id: district_026
+    label: State Senate District 26 (2024); Utah
+    ordinal: 25
+    row_number: 27
+    geography_id: 610U900US49026
+    geography_level: state_legislative_district_upper
+    geography_name: State Senate District 26 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 610U900US49026
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 610U900US49026
+      label: GEO_ID
+    - column: B
+      expected_value: State Senate District 26 (2024); Utah
+      label: District name
+  - value_id: district_027
+    label: State Senate District 27 (2024); Utah
+    ordinal: 26
+    row_number: 28
+    geography_id: 610U900US49027
+    geography_level: state_legislative_district_upper
+    geography_name: State Senate District 27 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 610U900US49027
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 610U900US49027
+      label: GEO_ID
+    - column: B
+      expected_value: State Senate District 27 (2024); Utah
+      label: District name
+  - value_id: district_028
+    label: State Senate District 28 (2024); Utah
+    ordinal: 27
+    row_number: 29
+    geography_id: 610U900US49028
+    geography_level: state_legislative_district_upper
+    geography_name: State Senate District 28 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 610U900US49028
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 610U900US49028
+      label: GEO_ID
+    - column: B
+      expected_value: State Senate District 28 (2024); Utah
+      label: District name
+  - value_id: district_029
+    label: State Senate District 29 (2024); Utah
+    ordinal: 28
+    row_number: 30
+    geography_id: 610U900US49029
+    geography_level: state_legislative_district_upper
+    geography_name: State Senate District 29 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 610U900US49029
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 610U900US49029
+      label: GEO_ID
+    - column: B
+      expected_value: State Senate District 29 (2024); Utah
+      label: District name
+  measures:
+  - measure_id: age_0_to_4
+    label: Aged 0-4
+    ordinal: 0
+    column: D
+    source_column_id: S0101_C01_002E
+    concept: census_acs.person_count
+    source_concept: ACS S0101 total population Aged 0-4
+    concept_relation: source_label
+    unit: count
+    aggregation: sum
+    expected_cell_type: number
+    constraints:
+    - variable: age
+      operator: '>='
+      value: 0
+      unit: years
+      label: age lower bound
+    - variable: age
+      operator: <
+      value: 5
+      unit: years
+      label: age upper bound
+  - measure_id: age_5_to_9
+    label: Aged 5-9
+    ordinal: 1
+    column: E
+    source_column_id: S0101_C01_003E
+    concept: census_acs.person_count
+    source_concept: ACS S0101 total population Aged 5-9
+    concept_relation: source_label
+    unit: count
+    aggregation: sum
+    expected_cell_type: number
+    constraints:
+    - variable: age
+      operator: '>='
+      value: 5
+      unit: years
+      label: age lower bound
+    - variable: age
+      operator: <
+      value: 10
+      unit: years
+      label: age upper bound
+  - measure_id: age_10_to_14
+    label: Aged 10-14
+    ordinal: 2
+    column: F
+    source_column_id: S0101_C01_004E
+    concept: census_acs.person_count
+    source_concept: ACS S0101 total population Aged 10-14
+    concept_relation: source_label
+    unit: count
+    aggregation: sum
+    expected_cell_type: number
+    constraints:
+    - variable: age
+      operator: '>='
+      value: 10
+      unit: years
+      label: age lower bound
+    - variable: age
+      operator: <
+      value: 15
+      unit: years
+      label: age upper bound
+  - measure_id: age_15_to_19
+    label: Aged 15-19
+    ordinal: 3
+    column: G
+    source_column_id: S0101_C01_005E
+    concept: census_acs.person_count
+    source_concept: ACS S0101 total population Aged 15-19
+    concept_relation: source_label
+    unit: count
+    aggregation: sum
+    expected_cell_type: number
+    constraints:
+    - variable: age
+      operator: '>='
+      value: 15
+      unit: years
+      label: age lower bound
+    - variable: age
+      operator: <
+      value: 20
+      unit: years
+      label: age upper bound
+  - measure_id: age_20_to_24
+    label: Aged 20-24
+    ordinal: 4
+    column: H
+    source_column_id: S0101_C01_006E
+    concept: census_acs.person_count
+    source_concept: ACS S0101 total population Aged 20-24
+    concept_relation: source_label
+    unit: count
+    aggregation: sum
+    expected_cell_type: number
+    constraints:
+    - variable: age
+      operator: '>='
+      value: 20
+      unit: years
+      label: age lower bound
+    - variable: age
+      operator: <
+      value: 25
+      unit: years
+      label: age upper bound
+  - measure_id: age_25_to_29
+    label: Aged 25-29
+    ordinal: 5
+    column: I
+    source_column_id: S0101_C01_007E
+    concept: census_acs.person_count
+    source_concept: ACS S0101 total population Aged 25-29
+    concept_relation: source_label
+    unit: count
+    aggregation: sum
+    expected_cell_type: number
+    constraints:
+    - variable: age
+      operator: '>='
+      value: 25
+      unit: years
+      label: age lower bound
+    - variable: age
+      operator: <
+      value: 30
+      unit: years
+      label: age upper bound
+  - measure_id: age_30_to_34
+    label: Aged 30-34
+    ordinal: 6
+    column: J
+    source_column_id: S0101_C01_008E
+    concept: census_acs.person_count
+    source_concept: ACS S0101 total population Aged 30-34
+    concept_relation: source_label
+    unit: count
+    aggregation: sum
+    expected_cell_type: number
+    constraints:
+    - variable: age
+      operator: '>='
+      value: 30
+      unit: years
+      label: age lower bound
+    - variable: age
+      operator: <
+      value: 35
+      unit: years
+      label: age upper bound
+  - measure_id: age_35_to_39
+    label: Aged 35-39
+    ordinal: 7
+    column: K
+    source_column_id: S0101_C01_009E
+    concept: census_acs.person_count
+    source_concept: ACS S0101 total population Aged 35-39
+    concept_relation: source_label
+    unit: count
+    aggregation: sum
+    expected_cell_type: number
+    constraints:
+    - variable: age
+      operator: '>='
+      value: 35
+      unit: years
+      label: age lower bound
+    - variable: age
+      operator: <
+      value: 40
+      unit: years
+      label: age upper bound
+  - measure_id: age_40_to_44
+    label: Aged 40-44
+    ordinal: 8
+    column: L
+    source_column_id: S0101_C01_010E
+    concept: census_acs.person_count
+    source_concept: ACS S0101 total population Aged 40-44
+    concept_relation: source_label
+    unit: count
+    aggregation: sum
+    expected_cell_type: number
+    constraints:
+    - variable: age
+      operator: '>='
+      value: 40
+      unit: years
+      label: age lower bound
+    - variable: age
+      operator: <
+      value: 45
+      unit: years
+      label: age upper bound
+  - measure_id: age_45_to_49
+    label: Aged 45-49
+    ordinal: 9
+    column: M
+    source_column_id: S0101_C01_011E
+    concept: census_acs.person_count
+    source_concept: ACS S0101 total population Aged 45-49
+    concept_relation: source_label
+    unit: count
+    aggregation: sum
+    expected_cell_type: number
+    constraints:
+    - variable: age
+      operator: '>='
+      value: 45
+      unit: years
+      label: age lower bound
+    - variable: age
+      operator: <
+      value: 50
+      unit: years
+      label: age upper bound
+  - measure_id: age_50_to_54
+    label: Aged 50-54
+    ordinal: 10
+    column: N
+    source_column_id: S0101_C01_012E
+    concept: census_acs.person_count
+    source_concept: ACS S0101 total population Aged 50-54
+    concept_relation: source_label
+    unit: count
+    aggregation: sum
+    expected_cell_type: number
+    constraints:
+    - variable: age
+      operator: '>='
+      value: 50
+      unit: years
+      label: age lower bound
+    - variable: age
+      operator: <
+      value: 55
+      unit: years
+      label: age upper bound
+  - measure_id: age_55_to_59
+    label: Aged 55-59
+    ordinal: 11
+    column: O
+    source_column_id: S0101_C01_013E
+    concept: census_acs.person_count
+    source_concept: ACS S0101 total population Aged 55-59
+    concept_relation: source_label
+    unit: count
+    aggregation: sum
+    expected_cell_type: number
+    constraints:
+    - variable: age
+      operator: '>='
+      value: 55
+      unit: years
+      label: age lower bound
+    - variable: age
+      operator: <
+      value: 60
+      unit: years
+      label: age upper bound
+  - measure_id: age_60_to_64
+    label: Aged 60-64
+    ordinal: 12
+    column: P
+    source_column_id: S0101_C01_014E
+    concept: census_acs.person_count
+    source_concept: ACS S0101 total population Aged 60-64
+    concept_relation: source_label
+    unit: count
+    aggregation: sum
+    expected_cell_type: number
+    constraints:
+    - variable: age
+      operator: '>='
+      value: 60
+      unit: years
+      label: age lower bound
+    - variable: age
+      operator: <
+      value: 65
+      unit: years
+      label: age upper bound
+  - measure_id: age_65_to_69
+    label: Aged 65-69
+    ordinal: 13
+    column: Q
+    source_column_id: S0101_C01_015E
+    concept: census_acs.person_count
+    source_concept: ACS S0101 total population Aged 65-69
+    concept_relation: source_label
+    unit: count
+    aggregation: sum
+    expected_cell_type: number
+    constraints:
+    - variable: age
+      operator: '>='
+      value: 65
+      unit: years
+      label: age lower bound
+    - variable: age
+      operator: <
+      value: 70
+      unit: years
+      label: age upper bound
+  - measure_id: age_70_to_74
+    label: Aged 70-74
+    ordinal: 14
+    column: R
+    source_column_id: S0101_C01_016E
+    concept: census_acs.person_count
+    source_concept: ACS S0101 total population Aged 70-74
+    concept_relation: source_label
+    unit: count
+    aggregation: sum
+    expected_cell_type: number
+    constraints:
+    - variable: age
+      operator: '>='
+      value: 70
+      unit: years
+      label: age lower bound
+    - variable: age
+      operator: <
+      value: 75
+      unit: years
+      label: age upper bound
+  - measure_id: age_75_to_79
+    label: Aged 75-79
+    ordinal: 15
+    column: S
+    source_column_id: S0101_C01_017E
+    concept: census_acs.person_count
+    source_concept: ACS S0101 total population Aged 75-79
+    concept_relation: source_label
+    unit: count
+    aggregation: sum
+    expected_cell_type: number
+    constraints:
+    - variable: age
+      operator: '>='
+      value: 75
+      unit: years
+      label: age lower bound
+    - variable: age
+      operator: <
+      value: 80
+      unit: years
+      label: age upper bound
+  - measure_id: age_80_to_84
+    label: Aged 80-84
+    ordinal: 16
+    column: T
+    source_column_id: S0101_C01_018E
+    concept: census_acs.person_count
+    source_concept: ACS S0101 total population Aged 80-84
+    concept_relation: source_label
+    unit: count
+    aggregation: sum
+    expected_cell_type: number
+    constraints:
+    - variable: age
+      operator: '>='
+      value: 80
+      unit: years
+      label: age lower bound
+    - variable: age
+      operator: <
+      value: 85
+      unit: years
+      label: age upper bound
+  - measure_id: age_85_and_over
+    label: Aged 85 and over
+    ordinal: 17
+    column: U
+    source_column_id: S0101_C01_019E
+    concept: census_acs.person_count
+    source_concept: ACS S0101 total population Aged 85 and over
+    concept_relation: source_label
+    unit: count
+    aggregation: sum
+    expected_cell_type: number
+    constraints:
+    - variable: age
+      operator: '>='
+      value: 85
+      unit: years
+      label: age lower bound

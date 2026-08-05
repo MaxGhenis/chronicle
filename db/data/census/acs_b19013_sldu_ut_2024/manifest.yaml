@@ -1,0 +1,15 @@
+source_id: census_acs
+package_id: census-acs-b19013-sld-upper-utah-median-household-income-2024
+dataset: census_acs_b19013_sldu_ut_2024
+source_page: https://api.census.gov/data/2024/acs/acs5.html
+vintage: 2020-2024 ACS 5-year tables
+table: B19013 at summary level 610
+files:
+  2024:
+    filename: acs_B19013_sldu_ut_2024.json
+    source_url: https://api.census.gov/data/2024/acs/acs5?get=GEO_ID,NAME,B19013_001E,B19013_001M&for=state%20legislative%20district%20(upper%20chamber):*&in=state:49
+    sha256: 097d790423e5c7f1c5372cb62e0098f05f1bf8257bccc0968bda5ad4a8d94b70
+    size_bytes: 2597
+    source_table: ACS 2024 5-year table B19013 Utah state legislative district (upper chamber)
+      median household income
+    year: 2024

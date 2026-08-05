@@ -1,0 +1,15 @@
+source_id: census_acs
+package_id: census-acs-b19001-sld-lower-utah-household-income-2024
+dataset: census_acs_b19001_sldl_ut_2024
+source_page: https://api.census.gov/data/2024/acs/acs5.html
+vintage: 2020-2024 ACS 5-year tables
+table: B19001 at summary level 620
+files:
+  2024:
+    filename: acs_B19001_sldl_ut_2024.json
+    source_url: https://api.census.gov/data/2024/acs/acs5?get=GEO_ID,NAME,B19001_001E,B19001_002E,B19001_003E,B19001_004E,B19001_005E,B19001_006E,B19001_007E,B19001_008E,B19001_009E,B19001_010E,B19001_011E,B19001_012E,B19001_013E,B19001_014E,B19001_015E,B19001_016E,B19001_017E,B19001_001M,B19001_002M,B19001_003M,B19001_004M,B19001_005M,B19001_006M,B19001_007M,B19001_008M,B19001_009M,B19001_010M,B19001_011M,B19001_012M,B19001_013M,B19001_014M,B19001_015M,B19001_016M,B19001_017M&for=state%20legislative%20district%20(lower%20chamber):*&in=state:49
+    sha256: e440ef7ac74f5bc4b6f1badc6281b749f63046cab2748f4988694a5680808aae
+    size_bytes: 21477
+    source_table: ACS 2024 5-year table B19001 Utah state legislative district (lower chamber)
+      household income brackets
+    year: 2024

@@ -31,7 +31,7 @@ def test_build_bundle_writes_merged_consumer_contract(tmp_path):
         "geography_count": 9390,
         "period_count": 144,
         "semantic_duplicate_key_count": 12,
-        "skipped_source_count": 10,
+        "skipped_source_count": 16,
         "source_count": 40,
         "source_package_count": 120,
         "warning_count": 1,
@@ -55,10 +55,16 @@ def test_build_bundle_writes_merged_consumer_contract(tmp_path):
     assert rows[0]["aggregate_fact_key"].startswith("ledger.aggregate_fact.v2:")
     assert rows[0]["semantic_fact_key"].startswith("ledger.semantic_fact.v2:")
     assert source_packages["source_package_count"] == 120
-    assert source_packages["skipped_source_count"] == 10
+    assert source_packages["skipped_source_count"] == 16
     assert sorted(item["source"] for item in source_packages["skipped_sources"]) == [
+        "census-acs-b19001-sld-lower-utah-household-income-2024",
+        "census-acs-b19001-sld-upper-utah-household-income-2024",
+        "census-acs-b19013-sld-lower-utah-median-household-income-2024",
+        "census-acs-b19013-sld-upper-utah-median-household-income-2024",
         "census-acs-s0101-congressional-district-age-2024",
         "census-acs-s0101-national-age-2024",
+        "census-acs-s0101-sld-lower-utah-age-2024",
+        "census-acs-s0101-sld-upper-utah-age-2024",
         "census-acs-s0101-state-age-2024",
         "census-acs-s2201-congressional-district-snap-2024",
         "cms-aca-effectuated-enrollment-2022",

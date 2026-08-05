@@ -1,0 +1,915 @@
+schema_version: ledger.source_package.v1
+package_id: census-acs-b19001-sld-upper-utah-household-income-2024
+label: Census ACS 2020-2024 5-year B19001 Utah state legislative district (upper chamber)
+  household income brackets
+artifact:
+  source_name: census_acs
+  source_table: ACS 2024 5-year table B19001 Utah state legislative district (upper chamber)
+    household income brackets
+  resource_package: db
+  resource_directory: data/census/acs_b19001_sldu_ut_2024
+  manifest: manifest.yaml
+  vintage: acs_5_year_{year}
+  extracted_at: '2026-08-05'
+  extraction_method: Census API JSON table parsed to one source row per district
+  parser: json_table_full_rows
+  sheet_name: api_response
+record_sets:
+- record_set_id: census_acs.acs5_{year}.b19001.sld_upper_ut.household_income
+  provenance_class: survey_aggregate
+  survey_instrument: ACS 5-year
+  record_set_spec_id: census_acs.b19001.sld_upper_household_income.v1
+  source_record_id_prefix: census_acs.acs5_{year}.b19001.sld_upper_ut.household_income
+  sheet_name: api_response
+  period_type: calendar_year
+  period: '{year}'
+  period_coverage:
+    start_date: '2020-01-01'
+    end_date: '2024-12-31'
+    basis: survey_reference
+    source_period_label: 2020-2024 ACS 5-year estimates
+  geography_id: 0400000US49
+  geography_level: state
+  geography_name: Utah
+  geography_vintage: current
+  entity: household
+  entity_role: resident_household
+  domain: households
+  groupby_dimension: census_acs.state_legislative_district
+  rows:
+  - value_id: district_001
+    label: State Senate District 1 (2024); Utah
+    ordinal: 0
+    row_number: 2
+    geography_id: 610U900US49001
+    geography_level: state_legislative_district_upper
+    geography_name: State Senate District 1 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 610U900US49001
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 610U900US49001
+      label: GEO_ID
+    - column: B
+      expected_value: State Senate District 1 (2024); Utah
+      label: District name
+  - value_id: district_002
+    label: State Senate District 2 (2024); Utah
+    ordinal: 1
+    row_number: 3
+    geography_id: 610U900US49002
+    geography_level: state_legislative_district_upper
+    geography_name: State Senate District 2 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 610U900US49002
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 610U900US49002
+      label: GEO_ID
+    - column: B
+      expected_value: State Senate District 2 (2024); Utah
+      label: District name
+  - value_id: district_003
+    label: State Senate District 3 (2024); Utah
+    ordinal: 2
+    row_number: 4
+    geography_id: 610U900US49003
+    geography_level: state_legislative_district_upper
+    geography_name: State Senate District 3 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 610U900US49003
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 610U900US49003
+      label: GEO_ID
+    - column: B
+      expected_value: State Senate District 3 (2024); Utah
+      label: District name
+  - value_id: district_004
+    label: State Senate District 4 (2024); Utah
+    ordinal: 3
+    row_number: 5
+    geography_id: 610U900US49004
+    geography_level: state_legislative_district_upper
+    geography_name: State Senate District 4 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 610U900US49004
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 610U900US49004
+      label: GEO_ID
+    - column: B
+      expected_value: State Senate District 4 (2024); Utah
+      label: District name
+  - value_id: district_005
+    label: State Senate District 5 (2024); Utah
+    ordinal: 4
+    row_number: 6
+    geography_id: 610U900US49005
+    geography_level: state_legislative_district_upper
+    geography_name: State Senate District 5 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 610U900US49005
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 610U900US49005
+      label: GEO_ID
+    - column: B
+      expected_value: State Senate District 5 (2024); Utah
+      label: District name
+  - value_id: district_006
+    label: State Senate District 6 (2024); Utah
+    ordinal: 5
+    row_number: 7
+    geography_id: 610U900US49006
+    geography_level: state_legislative_district_upper
+    geography_name: State Senate District 6 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 610U900US49006
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 610U900US49006
+      label: GEO_ID
+    - column: B
+      expected_value: State Senate District 6 (2024); Utah
+      label: District name
+  - value_id: district_007
+    label: State Senate District 7 (2024); Utah
+    ordinal: 6
+    row_number: 8
+    geography_id: 610U900US49007
+    geography_level: state_legislative_district_upper
+    geography_name: State Senate District 7 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 610U900US49007
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 610U900US49007
+      label: GEO_ID
+    - column: B
+      expected_value: State Senate District 7 (2024); Utah
+      label: District name
+  - value_id: district_008
+    label: State Senate District 8 (2024); Utah
+    ordinal: 7
+    row_number: 9
+    geography_id: 610U900US49008
+    geography_level: state_legislative_district_upper
+    geography_name: State Senate District 8 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 610U900US49008
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 610U900US49008
+      label: GEO_ID
+    - column: B
+      expected_value: State Senate District 8 (2024); Utah
+      label: District name
+  - value_id: district_009
+    label: State Senate District 9 (2024); Utah
+    ordinal: 8
+    row_number: 10
+    geography_id: 610U900US49009
+    geography_level: state_legislative_district_upper
+    geography_name: State Senate District 9 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 610U900US49009
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 610U900US49009
+      label: GEO_ID
+    - column: B
+      expected_value: State Senate District 9 (2024); Utah
+      label: District name
+  - value_id: district_010
+    label: State Senate District 10 (2024); Utah
+    ordinal: 9
+    row_number: 11
+    geography_id: 610U900US49010
+    geography_level: state_legislative_district_upper
+    geography_name: State Senate District 10 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 610U900US49010
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 610U900US49010
+      label: GEO_ID
+    - column: B
+      expected_value: State Senate District 10 (2024); Utah
+      label: District name
+  - value_id: district_011
+    label: State Senate District 11 (2024); Utah
+    ordinal: 10
+    row_number: 12
+    geography_id: 610U900US49011
+    geography_level: state_legislative_district_upper
+    geography_name: State Senate District 11 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 610U900US49011
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 610U900US49011
+      label: GEO_ID
+    - column: B
+      expected_value: State Senate District 11 (2024); Utah
+      label: District name
+  - value_id: district_012
+    label: State Senate District 12 (2024); Utah
+    ordinal: 11
+    row_number: 13
+    geography_id: 610U900US49012
+    geography_level: state_legislative_district_upper
+    geography_name: State Senate District 12 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 610U900US49012
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 610U900US49012
+      label: GEO_ID
+    - column: B
+      expected_value: State Senate District 12 (2024); Utah
+      label: District name
+  - value_id: district_013
+    label: State Senate District 13 (2024); Utah
+    ordinal: 12
+    row_number: 14
+    geography_id: 610U900US49013
+    geography_level: state_legislative_district_upper
+    geography_name: State Senate District 13 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 610U900US49013
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 610U900US49013
+      label: GEO_ID
+    - column: B
+      expected_value: State Senate District 13 (2024); Utah
+      label: District name
+  - value_id: district_014
+    label: State Senate District 14 (2024); Utah
+    ordinal: 13
+    row_number: 15
+    geography_id: 610U900US49014
+    geography_level: state_legislative_district_upper
+    geography_name: State Senate District 14 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 610U900US49014
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 610U900US49014
+      label: GEO_ID
+    - column: B
+      expected_value: State Senate District 14 (2024); Utah
+      label: District name
+  - value_id: district_015
+    label: State Senate District 15 (2024); Utah
+    ordinal: 14
+    row_number: 16
+    geography_id: 610U900US49015
+    geography_level: state_legislative_district_upper
+    geography_name: State Senate District 15 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 610U900US49015
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 610U900US49015
+      label: GEO_ID
+    - column: B
+      expected_value: State Senate District 15 (2024); Utah
+      label: District name
+  - value_id: district_016
+    label: State Senate District 16 (2024); Utah
+    ordinal: 15
+    row_number: 17
+    geography_id: 610U900US49016
+    geography_level: state_legislative_district_upper
+    geography_name: State Senate District 16 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 610U900US49016
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 610U900US49016
+      label: GEO_ID
+    - column: B
+      expected_value: State Senate District 16 (2024); Utah
+      label: District name
+  - value_id: district_017
+    label: State Senate District 17 (2024); Utah
+    ordinal: 16
+    row_number: 18
+    geography_id: 610U900US49017
+    geography_level: state_legislative_district_upper
+    geography_name: State Senate District 17 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 610U900US49017
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 610U900US49017
+      label: GEO_ID
+    - column: B
+      expected_value: State Senate District 17 (2024); Utah
+      label: District name
+  - value_id: district_018
+    label: State Senate District 18 (2024); Utah
+    ordinal: 17
+    row_number: 19
+    geography_id: 610U900US49018
+    geography_level: state_legislative_district_upper
+    geography_name: State Senate District 18 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 610U900US49018
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 610U900US49018
+      label: GEO_ID
+    - column: B
+      expected_value: State Senate District 18 (2024); Utah
+      label: District name
+  - value_id: district_019
+    label: State Senate District 19 (2024); Utah
+    ordinal: 18
+    row_number: 20
+    geography_id: 610U900US49019
+    geography_level: state_legislative_district_upper
+    geography_name: State Senate District 19 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 610U900US49019
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 610U900US49019
+      label: GEO_ID
+    - column: B
+      expected_value: State Senate District 19 (2024); Utah
+      label: District name
+  - value_id: district_020
+    label: State Senate District 20 (2024); Utah
+    ordinal: 19
+    row_number: 21
+    geography_id: 610U900US49020
+    geography_level: state_legislative_district_upper
+    geography_name: State Senate District 20 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 610U900US49020
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 610U900US49020
+      label: GEO_ID
+    - column: B
+      expected_value: State Senate District 20 (2024); Utah
+      label: District name
+  - value_id: district_021
+    label: State Senate District 21 (2024); Utah
+    ordinal: 20
+    row_number: 22
+    geography_id: 610U900US49021
+    geography_level: state_legislative_district_upper
+    geography_name: State Senate District 21 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 610U900US49021
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 610U900US49021
+      label: GEO_ID
+    - column: B
+      expected_value: State Senate District 21 (2024); Utah
+      label: District name
+  - value_id: district_022
+    label: State Senate District 22 (2024); Utah
+    ordinal: 21
+    row_number: 23
+    geography_id: 610U900US49022
+    geography_level: state_legislative_district_upper
+    geography_name: State Senate District 22 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 610U900US49022
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 610U900US49022
+      label: GEO_ID
+    - column: B
+      expected_value: State Senate District 22 (2024); Utah
+      label: District name
+  - value_id: district_023
+    label: State Senate District 23 (2024); Utah
+    ordinal: 22
+    row_number: 24
+    geography_id: 610U900US49023
+    geography_level: state_legislative_district_upper
+    geography_name: State Senate District 23 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 610U900US49023
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 610U900US49023
+      label: GEO_ID
+    - column: B
+      expected_value: State Senate District 23 (2024); Utah
+      label: District name
+  - value_id: district_024
+    label: State Senate District 24 (2024); Utah
+    ordinal: 23
+    row_number: 25
+    geography_id: 610U900US49024
+    geography_level: state_legislative_district_upper
+    geography_name: State Senate District 24 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 610U900US49024
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 610U900US49024
+      label: GEO_ID
+    - column: B
+      expected_value: State Senate District 24 (2024); Utah
+      label: District name
+  - value_id: district_025
+    label: State Senate District 25 (2024); Utah
+    ordinal: 24
+    row_number: 26
+    geography_id: 610U900US49025
+    geography_level: state_legislative_district_upper
+    geography_name: State Senate District 25 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 610U900US49025
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 610U900US49025
+      label: GEO_ID
+    - column: B
+      expected_value: State Senate District 25 (2024); Utah
+      label: District name
+  - value_id: district_026
+    label: State Senate District 26 (2024); Utah
+    ordinal: 25
+    row_number: 27
+    geography_id: 610U900US49026
+    geography_level: state_legislative_district_upper
+    geography_name: State Senate District 26 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 610U900US49026
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 610U900US49026
+      label: GEO_ID
+    - column: B
+      expected_value: State Senate District 26 (2024); Utah
+      label: District name
+  - value_id: district_027
+    label: State Senate District 27 (2024); Utah
+    ordinal: 26
+    row_number: 28
+    geography_id: 610U900US49027
+    geography_level: state_legislative_district_upper
+    geography_name: State Senate District 27 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 610U900US49027
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 610U900US49027
+      label: GEO_ID
+    - column: B
+      expected_value: State Senate District 27 (2024); Utah
+      label: District name
+  - value_id: district_028
+    label: State Senate District 28 (2024); Utah
+    ordinal: 27
+    row_number: 29
+    geography_id: 610U900US49028
+    geography_level: state_legislative_district_upper
+    geography_name: State Senate District 28 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 610U900US49028
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 610U900US49028
+      label: GEO_ID
+    - column: B
+      expected_value: State Senate District 28 (2024); Utah
+      label: District name
+  - value_id: district_029
+    label: State Senate District 29 (2024); Utah
+    ordinal: 28
+    row_number: 30
+    geography_id: 610U900US49029
+    geography_level: state_legislative_district_upper
+    geography_name: State Senate District 29 (2024); Utah
+    geography_vintage: 2024_state_legislative_districts
+    expected_row_header_column: A
+    expected_row_header: 610U900US49029
+    table_record_kind: total
+    guard_cells:
+    - column: A
+      expected_value: 610U900US49029
+      label: GEO_ID
+    - column: B
+      expected_value: State Senate District 29 (2024); Utah
+      label: District name
+  measures:
+  - measure_id: all_households
+    label: Total households
+    ordinal: 0
+    column: C
+    source_column_id: B19001_001E
+    concept: census_acs.household_count
+    source_concept: ACS B19001 total households estimate
+    concept_relation: source_label
+    unit: count
+    aggregation: sum
+    expected_cell_type: number
+  - measure_id: income_under_10000
+    label: Household income under $10,000
+    ordinal: 1
+    column: D
+    source_column_id: B19001_002E
+    concept: census_acs.household_count
+    source_concept: ACS B19001 households with household income under $10,000
+    concept_relation: source_label
+    unit: count
+    aggregation: sum
+    expected_cell_type: number
+    constraints:
+    - variable: household_income
+      operator: <
+      value: 10000
+      unit: usd
+      label: household_income upper bound
+  - measure_id: income_10000_to_14999
+    label: Household income $10,000 to $14,999
+    ordinal: 2
+    column: E
+    source_column_id: B19001_003E
+    concept: census_acs.household_count
+    source_concept: ACS B19001 households with household income $10,000 to $14,999
+    concept_relation: source_label
+    unit: count
+    aggregation: sum
+    expected_cell_type: number
+    constraints:
+    - variable: household_income
+      operator: '>='
+      value: 10000
+      unit: usd
+      label: household_income lower bound
+    - variable: household_income
+      operator: <
+      value: 15000
+      unit: usd
+      label: household_income upper bound
+  - measure_id: income_15000_to_19999
+    label: Household income $15,000 to $19,999
+    ordinal: 3
+    column: F
+    source_column_id: B19001_004E
+    concept: census_acs.household_count
+    source_concept: ACS B19001 households with household income $15,000 to $19,999
+    concept_relation: source_label
+    unit: count
+    aggregation: sum
+    expected_cell_type: number
+    constraints:
+    - variable: household_income
+      operator: '>='
+      value: 15000
+      unit: usd
+      label: household_income lower bound
+    - variable: household_income
+      operator: <
+      value: 20000
+      unit: usd
+      label: household_income upper bound
+  - measure_id: income_20000_to_24999
+    label: Household income $20,000 to $24,999
+    ordinal: 4
+    column: G
+    source_column_id: B19001_005E
+    concept: census_acs.household_count
+    source_concept: ACS B19001 households with household income $20,000 to $24,999
+    concept_relation: source_label
+    unit: count
+    aggregation: sum
+    expected_cell_type: number
+    constraints:
+    - variable: household_income
+      operator: '>='
+      value: 20000
+      unit: usd
+      label: household_income lower bound
+    - variable: household_income
+      operator: <
+      value: 25000
+      unit: usd
+      label: household_income upper bound
+  - measure_id: income_25000_to_29999
+    label: Household income $25,000 to $29,999
+    ordinal: 5
+    column: H
+    source_column_id: B19001_006E
+    concept: census_acs.household_count
+    source_concept: ACS B19001 households with household income $25,000 to $29,999
+    concept_relation: source_label
+    unit: count
+    aggregation: sum
+    expected_cell_type: number
+    constraints:
+    - variable: household_income
+      operator: '>='
+      value: 25000
+      unit: usd
+      label: household_income lower bound
+    - variable: household_income
+      operator: <
+      value: 30000
+      unit: usd
+      label: household_income upper bound
+  - measure_id: income_30000_to_34999
+    label: Household income $30,000 to $34,999
+    ordinal: 6
+    column: I
+    source_column_id: B19001_007E
+    concept: census_acs.household_count
+    source_concept: ACS B19001 households with household income $30,000 to $34,999
+    concept_relation: source_label
+    unit: count
+    aggregation: sum
+    expected_cell_type: number
+    constraints:
+    - variable: household_income
+      operator: '>='
+      value: 30000
+      unit: usd
+      label: household_income lower bound
+    - variable: household_income
+      operator: <
+      value: 35000
+      unit: usd
+      label: household_income upper bound
+  - measure_id: income_35000_to_39999
+    label: Household income $35,000 to $39,999
+    ordinal: 7
+    column: J
+    source_column_id: B19001_008E
+    concept: census_acs.household_count
+    source_concept: ACS B19001 households with household income $35,000 to $39,999
+    concept_relation: source_label
+    unit: count
+    aggregation: sum
+    expected_cell_type: number
+    constraints:
+    - variable: household_income
+      operator: '>='
+      value: 35000
+      unit: usd
+      label: household_income lower bound
+    - variable: household_income
+      operator: <
+      value: 40000
+      unit: usd
+      label: household_income upper bound
+  - measure_id: income_40000_to_44999
+    label: Household income $40,000 to $44,999
+    ordinal: 8
+    column: K
+    source_column_id: B19001_009E
+    concept: census_acs.household_count
+    source_concept: ACS B19001 households with household income $40,000 to $44,999
+    concept_relation: source_label
+    unit: count
+    aggregation: sum
+    expected_cell_type: number
+    constraints:
+    - variable: household_income
+      operator: '>='
+      value: 40000
+      unit: usd
+      label: household_income lower bound
+    - variable: household_income
+      operator: <
+      value: 45000
+      unit: usd
+      label: household_income upper bound
+  - measure_id: income_45000_to_49999
+    label: Household income $45,000 to $49,999
+    ordinal: 9
+    column: L
+    source_column_id: B19001_010E
+    concept: census_acs.household_count
+    source_concept: ACS B19001 households with household income $45,000 to $49,999
+    concept_relation: source_label
+    unit: count
+    aggregation: sum
+    expected_cell_type: number
+    constraints:
+    - variable: household_income
+      operator: '>='
+      value: 45000
+      unit: usd
+      label: household_income lower bound
+    - variable: household_income
+      operator: <
+      value: 50000
+      unit: usd
+      label: household_income upper bound
+  - measure_id: income_50000_to_59999
+    label: Household income $50,000 to $59,999
+    ordinal: 10
+    column: M
+    source_column_id: B19001_011E
+    concept: census_acs.household_count
+    source_concept: ACS B19001 households with household income $50,000 to $59,999
+    concept_relation: source_label
+    unit: count
+    aggregation: sum
+    expected_cell_type: number
+    constraints:
+    - variable: household_income
+      operator: '>='
+      value: 50000
+      unit: usd
+      label: household_income lower bound
+    - variable: household_income
+      operator: <
+      value: 60000
+      unit: usd
+      label: household_income upper bound
+  - measure_id: income_60000_to_74999
+    label: Household income $60,000 to $74,999
+    ordinal: 11
+    column: N
+    source_column_id: B19001_012E
+    concept: census_acs.household_count
+    source_concept: ACS B19001 households with household income $60,000 to $74,999
+    concept_relation: source_label
+    unit: count
+    aggregation: sum
+    expected_cell_type: number
+    constraints:
+    - variable: household_income
+      operator: '>='
+      value: 60000
+      unit: usd
+      label: household_income lower bound
+    - variable: household_income
+      operator: <
+      value: 75000
+      unit: usd
+      label: household_income upper bound
+  - measure_id: income_75000_to_99999
+    label: Household income $75,000 to $99,999
+    ordinal: 12
+    column: O
+    source_column_id: B19001_013E
+    concept: census_acs.household_count
+    source_concept: ACS B19001 households with household income $75,000 to $99,999
+    concept_relation: source_label
+    unit: count
+    aggregation: sum
+    expected_cell_type: number
+    constraints:
+    - variable: household_income
+      operator: '>='
+      value: 75000
+      unit: usd
+      label: household_income lower bound
+    - variable: household_income
+      operator: <
+      value: 100000
+      unit: usd
+      label: household_income upper bound
+  - measure_id: income_100000_to_124999
+    label: Household income $100,000 to $124,999
+    ordinal: 13
+    column: P
+    source_column_id: B19001_014E
+    concept: census_acs.household_count
+    source_concept: ACS B19001 households with household income $100,000 to $124,999
+    concept_relation: source_label
+    unit: count
+    aggregation: sum
+    expected_cell_type: number
+    constraints:
+    - variable: household_income
+      operator: '>='
+      value: 100000
+      unit: usd
+      label: household_income lower bound
+    - variable: household_income
+      operator: <
+      value: 125000
+      unit: usd
+      label: household_income upper bound
+  - measure_id: income_125000_to_149999
+    label: Household income $125,000 to $149,999
+    ordinal: 14
+    column: Q
+    source_column_id: B19001_015E
+    concept: census_acs.household_count
+    source_concept: ACS B19001 households with household income $125,000 to $149,999
+    concept_relation: source_label
+    unit: count
+    aggregation: sum
+    expected_cell_type: number
+    constraints:
+    - variable: household_income
+      operator: '>='
+      value: 125000
+      unit: usd
+      label: household_income lower bound
+    - variable: household_income
+      operator: <
+      value: 150000
+      unit: usd
+      label: household_income upper bound
+  - measure_id: income_150000_to_199999
+    label: Household income $150,000 to $199,999
+    ordinal: 15
+    column: R
+    source_column_id: B19001_016E
+    concept: census_acs.household_count
+    source_concept: ACS B19001 households with household income $150,000 to $199,999
+    concept_relation: source_label
+    unit: count
+    aggregation: sum
+    expected_cell_type: number
+    constraints:
+    - variable: household_income
+      operator: '>='
+      value: 150000
+      unit: usd
+      label: household_income lower bound
+    - variable: household_income
+      operator: <
+      value: 200000
+      unit: usd
+      label: household_income upper bound
+  - measure_id: income_200000_and_over
+    label: Household income $200,000 or more
+    ordinal: 16
+    column: S
+    source_column_id: B19001_017E
+    concept: census_acs.household_count
+    source_concept: ACS B19001 households with household income $200,000 or more
+    concept_relation: source_label
+    unit: count
+    aggregation: sum
+    expected_cell_type: number
+    constraints:
+    - variable: household_income
+      operator: '>='
+      value: 200000
+      unit: usd
+      label: household_income lower bound
