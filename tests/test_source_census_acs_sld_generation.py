@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from ledger.sources.census_acs_sld import (
+from chronicle.sources.census_acs_sld import (
     CHAMBERS,
     SLD_TABLES,
     _package_names,
@@ -27,6 +27,7 @@ from ledger.sources.census_acs_sld import (
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 EXTRACTED_AT = "2026-08-05"
+FETCHED_AT = "2026-08-05"
 PILOT_STATE_FIPS = "49"
 
 
@@ -71,6 +72,7 @@ def test_committed_manifest_matches_witnessed_bytes(
         table_key=table_key,
         chamber_key=chamber_key,
         state_fips=PILOT_STATE_FIPS,
+        fetched_at=FETCHED_AT,
     )
     committed = yaml.safe_load((data_dir / "manifest.yaml").read_text())
     # publish-raw appends storage.r2 blocks to committed file entries after
@@ -142,10 +144,13 @@ def test_parse_witness_rows_refuses_duplicate_districts() -> None:
         parse_witness_rows(content)
 
 
-def test_generate_source_package_refuses_suppressed_values() -> None:
+@pytest.mark.parametrize("sentinel", ["-666666666", "-888888888", "-1"])
+def test_generate_source_package_refuses_negative_sentinels(
+    sentinel: str,
+) -> None:
     content = _witness(
         ["GEO_ID", "NAME", "B19013_001E", "B19013_001M", "state", "sld"],
-        [["610U900US49001", "d1", "-666666666", "0", "49", "001"]],
+        [["610U900US49001", "d1", sentinel, "0", "49", "001"]],
     )
     with pytest.raises(ValueError, match="Suppressed"):
         generate_source_package(
@@ -170,3 +175,71 @@ def test_generate_source_package_refuses_wrong_chamber_geoids() -> None:
             state_fips=PILOT_STATE_FIPS,
             extracted_at=EXTRACTED_AT,
         )
+
+
+@pytest.mark.parametrize(("table_key", "chamber_key"), _pilot_cases())
+def test_committed_witness_bytes_match_manifest_sha(
+    table_key: str,
+    chamber_key: str,
+) -> None:
+    import hashlib
+
+    names = _package_names(table_key, chamber_key, PILOT_STATE_FIPS)
+    data_dir = REPO_ROOT / "db" / "data" / "census" / names["directory"]
+    committed = yaml.safe_load((data_dir / "manifest.yaml").read_text())
+    entry = committed["files"][2024]
+    content = (data_dir / names["filename"]).read_bytes()
+    assert hashlib.sha256(content).hexdigest() == entry["sha256"]
+    assert len(content) == entry["size_bytes"]
+
+
+def _acceptance_error_codes(alias: str) -> set[str]:
+    from chronicle.concepts import validate_concept_alignments
+    from chronicle.core import validate_facts
+    from chronicle.source_package import load_source_package
+    from chronicle.sources.cells import validate_source_cells
+    from chronicle.sources.rows import validate_source_rows
+    from chronicle.suite import (
+        build_agent_acceptance_report,
+        build_source_record_specs,
+        validate_source_record_specs,
+        validate_source_regions,
+    )
+
+    package = load_source_package(alias)
+    rows = package.build_source_rows(2024)
+    cells = package.build_source_cells(2024, source_rows=rows)
+    facts = package.build_facts(2024, cells=cells, source_rows=rows)
+    regions = package.build_source_regions(2024)
+    specs = build_source_record_specs(alias, year=2024)
+    report = build_agent_acceptance_report(
+        facts,
+        rows,
+        cells,
+        source_rows=validate_source_rows(rows),
+        source_cells=validate_source_cells(cells),
+        source_regions=validate_source_regions(regions, cells),
+        source_records=validate_source_record_specs(specs, cells),
+        fact_report=validate_facts(facts),
+        concept_alignments=validate_concept_alignments(facts),
+    )
+    return {error.code for error in report.errors}
+
+
+@pytest.mark.parametrize(
+    "alias",
+    [
+        "census-acs-s0101-sld-upper-utah-age-2024",
+        "census-acs-b19001-sld-upper-utah-household-income-2024",
+        "census-acs-b19013-sld-upper-utah-median-household-income-2024",
+    ],
+)
+def test_agent_acceptance_is_clean_except_pending_r2(alias: str) -> None:
+    """Constraint evidence, guards, lineage, and parsing all pass.
+
+    The one standing error is ``missing_raw_r2_link``: the publish-raw
+    upload needs ledger-raw credentials and is the recorded pending step.
+    After it runs (writing storage.r2 into the manifests), this pin
+    tightens to an empty set.
+    """
+    assert _acceptance_error_codes(alias) <= {"missing_raw_r2_link"}

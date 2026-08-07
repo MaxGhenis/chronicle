@@ -19,7 +19,6 @@ record_sets:
   provenance_class: survey_aggregate
   survey_instrument: ACS 5-year
   record_set_spec_id: census_acs.b19013.sld_lower_median_household_income.v1
-  source_record_id_prefix: census_acs.acs5_{year}.b19013.sld_lower_ut.median_household_income
   sheet_name: api_response
   period_type: calendar_year
   period: '{year}'
@@ -28,13 +27,14 @@ record_sets:
     end_date: '2024-12-31'
     basis: survey_reference
     source_period_label: 2020-2024 ACS 5-year estimates
+  entity: household
+  entity_role: resident_household
+  domain: households
+  source_record_id_prefix: census_acs.acs5_{year}.b19013.sld_lower_ut.median_household_income
   geography_id: 0400000US49
   geography_level: state
   geography_name: Utah
   geography_vintage: current
-  entity: household
-  entity_role: resident_household
-  domain: households
   groupby_dimension: census_acs.state_legislative_district
   rows:
   - value_id: district_001
@@ -1393,6 +1393,8 @@ record_sets:
     ordinal: 0
     column: C
     source_column_id: B19013_001E
+    expected_column_header_row: 1
+    expected_column_header: B19013_001E
     concept: census_acs.median_household_income
     source_concept: ACS B19013 median household income in the past 12 months (inflation-adjusted
       dollars)

@@ -392,12 +392,15 @@ def _validate_witness_values(
         index = header.index(measure.variable)
         for row in rows:
             value = row[index]
-            if value is None or str(value).startswith("-6666"):
+            if value is None or str(value).startswith("-"):
+                # Every value in these tables is a nonnegative count or a
+                # published median; any negative is an ACS annotation
+                # sentinel (suppression, jam values), never data.
                 raise ValueError(
                     f"Suppressed/absent value for {measure.variable} at "
                     f"{row[0]}; scope the package rows to published cells."
                 )
-            if not str(value).lstrip("-").isdigit():
+            if not str(value).isdigit():
                 raise ValueError(
                     f"Non-numeric value {value!r} for {measure.variable} at {row[0]}."
                 )
@@ -433,6 +436,7 @@ def generate_manifest(
     table_key: str,
     chamber_key: str,
     state_fips: str,
+    fetched_at: str,
 ) -> dict[str, Any]:
     """The db-resource ``manifest.yaml`` payload for one witness."""
     table = SLD_TABLES[table_key]
@@ -457,35 +461,28 @@ def generate_manifest(
                 "size_bytes": len(content),
                 "source_table": source_table,
                 "year": 2024,
+                "fetched_at": fetched_at,
             }
         },
     }
 
 
-def generate_source_package(
+def _validated_district_rows(
     content: bytes,
-    *,
-    table_key: str,
-    chamber_key: str,
+    table: SldTable,
+    chamber: SldChamber,
     state_fips: str,
-    extracted_at: str,
-) -> dict[str, Any]:
-    """The ``source_package.yaml`` payload generated from witnessed bytes."""
-    table = SLD_TABLES[table_key]
-    chamber = CHAMBERS[chamber_key]
-    names = _package_names(table_key, chamber_key, state_fips)
+) -> tuple[list[str], list[list[str]]]:
+    """Parse + validate the witness, returning (header, district rows)."""
     header, rows = parse_witness_rows(content)
     _validate_witness_values(header, rows, table)
-
-    row_payloads: list[dict[str, Any]] = []
-    for ordinal, row in enumerate(rows):
-        geo_id, name = str(row[0]), str(row[1])
-        district_code = str(row[-1])
-        expected_prefix = (
-            f"{chamber.summary_level}U"
-            if chamber.key == "upper"
-            else f"{chamber.summary_level}L"
-        )
+    expected_prefix = (
+        f"{chamber.summary_level}U"
+        if chamber.key == "upper"
+        else f"{chamber.summary_level}L"
+    )
+    for row in rows:
+        geo_id, district_code = str(row[0]), str(row[-1])
         if not geo_id.startswith(expected_prefix):
             raise ValueError(
                 f"GEO_ID {geo_id} does not match summary level "
@@ -496,69 +493,20 @@ def generate_source_package(
                 f"GEO_ID {geo_id} does not end with state {state_fips} and "
                 f"district {district_code}."
             )
-        row_payloads.append(
-            {
-                "value_id": f"district_{district_code}",
-                "label": name,
-                "ordinal": ordinal,
-                # json_table_full_rows numbers data rows from 2 (the header
-                # row is row 1 and is not materialized as cells).
-                "row_number": ordinal + 2,
-                "geography_id": geo_id,
-                "geography_level": chamber.geography_level,
-                "geography_name": name,
-                "geography_vintage": SLD_GEOGRAPHY_VINTAGE,
-                "expected_row_header_column": "A",
-                "expected_row_header": geo_id,
-                "table_record_kind": "total",
-                "guard_cells": [
-                    {
-                        "column": "A",
-                        "expected_value": geo_id,
-                        "label": "GEO_ID",
-                    },
-                    {
-                        "column": "B",
-                        "expected_value": name,
-                        "label": "District name",
-                    },
-                ],
-            }
-        )
+    return header, rows
 
-    measure_payloads: list[dict[str, Any]] = []
-    for ordinal, measure in enumerate(table.measures):
-        column_index = header.index(measure.variable) + 1
-        payload: dict[str, Any] = {
-            "measure_id": measure.measure_id,
-            "label": measure.label,
-            "ordinal": ordinal,
-            "column": _excel_column_name(column_index),
-            "source_column_id": measure.variable,
-            "concept": measure.concept,
-            "source_concept": measure.source_concept,
-            "concept_relation": "source_label",
-            "unit": measure.unit,
-            "aggregation": measure.aggregation,
-            "expected_cell_type": "number",
-        }
-        constraints = measure.constraints()
-        if constraints:
-            payload["constraints"] = constraints
-        measure_payloads.append(payload)
 
-    record_set_id = (
-        "census_acs.acs5_{year}."
-        f"{table_key}.sld_{chamber.key}_{names['usps']}.{table.topic}"
-    )
-    record_set = {
-        "record_set_id": record_set_id,
+def _record_set_common(
+    table: SldTable,
+    chamber: SldChamber,
+    table_key: str,
+) -> dict[str, Any]:
+    return {
         "provenance_class": "survey_aggregate",
         "survey_instrument": "ACS 5-year",
         "record_set_spec_id": (
             f"census_acs.{table_key}.sld_{chamber.key}_{table.topic}.v1"
         ),
-        "source_record_id_prefix": record_set_id,
         "sheet_name": "api_response",
         "period_type": "calendar_year",
         "period": "{year}",
@@ -568,17 +516,250 @@ def generate_source_package(
             "basis": "survey_reference",
             "source_period_label": "2020-2024 ACS 5-year estimates",
         },
-        "geography_id": f"0400000US{state_fips}",
-        "geography_level": "state",
-        "geography_name": names["state_name"],
-        "geography_vintage": "current",
         "entity": table.entity,
         "entity_role": table.entity_role,
         "domain": table.domain,
-        "groupby_dimension": "census_acs.state_legislative_district",
-        "rows": row_payloads,
-        "measures": measure_payloads,
     }
+
+
+#: Unpivoted-stream layouts per table: (parser name, dimension key column,
+#: value column, groupby dimension, band descriptors). Band descriptors are
+#: (value_id, publisher label emitted by the parser, constraints payload,
+#: table_record_kind). The labels MUST match the parser's emitted dimension
+#: values byte for byte — the regeneration test holds them together.
+def _s0101_band_descriptors() -> list[tuple[str, str, list[dict[str, Any]], str]]:
+    return [
+        (measure.measure_id, measure.label, measure.constraints(), "detail")
+        for measure in AGE_BAND_MEASURES
+    ]
+
+
+def _b19001_band_descriptors() -> list[tuple[str, str, list[dict[str, Any]], str]]:
+    from chronicle.sources.rows import B19001_INCOME_BRACKET_COLUMNS
+
+    by_variable = {measure.variable: measure for measure in INCOME_BRACKET_MEASURES}
+    descriptors: list[tuple[str, str, list[dict[str, Any]], str]] = []
+    for variable, _value_id, label, _lower, _upper in B19001_INCOME_BRACKET_COLUMNS:
+        measure = by_variable[variable]
+        descriptors.append(
+            (
+                measure.measure_id,
+                label,
+                measure.constraints(),
+                "total" if variable == "B19001_001E" else "detail",
+            )
+        )
+    return descriptors
+
+
+_UNPIVOTED_LAYOUTS: dict[str, dict[str, Any]] = {
+    "s0101": {
+        "parser": "census_acs_s0101_age_json_rows",
+        "header_column": "E",
+        "value_column": "F",
+        "groupby_dimension": "age",
+        "descriptors": _s0101_band_descriptors,
+        "measure_id": "population",
+        "measure_label": "Population",
+        "extraction_method": (
+            "Census API JSON table parsed and unpivoted to district age-band rows"
+        ),
+    },
+    "b19001": {
+        "parser": "census_acs_b19001_income_json_rows",
+        "header_column": "E",
+        "value_column": "H",
+        "groupby_dimension": "household_income",
+        "descriptors": _b19001_band_descriptors,
+        "measure_id": "household_count",
+        "measure_label": "Households",
+        "extraction_method": (
+            "Census API JSON table parsed and unpivoted to district "
+            "income-bracket rows with explicit bound columns"
+        ),
+    },
+}
+
+
+def generate_source_package(
+    content: bytes,
+    *,
+    table_key: str,
+    chamber_key: str,
+    state_fips: str,
+    extracted_at: str,
+) -> dict[str, Any]:
+    """The ``source_package.yaml`` payload generated from witnessed bytes.
+
+    Constrained tables (S0101 age bands, B19001 income brackets) use the
+    unpivoted per-district record-set shape: each fact's source row carries
+    its band's semantic value (and, for income, explicit numeric bounds),
+    so the agent-acceptance constraint-evidence gate validates every bound
+    against the parsed rows. The unconstrained B19013 median keeps the
+    compact rectangular shape.
+    """
+    table = SLD_TABLES[table_key]
+    chamber = CHAMBERS[chamber_key]
+    names = _package_names(table_key, chamber_key, state_fips)
+    header, rows = _validated_district_rows(content, table, chamber, state_fips)
+
+    if table_key in _UNPIVOTED_LAYOUTS:
+        layout = _UNPIVOTED_LAYOUTS[table_key]
+        descriptors = layout["descriptors"]()
+        n_bands = len(descriptors)
+        record_sets: list[dict[str, Any]] = []
+        for district_index, row in enumerate(rows):
+            geo_id, name = str(row[0]), str(row[1])
+            district_code = str(row[-1])
+            record_set_id = (
+                "census_acs.acs5_{year}."
+                f"{table_key}.sld_{chamber.key}_{names['usps']}.{table.topic}"
+                f".{state_fips}{district_code}"
+            )
+            row_payloads = []
+            for band_index, (value_id, band_label, constraints, kind) in enumerate(
+                descriptors
+            ):
+                payload: dict[str, Any] = {
+                    "value_id": value_id,
+                    "label": band_label,
+                    "ordinal": band_index,
+                    # Cells materialize a header row at row 1; data rows
+                    # of the unpivoted stream start at row 2.
+                    "row_number": district_index * n_bands + band_index + 2,
+                    "expected_row_header_column": layout["header_column"],
+                    "expected_row_header": band_label,
+                    "guard_cells": [
+                        {
+                            "column": "A",
+                            "expected_value": geo_id,
+                            "label": "GEO_ID",
+                        },
+                        {
+                            "column": "B",
+                            "expected_value": name,
+                            "label": "District name",
+                        },
+                    ],
+                }
+                if kind != "detail":
+                    payload["table_record_kind"] = kind
+                if constraints:
+                    payload["constraints"] = constraints
+                row_payloads.append(payload)
+            record_sets.append(
+                {
+                    "record_set_id": record_set_id,
+                    **_record_set_common(table, chamber, table_key),
+                    "source_record_id_prefix": record_set_id,
+                    "geography_id": geo_id,
+                    "geography_level": chamber.geography_level,
+                    "geography_name": name,
+                    "geography_vintage": SLD_GEOGRAPHY_VINTAGE,
+                    "groupby_dimension": layout["groupby_dimension"],
+                    "rows": row_payloads,
+                    "measures": [
+                        {
+                            "measure_id": layout["measure_id"],
+                            "label": layout["measure_label"],
+                            "ordinal": 0,
+                            "column": layout["value_column"],
+                            "source_column_id": "value",
+                            "expected_column_header_row": 1,
+                            "expected_column_header": "value",
+                            "concept": table.measures[0].concept,
+                            "source_concept": (
+                                f"ACS {table.table} district "
+                                f"{layout['groupby_dimension']} estimate"
+                            ),
+                            "concept_relation": "source_label",
+                            "unit": table.measures[0].unit,
+                            "aggregation": "sum",
+                            "expected_cell_type": "number",
+                        }
+                    ],
+                }
+            )
+        parser = layout["parser"]
+        extraction_method = layout["extraction_method"]
+    else:
+        row_payloads = []
+        for ordinal, row in enumerate(rows):
+            geo_id, name = str(row[0]), str(row[1])
+            district_code = str(row[-1])
+            row_payloads.append(
+                {
+                    "value_id": f"district_{district_code}",
+                    "label": name,
+                    "ordinal": ordinal,
+                    # json_table_full_rows numbers data rows from 2 (the
+                    # header row is row 1 and is not materialized as cells).
+                    "row_number": ordinal + 2,
+                    "geography_id": geo_id,
+                    "geography_level": chamber.geography_level,
+                    "geography_name": name,
+                    "geography_vintage": SLD_GEOGRAPHY_VINTAGE,
+                    "expected_row_header_column": "A",
+                    "expected_row_header": geo_id,
+                    "table_record_kind": "total",
+                    "guard_cells": [
+                        {
+                            "column": "A",
+                            "expected_value": geo_id,
+                            "label": "GEO_ID",
+                        },
+                        {
+                            "column": "B",
+                            "expected_value": name,
+                            "label": "District name",
+                        },
+                    ],
+                }
+            )
+        measure_payloads = []
+        for ordinal, measure in enumerate(table.measures):
+            column_index = header.index(measure.variable) + 1
+            payload = {
+                "measure_id": measure.measure_id,
+                "label": measure.label,
+                "ordinal": ordinal,
+                "column": _excel_column_name(column_index),
+                "source_column_id": measure.variable,
+                "expected_column_header_row": 1,
+                "expected_column_header": measure.variable,
+                "concept": measure.concept,
+                "source_concept": measure.source_concept,
+                "concept_relation": "source_label",
+                "unit": measure.unit,
+                "aggregation": measure.aggregation,
+                "expected_cell_type": "number",
+            }
+            constraints = measure.constraints()
+            if constraints:
+                payload["constraints"] = constraints
+            measure_payloads.append(payload)
+        record_set_id = (
+            "census_acs.acs5_{year}."
+            f"{table_key}.sld_{chamber.key}_{names['usps']}.{table.topic}"
+        )
+        record_sets = [
+            {
+                "record_set_id": record_set_id,
+                **_record_set_common(table, chamber, table_key),
+                "source_record_id_prefix": record_set_id,
+                "geography_id": f"0400000US{state_fips}",
+                "geography_level": "state",
+                "geography_name": names["state_name"],
+                "geography_vintage": "current",
+                "groupby_dimension": "census_acs.state_legislative_district",
+                "rows": row_payloads,
+                "measures": measure_payloads,
+            }
+        ]
+        parser = "json_table_full_rows"
+        extraction_method = (
+            "Census API JSON table parsed to one source row per district"
+        )
 
     label = (
         f"Census ACS 2020-2024 5-year {table.table} {names['state_name']} "
@@ -601,11 +782,9 @@ def generate_source_package(
             "manifest": "manifest.yaml",
             "vintage": "acs_5_year_{year}",
             "extracted_at": extracted_at,
-            "extraction_method": (
-                "Census API JSON table parsed to one source row per district"
-            ),
-            "parser": "json_table_full_rows",
+            "extraction_method": extraction_method,
+            "parser": parser,
             "sheet_name": "api_response",
         },
-        "record_sets": [record_set],
+        "record_sets": record_sets,
     }

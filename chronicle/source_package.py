@@ -46,6 +46,7 @@ from chronicle.sources.rows import (
     SourceRow,
     source_cells_from_source_rows,
     source_rows_from_census_acs_s0101_age_json,
+    source_rows_from_census_acs_b19001_income_json,
     source_rows_from_census_acs_s2201_snap_json,
     source_rows_from_census_b01001_female_age_json,
     source_rows_from_cdc_vsrr_live_births_json,
@@ -99,9 +100,7 @@ SOURCE_PACKAGE_ALIASES = {
         "mhclg/ehs_weekly_housing_costs_2023_24"
     ),
     "statbel-population-structure-2026": Path("statbel/population_structure_2026"),
-    "statbel-fiscal-income-2023-nis-2025": Path(
-        "statbel/fiscal_income_2023_nis_2025"
-    ),
+    "statbel-fiscal-income-2023-nis-2025": Path("statbel/fiscal_income_2023_nis_2025"),
     "spf-finances-pit-2023": Path("spf_finances/pit_2023"),
     "onss-contributions-2024": Path("onss/contributions_2024"),
     "onem-rva-unemployment-2024": Path("onem_rva/unemployment_2024"),
@@ -111,12 +110,8 @@ SOURCE_PACKAGE_ALIASES = {
     "jrc-euromod-be-baseline-statistics-2025": Path(
         "jrc/euromod_be_baseline_statistics_2025"
     ),
-    "sfpd-legal-pension-caseload-2025": Path(
-        "sfpd/legal_pension_caseload_2025"
-    ),
-    "opgroeien-groeipakket-caseload-2025": Path(
-        "opgroeien/groeipakket_caseload_2025"
-    ),
+    "sfpd-legal-pension-caseload-2025": Path("sfpd/legal_pension_caseload_2025"),
+    "opgroeien-groeipakket-caseload-2025": Path("opgroeien/groeipakket_caseload_2025"),
     "bfp-economic-outlook-2026-06": Path("bfp/economic_outlook_2026_06"),
     "dft-nts-vehicle-ownership-2024": Path("dft/nts_vehicle_ownership_2024"),
     "dwp-benefit-cap-november-2025": Path("dwp/benefit_cap_november_2025"),
@@ -158,12 +153,8 @@ SOURCE_PACKAGE_ALIASES = {
     "census-acs-s2201-congressional-district-snap-2024": Path(
         "census/acs_s2201_district_2024"
     ),
-    "census-acs-s0101-sld-upper-utah-age-2024": Path(
-        "census/acs_s0101_sldu_ut_2024"
-    ),
-    "census-acs-s0101-sld-lower-utah-age-2024": Path(
-        "census/acs_s0101_sldl_ut_2024"
-    ),
+    "census-acs-s0101-sld-upper-utah-age-2024": Path("census/acs_s0101_sldu_ut_2024"),
+    "census-acs-s0101-sld-lower-utah-age-2024": Path("census/acs_s0101_sldl_ut_2024"),
     "census-acs-b19001-sld-upper-utah-household-income-2024": Path(
         "census/acs_b19001_sldu_ut_2024"
     ),
@@ -342,7 +333,9 @@ DEFAULT_SOURCE_ARTIFACT_CACHE_DIR = (
 SOURCE_PACKAGE_FILENAME = "source_package.yaml"
 # Repository ``packages/`` directory: the source-package authoring surface a
 # complete bundle must cover (see PolicyEngine/chronicle#78).
-SOURCE_PACKAGE_ROOT = Path(__file__).resolve().parents[1] / SOURCE_PACKAGE_RESOURCE_PACKAGE
+SOURCE_PACKAGE_ROOT = (
+    Path(__file__).resolve().parents[1] / SOURCE_PACKAGE_RESOURCE_PACKAGE
+)
 EXCEL_COLUMN_RE = re.compile(r"^[A-Z]+$")
 
 
@@ -413,6 +406,12 @@ class SourceArtifactSpec:
             )
         if self.parser == "census_acs_s2201_snap_json_rows":
             return source_rows_from_census_acs_s2201_snap_json(
+                content,
+                artifact,
+                sheet_name=self._sheet_name(filename, year=year),
+            )
+        if self.parser == "census_acs_b19001_income_json_rows":
+            return source_rows_from_census_acs_b19001_income_json(
                 content,
                 artifact,
                 sheet_name=self._sheet_name(filename, year=year),
@@ -615,6 +614,26 @@ class SourceArtifactSpec:
                 source_rows
                 if source_rows is not None
                 else source_rows_from_census_b01001_female_age_json(
+                    content,
+                    artifact,
+                    sheet_name=self._sheet_name(filename, year=year),
+                )
+            )
+            return source_cells_from_source_rows(
+                rows,
+                selected_rows=tuple(
+                    {
+                        key: str(_render_value(value, year=year))
+                        for key, value in row.items()
+                    }
+                    for row in self.selected_rows
+                ),
+            )
+        if self.parser == "census_acs_b19001_income_json_rows":
+            rows = (
+                source_rows
+                if source_rows is not None
+                else source_rows_from_census_acs_b19001_income_json(
                     content,
                     artifact,
                     sheet_name=self._sheet_name(filename, year=year),
@@ -2023,9 +2042,7 @@ def _provenance_fields_from_mapping(
     survey_instrument = payload.get("survey_instrument")
     if provenance_class == "survey_aggregate":
         if not has_survey_instrument:
-            raise KeyError(
-                "Missing required record_set field: survey_instrument"
-            )
+            raise KeyError("Missing required record_set field: survey_instrument")
         if type(survey_instrument) is not str or not survey_instrument.strip():
             raise TypeError(
                 "record_set survey_instrument must be a non-empty string for "
@@ -2077,9 +2094,7 @@ def _period_coverage_from_mapping(
     }
     unknown = sorted(set(payload) - allowed_keys)
     if unknown:
-        raise ValueError(
-            f"record_set period_coverage has unknown keys: {unknown}."
-        )
+        raise ValueError(f"record_set period_coverage has unknown keys: {unknown}.")
     return PeriodCoverage(
         **{
             key: _optional_rendered_string(payload.get(key), year=year)

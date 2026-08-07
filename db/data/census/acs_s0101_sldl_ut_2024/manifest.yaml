@@ -13,3 +13,4 @@ files:
     source_table: ACS 2024 5-year table S0101 Utah state legislative district (lower chamber)
       population by age band
     year: 2024
+    fetched_at: '2026-08-05'

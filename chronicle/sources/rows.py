@@ -456,6 +456,79 @@ def source_rows_from_census_acs_s2201_snap_json(
     return rows
 
 
+B19001_INCOME_BRACKET_COLUMNS: tuple[
+    tuple[str, str, str, int | None, int | None], ...
+] = (
+    ("B19001_001E", "all_households", "Total", None, None),
+    ("B19001_002E", "under_10000", "Less than $10,000", None, 10_000),
+    ("B19001_003E", "10000_to_14999", "$10,000 to $14,999", 10_000, 15_000),
+    ("B19001_004E", "15000_to_19999", "$15,000 to $19,999", 15_000, 20_000),
+    ("B19001_005E", "20000_to_24999", "$20,000 to $24,999", 20_000, 25_000),
+    ("B19001_006E", "25000_to_29999", "$25,000 to $29,999", 25_000, 30_000),
+    ("B19001_007E", "30000_to_34999", "$30,000 to $34,999", 30_000, 35_000),
+    ("B19001_008E", "35000_to_39999", "$35,000 to $39,999", 35_000, 40_000),
+    ("B19001_009E", "40000_to_44999", "$40,000 to $44,999", 40_000, 45_000),
+    ("B19001_010E", "45000_to_49999", "$45,000 to $49,999", 45_000, 50_000),
+    ("B19001_011E", "50000_to_59999", "$50,000 to $59,999", 50_000, 60_000),
+    ("B19001_012E", "60000_to_74999", "$60,000 to $74,999", 60_000, 75_000),
+    ("B19001_013E", "75000_to_99999", "$75,000 to $99,999", 75_000, 100_000),
+    ("B19001_014E", "100000_to_124999", "$100,000 to $124,999", 100_000, 125_000),
+    ("B19001_015E", "125000_to_149999", "$125,000 to $149,999", 125_000, 150_000),
+    ("B19001_016E", "150000_to_199999", "$150,000 to $199,999", 150_000, 200_000),
+    ("B19001_017E", "200000_and_over", "$200,000 or more", 200_000, None),
+)
+
+
+def source_rows_from_census_acs_b19001_income_json(
+    content: bytes,
+    artifact: SourceArtifactMetadata,
+    *,
+    sheet_name: str,
+) -> list[SourceRow]:
+    """Unpivot Census ACS B19001 API rows into income-bracket source rows.
+
+    Each unpivoted row carries the bracket's semantic value under
+    ``household_income`` (the publisher's bracket label) plus explicit
+    ``household_income_lower_bound`` / ``household_income_upper_bound``
+    numeric keys, so bracket-bound constraints are evidenced by the fact's
+    own source rows (the agent-acceptance ``row_constraint`` gate). The
+    total-households column carries no bounds.
+    """
+    table_rows = source_rows_from_json_table(
+        content,
+        artifact,
+        sheet_name=sheet_name,
+    )
+    rows: list[SourceRow] = []
+    for source_table_row in table_rows:
+        for variable, _value_id, label, lower, upper in B19001_INCOME_BRACKET_COLUMNS:
+            rows.append(
+                SourceRow(
+                    artifact=artifact,
+                    sheet_name=sheet_name,
+                    row_number=len(rows) + 1,
+                    values={
+                        "GEO_ID": source_table_row.values.get("GEO_ID"),
+                        "NAME": source_table_row.values.get("NAME"),
+                        "source_column_id": variable,
+                        "source_concept": f"Household income {label}"
+                        if variable != "B19001_001E"
+                        else "Total households",
+                        "household_income": label,
+                        "household_income_lower_bound": (
+                            "" if lower is None else lower
+                        ),
+                        "household_income_upper_bound": (
+                            "" if upper is None else upper
+                        ),
+                        "value": source_table_row.values.get(variable),
+                        "source_table_row_number": source_table_row.row_number,
+                    },
+                )
+            )
+    return rows
+
+
 def source_rows_from_census_b01001_female_age_json(
     content: bytes,
     artifact: SourceArtifactMetadata,
