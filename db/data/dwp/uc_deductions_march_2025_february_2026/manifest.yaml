@@ -1,0 +1,12 @@
+source_id: dwp
+package_id: dwp-uc-deductions-march-2025-february-2026
+dataset: dwp_uc_deductions_march_2025_february_2026
+source_page: https://www.gov.uk/government/statistics/universal-credit-quarterly-statistics-29-april-2013-to-12-february-2026
+table: 'Universal Credit deductions statistics March 2025 to February 2026, supplementary data tables'
+files:
+  2026:
+    filename: universal-credit-deductions-march-2025-to-february-2026.ods
+    source_url: https://assets.publishing.service.gov.uk/media/69fb3ea22a6137e93226b7ce/universal-credit-deductions-march-2025-to-february-2026.ods
+    sha256: 307ec8fa49a1f1e23db3c59f1282e16609de03444e501824e204b4151e2e5c9b
+    size_bytes: 148671
+    fetched_at: '2026-08-19T00:00:00+00:00'

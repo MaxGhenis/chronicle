@@ -85,7 +85,9 @@ SOURCE_PACKAGE_ALIASES = {
     "hmrc-spi-income-bands-2023-24": Path("hmrc/spi_income_bands_2023_24"),
     "hmrc-cgt-statistics-2025": Path("hmrc/cgt_statistics_2025"),
     "hmrc-spi-income-by-area-2023-24": Path("hmrc/spi_income_by_area_2023_24"),
-    "hmrc-salary-sacrifice-relief-2024-25": Path("hmrc/salary_sacrifice_relief_2024_25"),
+    "hmrc-salary-sacrifice-relief-2024-25": Path(
+        "hmrc/salary_sacrifice_relief_2024_25"
+    ),
     "hmrc-salary-sacrifice-reform-2029-headcounts": Path(
         "hmrc/salary_sacrifice_reform_2029_headcounts"
     ),
@@ -99,9 +101,7 @@ SOURCE_PACKAGE_ALIASES = {
         "mhclg/ehs_weekly_housing_costs_2023_24"
     ),
     "statbel-population-structure-2026": Path("statbel/population_structure_2026"),
-    "statbel-fiscal-income-2023-nis-2025": Path(
-        "statbel/fiscal_income_2023_nis_2025"
-    ),
+    "statbel-fiscal-income-2023-nis-2025": Path("statbel/fiscal_income_2023_nis_2025"),
     "spf-finances-pit-2023": Path("spf_finances/pit_2023"),
     "onss-contributions-2024": Path("onss/contributions_2024"),
     "onem-rva-unemployment-2024": Path("onem_rva/unemployment_2024"),
@@ -111,17 +111,16 @@ SOURCE_PACKAGE_ALIASES = {
     "jrc-euromod-be-baseline-statistics-2025": Path(
         "jrc/euromod_be_baseline_statistics_2025"
     ),
-    "sfpd-legal-pension-caseload-2025": Path(
-        "sfpd/legal_pension_caseload_2025"
-    ),
-    "opgroeien-groeipakket-caseload-2025": Path(
-        "opgroeien/groeipakket_caseload_2025"
-    ),
+    "sfpd-legal-pension-caseload-2025": Path("sfpd/legal_pension_caseload_2025"),
+    "opgroeien-groeipakket-caseload-2025": Path("opgroeien/groeipakket_caseload_2025"),
     "bfp-economic-outlook-2026-06": Path("bfp/economic_outlook_2026_06"),
     "dft-nts-vehicle-ownership-2024": Path("dft/nts_vehicle_ownership_2024"),
     "dwp-benefit-cap-november-2025": Path("dwp/benefit_cap_november_2025"),
     "dwp-benefit-statistics-february-2026": Path(
         "dwp/benefit_statistics_february_2026"
+    ),
+    "dwp-uc-deductions-march-2025-february-2026": Path(
+        "dwp/uc_deductions_march_2025_february_2026"
     ),
     "dwp-pip-daily-living-foi-2025": Path("dwp/pip_daily_living_foi_2025"),
     "dwp-uc-households-by-constituency-may-2025": Path(
@@ -251,9 +250,7 @@ SOURCE_PACKAGE_ALIASES = {
     "kff-marketplace-effectuated-enrollment": Path(
         "kff/marketplace_effectuated_enrollment"
     ),
-    "ons-census2021-ts041-households-lad": Path(
-        "ons/census2021_ts041_households_lad"
-    ),
+    "ons-census2021-ts041-households-lad": Path("ons/census2021_ts041_households_lad"),
     "ons-census2021-ts041-households-pcon24": Path(
         "ons/census2021_ts041_households_pcon24"
     ),
@@ -262,28 +259,20 @@ SOURCE_PACKAGE_ALIASES = {
     "ons-mye-2024-uk": Path("ons/mye_2024_uk"),
     "ons-lad-population-by-age-2024": Path("ons/lad_population_by_age_2024"),
     "ons-pcon24-population-by-age-2024": Path("ons/pcon24_population_by_age_2024"),
-    "ons-small-area-income-msoa-fye2023": Path(
-        "ons/small_area_income_msoa_fye2023"
-    ),
+    "ons-small-area-income-msoa-fye2023": Path("ons/small_area_income_msoa_fye2023"),
     "ons-census2021-ts054-tenure-lad": Path("ons/census2021_ts054_tenure_lad"),
     "ons-subnational-dwellings-by-tenure-2024": Path(
         "ons/subnational_dwellings_by_tenure_2024"
     ),
     "ons-pipr-rents-by-area-june-2026": Path("ons/pipr_rents_by_area_june_2026"),
-    "nrs-census2022-households-ukpc24": Path(
-        "nrs/census2022_households_ukpc24"
-    ),
+    "nrs-census2022-households-ukpc24": Path("nrs/census2022_households_ukpc24"),
     "nrs-pcon24-population-by-age-2024": Path("nrs/pcon24_population_by_age_2024"),
     "nrs-census2022-uv404-tenure-council-area": Path(
         "nrs/census2022_uv404_tenure_council_area"
     ),
     "nisra-census2021-households-lgd": Path("nisra/census2021_households_lgd"),
-    "nisra-census2021-households-pcon24": Path(
-        "nisra/census2021_households_pcon24"
-    ),
-    "nisra-pcon24-population-by-age-2024": Path(
-        "nisra/pcon24_population_by_age_2024"
-    ),
+    "nisra-census2021-households-pcon24": Path("nisra/census2021_households_pcon24"),
+    "nisra-pcon24-population-by-age-2024": Path("nisra/pcon24_population_by_age_2024"),
     "nisra-census2021-tenure-lgd": Path("nisra/census2021_tenure_lgd"),
     "ons-uk-population-projections-2024": Path("ons/npp_2024_uk"),
     "scotgov-band-d-council-tax-rates-2026-27": Path(
@@ -294,13 +283,9 @@ SOURCE_PACKAGE_ALIASES = {
     "scotgov-scottish-budget-social-security-assistance-2026": Path(
         "scotgov/scottish_budget_social_security_assistance_2026"
     ),
-    "welshgov-council-tax-levels-2026-27": Path(
-        "welshgov/council_tax_levels_2026_27"
-    ),
+    "welshgov-council-tax-levels-2026-27": Path("welshgov/council_tax_levels_2026_27"),
     "voa-council-tax-bands-2025": Path("voa/council_tax_bands_2025"),
-    "voa-council-tax-stock-by-lad-2025": Path(
-        "voa/council_tax_stock_by_lad_2025"
-    ),
+    "voa-council-tax-stock-by-lad-2025": Path("voa/council_tax_stock_by_lad_2025"),
     "obr-efo-receipts-march-2026": Path("obr/efo_receipts_march_2026"),
     "obr-efo-expenditure-march-2026": Path("obr/efo_expenditure_march_2026"),
     "ons-national-balance-sheet-land-2025": Path(
@@ -324,7 +309,9 @@ DEFAULT_SOURCE_ARTIFACT_CACHE_DIR = (
 SOURCE_PACKAGE_FILENAME = "source_package.yaml"
 # Repository ``packages/`` directory: the source-package authoring surface a
 # complete bundle must cover (see PolicyEngine/chronicle#78).
-SOURCE_PACKAGE_ROOT = Path(__file__).resolve().parents[1] / SOURCE_PACKAGE_RESOURCE_PACKAGE
+SOURCE_PACKAGE_ROOT = (
+    Path(__file__).resolve().parents[1] / SOURCE_PACKAGE_RESOURCE_PACKAGE
+)
 EXCEL_COLUMN_RE = re.compile(r"^[A-Z]+$")
 
 
@@ -1789,6 +1776,12 @@ def _measure_from_mapping(
         unit=_required(payload, "unit", "measure"),
         aggregation=_required(payload, "aggregation", "measure"),
         value_scale=_render_value(payload.get("value_scale", 1), year=year),
+        divisor_column=payload.get("divisor_column"),
+        round_to=(
+            _render_value(payload["round_to"], year=year)
+            if "round_to" in payload
+            else None
+        ),
         source_column_id=(
             str(_render_value(payload["source_column_id"], year=year))
             if payload.get("source_column_id") is not None
@@ -2005,9 +1998,7 @@ def _provenance_fields_from_mapping(
     survey_instrument = payload.get("survey_instrument")
     if provenance_class == "survey_aggregate":
         if not has_survey_instrument:
-            raise KeyError(
-                "Missing required record_set field: survey_instrument"
-            )
+            raise KeyError("Missing required record_set field: survey_instrument")
         if type(survey_instrument) is not str or not survey_instrument.strip():
             raise TypeError(
                 "record_set survey_instrument must be a non-empty string for "
@@ -2059,9 +2050,7 @@ def _period_coverage_from_mapping(
     }
     unknown = sorted(set(payload) - allowed_keys)
     if unknown:
-        raise ValueError(
-            f"record_set period_coverage has unknown keys: {unknown}."
-        )
+        raise ValueError(f"record_set period_coverage has unknown keys: {unknown}.")
     return PeriodCoverage(
         **{
             key: _optional_rendered_string(payload.get(key), year=year)

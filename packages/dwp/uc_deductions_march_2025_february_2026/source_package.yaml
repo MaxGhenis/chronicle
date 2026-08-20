@@ -1,0 +1,218 @@
+# DWP calls the Universal Credit unit of assessment a household. It is a UC
+# benefit unit, not an ONS household; see policyengine-uk-data#457. Table 1
+# publishes rounded counts with a deduction and rounded shares of all UC units.
+# The total-caseload facts divide those two publisher cells and round the result
+# to 10,000. This is a deterministic within-row derivation, not a cross-source
+# estimate. Calendar-year and plateau summaries remain consumer aggregations.
+schema_version: ledger.source_package.v1
+package_id: dwp-uc-deductions-march-2025-february-2026
+label: 'DWP Universal Credit benefit units and deductions, March 2025 to February 2026'
+artifact:
+  source_name: dwp
+  source_table: 'Universal Credit deductions statistics March 2025 to February 2026, Table 1'
+  resource_package: db
+  resource_directory: data/dwp/uc_deductions_march_2025_february_2026
+  manifest: manifest.yaml
+  vintage: uc_deductions_2026_05_12
+  extracted_at: '2026-08-19'
+  extraction_method: ODS cell parse with within-row count/share derivation
+  parser: ods_used_range
+  artifact_year: 2026
+record_sets:
+- &published
+  record_set_id: dwp.uc_deductions.month2025_03.published
+  provenance_class: administrative
+  record_set_spec_id: dwp.uc_deductions.month2025_03.published.v1
+  source_record_id_prefix: dwp.uc_deductions.month2025_03.published
+  sheet_name: Table_1
+  period_type: month
+  period: 2025-03
+  geography_id: K03000001
+  geography_level: country
+  geography_name: Great Britain
+  geography_vintage: current
+  entity: benefit_unit
+  entity_role: universal_credit_unit_of_assessment
+  domain: universal_credit
+  groupby_dimension: dwp.uc_deductions_month
+  rows: [&march {value_id: month, label: March 2025, ordinal: 0, row_number: 6, expected_row_header_column: B, expected_row_header: March 2025, table_record_kind: total}]
+  measures: &published_measures
+  - measure_id: units_with_deduction
+    label: UC benefit units with a deduction
+    ordinal: 0
+    column: C
+    expected_column_header_row: 5
+    expected_column_header: Number of Households with a Deduction
+    concept: dwp.uc_benefit_units_with_deduction
+    source_concept: dwp.uc_households_with_deduction
+    concept_relation: source_label
+    concept_authority: dwp
+    concept_evidence_url: https://www.gov.uk/government/statistics/universal-credit-quarterly-statistics-29-april-2013-to-12-february-2026/universal-credit-deductions-statistics-march-2025-to-february-2026
+    concept_evidence_notes: DWP household means the Universal Credit unit of assessment, not an ONS household (policyengine-uk-data#457).
+    unit: count
+    aggregation: sum
+    expected_cell_type: number
+  - measure_id: deduction_share
+    label: Share of UC benefit units with a deduction
+    ordinal: 1
+    column: D
+    expected_column_header_row: 5
+    expected_column_header: Percentage of Households with a Deduction
+    concept: dwp.uc_benefit_units_with_deduction_share
+    source_concept: dwp.uc_households_with_deduction_share
+    concept_relation: source_label
+    concept_authority: dwp
+    concept_evidence_url: https://www.gov.uk/government/statistics/universal-credit-quarterly-statistics-29-april-2013-to-12-february-2026/universal-credit-deductions-statistics-march-2025-to-february-2026
+    concept_evidence_notes: Published decimal share; DWP household means the Universal Credit unit of assessment.
+    unit: share
+    aggregation: share
+    expected_cell_type: number
+- <<: *published
+  record_set_id: dwp.uc_deductions.month2025_04.published
+  record_set_spec_id: dwp.uc_deductions.month2025_04.published.v1
+  source_record_id_prefix: dwp.uc_deductions.month2025_04.published
+  period: 2025-04
+  rows: [&april {value_id: month, label: April 2025, ordinal: 0, row_number: 7, expected_row_header_column: B, expected_row_header: April 2025, table_record_kind: total}]
+- <<: *published
+  record_set_id: dwp.uc_deductions.month2025_05.published
+  record_set_spec_id: dwp.uc_deductions.month2025_05.published.v1
+  source_record_id_prefix: dwp.uc_deductions.month2025_05.published
+  period: 2025-05
+  rows: [&may {value_id: month, label: May 2025, ordinal: 0, row_number: 8, expected_row_header_column: B, expected_row_header: May 2025, table_record_kind: total}]
+- <<: *published
+  record_set_id: dwp.uc_deductions.month2025_06.published
+  record_set_spec_id: dwp.uc_deductions.month2025_06.published.v1
+  source_record_id_prefix: dwp.uc_deductions.month2025_06.published
+  period: 2025-06
+  rows: [&june {value_id: month, label: June 2025, ordinal: 0, row_number: 9, expected_row_header_column: B, expected_row_header: June 2025, table_record_kind: total}]
+- <<: *published
+  record_set_id: dwp.uc_deductions.month2025_07.published
+  record_set_spec_id: dwp.uc_deductions.month2025_07.published.v1
+  source_record_id_prefix: dwp.uc_deductions.month2025_07.published
+  period: 2025-07
+  rows: [&july {value_id: month, label: July 2025, ordinal: 0, row_number: 10, expected_row_header_column: B, expected_row_header: July 2025, table_record_kind: total}]
+- <<: *published
+  record_set_id: dwp.uc_deductions.month2025_08.published
+  record_set_spec_id: dwp.uc_deductions.month2025_08.published.v1
+  source_record_id_prefix: dwp.uc_deductions.month2025_08.published
+  period: 2025-08
+  rows: [&august {value_id: month, label: August 2025, ordinal: 0, row_number: 11, expected_row_header_column: B, expected_row_header: August 2025, table_record_kind: total}]
+- <<: *published
+  record_set_id: dwp.uc_deductions.month2025_09.published
+  record_set_spec_id: dwp.uc_deductions.month2025_09.published.v1
+  source_record_id_prefix: dwp.uc_deductions.month2025_09.published
+  period: 2025-09
+  rows: [&september {value_id: month, label: September 2025, ordinal: 0, row_number: 12, expected_row_header_column: B, expected_row_header: September 2025, table_record_kind: total}]
+- <<: *published
+  record_set_id: dwp.uc_deductions.month2025_10.published
+  record_set_spec_id: dwp.uc_deductions.month2025_10.published.v1
+  source_record_id_prefix: dwp.uc_deductions.month2025_10.published
+  period: 2025-10
+  rows: [&october {value_id: month, label: October 2025, ordinal: 0, row_number: 13, expected_row_header_column: B, expected_row_header: October 2025, table_record_kind: total}]
+- <<: *published
+  record_set_id: dwp.uc_deductions.month2025_11.published
+  record_set_spec_id: dwp.uc_deductions.month2025_11.published.v1
+  source_record_id_prefix: dwp.uc_deductions.month2025_11.published
+  period: 2025-11
+  rows: [&november {value_id: month, label: November 2025, ordinal: 0, row_number: 14, expected_row_header_column: B, expected_row_header: November 2025, table_record_kind: total}]
+- <<: *published
+  record_set_id: dwp.uc_deductions.month2025_12.published
+  record_set_spec_id: dwp.uc_deductions.month2025_12.published.v1
+  source_record_id_prefix: dwp.uc_deductions.month2025_12.published
+  period: 2025-12
+  rows: [&december {value_id: month, label: December 2025, ordinal: 0, row_number: 15, expected_row_header_column: B, expected_row_header: December 2025, table_record_kind: total}]
+- <<: *published
+  record_set_id: dwp.uc_deductions.month2026_01.published
+  record_set_spec_id: dwp.uc_deductions.month2026_01.published.v1
+  source_record_id_prefix: dwp.uc_deductions.month2026_01.published
+  period: 2026-01
+  rows: [&january {value_id: month, label: January 2026, ordinal: 0, row_number: 16, expected_row_header_column: B, expected_row_header: January 2026, table_record_kind: total}]
+- <<: *published
+  record_set_id: dwp.uc_deductions.month2026_02.published
+  record_set_spec_id: dwp.uc_deductions.month2026_02.published.v1
+  source_record_id_prefix: dwp.uc_deductions.month2026_02.published
+  period: 2026-02
+  rows: [&february {value_id: month, label: February 2026, ordinal: 0, row_number: 17, expected_row_header_column: B, expected_row_header: February 2026, table_record_kind: total}]
+- &derived
+  <<: *published
+  record_set_id: dwp.uc_deductions.month2025_04.total_units
+  record_set_spec_id: dwp.uc_deductions.month2025_04.total_units.v1
+  source_record_id_prefix: dwp.uc_deductions.month2025_04.total_units
+  period: 2025-04
+  rows: [*april]
+  measures: &derived_measures
+  - measure_id: total_units
+    label: Total UC benefit units
+    ordinal: 0
+    column: C
+    divisor_column: D
+    round_to: 10000
+    concept: dwp.uc_benefit_units
+    source_concept: dwp.uc_households
+    concept_relation: source_label
+    concept_authority: dwp
+    concept_evidence_url: https://www.gov.uk/government/statistics/universal-credit-quarterly-statistics-29-april-2013-to-12-february-2026/universal-credit-deductions-statistics-march-2025-to-february-2026
+    concept_evidence_notes: 'Derived within Table 1 as households with a deduction divided by the published share, rounded to 10,000. DWP household means a UC benefit unit, not an ONS household; see policyengine-uk-data#457.'
+    unit: count
+    aggregation: sum
+    expected_cell_type: number
+- <<: *derived
+  record_set_id: dwp.uc_deductions.month2025_05.total_units
+  record_set_spec_id: dwp.uc_deductions.month2025_05.total_units.v1
+  source_record_id_prefix: dwp.uc_deductions.month2025_05.total_units
+  period: 2025-05
+  rows: [*may]
+- <<: *derived
+  record_set_id: dwp.uc_deductions.month2025_06.total_units
+  record_set_spec_id: dwp.uc_deductions.month2025_06.total_units.v1
+  source_record_id_prefix: dwp.uc_deductions.month2025_06.total_units
+  period: 2025-06
+  rows: [*june]
+- <<: *derived
+  record_set_id: dwp.uc_deductions.month2025_07.total_units
+  record_set_spec_id: dwp.uc_deductions.month2025_07.total_units.v1
+  source_record_id_prefix: dwp.uc_deductions.month2025_07.total_units
+  period: 2025-07
+  rows: [*july]
+- <<: *derived
+  record_set_id: dwp.uc_deductions.month2025_08.total_units
+  record_set_spec_id: dwp.uc_deductions.month2025_08.total_units.v1
+  source_record_id_prefix: dwp.uc_deductions.month2025_08.total_units
+  period: 2025-08
+  rows: [*august]
+- <<: *derived
+  record_set_id: dwp.uc_deductions.month2025_09.total_units
+  record_set_spec_id: dwp.uc_deductions.month2025_09.total_units.v1
+  source_record_id_prefix: dwp.uc_deductions.month2025_09.total_units
+  period: 2025-09
+  rows: [*september]
+- <<: *derived
+  record_set_id: dwp.uc_deductions.month2025_10.total_units
+  record_set_spec_id: dwp.uc_deductions.month2025_10.total_units.v1
+  source_record_id_prefix: dwp.uc_deductions.month2025_10.total_units
+  period: 2025-10
+  rows: [*october]
+- <<: *derived
+  record_set_id: dwp.uc_deductions.month2025_11.total_units
+  record_set_spec_id: dwp.uc_deductions.month2025_11.total_units.v1
+  source_record_id_prefix: dwp.uc_deductions.month2025_11.total_units
+  period: 2025-11
+  rows: [*november]
+- <<: *derived
+  record_set_id: dwp.uc_deductions.month2025_12.total_units
+  record_set_spec_id: dwp.uc_deductions.month2025_12.total_units.v1
+  source_record_id_prefix: dwp.uc_deductions.month2025_12.total_units
+  period: 2025-12
+  rows: [*december]
+- <<: *derived
+  record_set_id: dwp.uc_deductions.month2026_01.total_units
+  record_set_spec_id: dwp.uc_deductions.month2026_01.total_units.v1
+  source_record_id_prefix: dwp.uc_deductions.month2026_01.total_units
+  period: 2026-01
+  rows: [*january]
+- <<: *derived
+  record_set_id: dwp.uc_deductions.month2026_02.total_units
+  record_set_spec_id: dwp.uc_deductions.month2026_02.total_units.v1
+  source_record_id_prefix: dwp.uc_deductions.month2026_02.total_units
+  period: 2026-02
+  rows: [*february]
