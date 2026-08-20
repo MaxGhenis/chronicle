@@ -69,66 +69,77 @@ record_sets:
     expected_cell_type: number
 - <<: *published
   record_set_id: dwp.uc_deductions.month2025_04.published
+  provenance_class: administrative
   record_set_spec_id: dwp.uc_deductions.month2025_04.published.v1
   source_record_id_prefix: dwp.uc_deductions.month2025_04.published
   period: 2025-04
   rows: [&april {value_id: month, label: April 2025, ordinal: 0, row_number: 7, expected_row_header_column: B, expected_row_header: April 2025, table_record_kind: total}]
 - <<: *published
   record_set_id: dwp.uc_deductions.month2025_05.published
+  provenance_class: administrative
   record_set_spec_id: dwp.uc_deductions.month2025_05.published.v1
   source_record_id_prefix: dwp.uc_deductions.month2025_05.published
   period: 2025-05
   rows: [&may {value_id: month, label: May 2025, ordinal: 0, row_number: 8, expected_row_header_column: B, expected_row_header: May 2025, table_record_kind: total}]
 - <<: *published
   record_set_id: dwp.uc_deductions.month2025_06.published
+  provenance_class: administrative
   record_set_spec_id: dwp.uc_deductions.month2025_06.published.v1
   source_record_id_prefix: dwp.uc_deductions.month2025_06.published
   period: 2025-06
   rows: [&june {value_id: month, label: June 2025, ordinal: 0, row_number: 9, expected_row_header_column: B, expected_row_header: June 2025, table_record_kind: total}]
 - <<: *published
   record_set_id: dwp.uc_deductions.month2025_07.published
+  provenance_class: administrative
   record_set_spec_id: dwp.uc_deductions.month2025_07.published.v1
   source_record_id_prefix: dwp.uc_deductions.month2025_07.published
   period: 2025-07
   rows: [&july {value_id: month, label: July 2025, ordinal: 0, row_number: 10, expected_row_header_column: B, expected_row_header: July 2025, table_record_kind: total}]
 - <<: *published
   record_set_id: dwp.uc_deductions.month2025_08.published
+  provenance_class: administrative
   record_set_spec_id: dwp.uc_deductions.month2025_08.published.v1
   source_record_id_prefix: dwp.uc_deductions.month2025_08.published
   period: 2025-08
   rows: [&august {value_id: month, label: August 2025, ordinal: 0, row_number: 11, expected_row_header_column: B, expected_row_header: August 2025, table_record_kind: total}]
 - <<: *published
   record_set_id: dwp.uc_deductions.month2025_09.published
+  provenance_class: administrative
   record_set_spec_id: dwp.uc_deductions.month2025_09.published.v1
   source_record_id_prefix: dwp.uc_deductions.month2025_09.published
   period: 2025-09
   rows: [&september {value_id: month, label: September 2025, ordinal: 0, row_number: 12, expected_row_header_column: B, expected_row_header: September 2025, table_record_kind: total}]
 - <<: *published
   record_set_id: dwp.uc_deductions.month2025_10.published
+  provenance_class: administrative
   record_set_spec_id: dwp.uc_deductions.month2025_10.published.v1
   source_record_id_prefix: dwp.uc_deductions.month2025_10.published
   period: 2025-10
   rows: [&october {value_id: month, label: October 2025, ordinal: 0, row_number: 13, expected_row_header_column: B, expected_row_header: October 2025, table_record_kind: total}]
 - <<: *published
   record_set_id: dwp.uc_deductions.month2025_11.published
+  provenance_class: administrative
   record_set_spec_id: dwp.uc_deductions.month2025_11.published.v1
   source_record_id_prefix: dwp.uc_deductions.month2025_11.published
   period: 2025-11
   rows: [&november {value_id: month, label: November 2025, ordinal: 0, row_number: 14, expected_row_header_column: B, expected_row_header: November 2025, table_record_kind: total}]
 - <<: *published
   record_set_id: dwp.uc_deductions.month2025_12.published
+  provenance_class: administrative
   record_set_spec_id: dwp.uc_deductions.month2025_12.published.v1
   source_record_id_prefix: dwp.uc_deductions.month2025_12.published
   period: 2025-12
   rows: [&december {value_id: month, label: December 2025, ordinal: 0, row_number: 15, expected_row_header_column: B, expected_row_header: December 2025, table_record_kind: total}]
 - <<: *published
   record_set_id: dwp.uc_deductions.month2026_01.published
+  provenance_class: administrative
   record_set_spec_id: dwp.uc_deductions.month2026_01.published.v1
   source_record_id_prefix: dwp.uc_deductions.month2026_01.published
   period: 2026-01
   rows: [&january {value_id: month, label: January 2026, ordinal: 0, row_number: 16, expected_row_header_column: B, expected_row_header: January 2026, table_record_kind: total}]
 - <<: *published
   record_set_id: dwp.uc_deductions.month2026_02.published
+  provenance_class: administrative
   record_set_spec_id: dwp.uc_deductions.month2026_02.published.v1
   source_record_id_prefix: dwp.uc_deductions.month2026_02.published
   period: 2026-02
@@ -136,6 +147,7 @@ record_sets:
 - &derived
   <<: *published
   record_set_id: dwp.uc_deductions.month2025_04.total_units
+  provenance_class: administrative
   record_set_spec_id: dwp.uc_deductions.month2025_04.total_units.v1
   source_record_id_prefix: dwp.uc_deductions.month2025_04.total_units
   period: 2025-04
@@ -158,60 +170,70 @@ record_sets:
     expected_cell_type: number
 - <<: *derived
   record_set_id: dwp.uc_deductions.month2025_05.total_units
+  provenance_class: administrative
   record_set_spec_id: dwp.uc_deductions.month2025_05.total_units.v1
   source_record_id_prefix: dwp.uc_deductions.month2025_05.total_units
   period: 2025-05
   rows: [*may]
 - <<: *derived
   record_set_id: dwp.uc_deductions.month2025_06.total_units
+  provenance_class: administrative
   record_set_spec_id: dwp.uc_deductions.month2025_06.total_units.v1
   source_record_id_prefix: dwp.uc_deductions.month2025_06.total_units
   period: 2025-06
   rows: [*june]
 - <<: *derived
   record_set_id: dwp.uc_deductions.month2025_07.total_units
+  provenance_class: administrative
   record_set_spec_id: dwp.uc_deductions.month2025_07.total_units.v1
   source_record_id_prefix: dwp.uc_deductions.month2025_07.total_units
   period: 2025-07
   rows: [*july]
 - <<: *derived
   record_set_id: dwp.uc_deductions.month2025_08.total_units
+  provenance_class: administrative
   record_set_spec_id: dwp.uc_deductions.month2025_08.total_units.v1
   source_record_id_prefix: dwp.uc_deductions.month2025_08.total_units
   period: 2025-08
   rows: [*august]
 - <<: *derived
   record_set_id: dwp.uc_deductions.month2025_09.total_units
+  provenance_class: administrative
   record_set_spec_id: dwp.uc_deductions.month2025_09.total_units.v1
   source_record_id_prefix: dwp.uc_deductions.month2025_09.total_units
   period: 2025-09
   rows: [*september]
 - <<: *derived
   record_set_id: dwp.uc_deductions.month2025_10.total_units
+  provenance_class: administrative
   record_set_spec_id: dwp.uc_deductions.month2025_10.total_units.v1
   source_record_id_prefix: dwp.uc_deductions.month2025_10.total_units
   period: 2025-10
   rows: [*october]
 - <<: *derived
   record_set_id: dwp.uc_deductions.month2025_11.total_units
+  provenance_class: administrative
   record_set_spec_id: dwp.uc_deductions.month2025_11.total_units.v1
   source_record_id_prefix: dwp.uc_deductions.month2025_11.total_units
   period: 2025-11
   rows: [*november]
 - <<: *derived
   record_set_id: dwp.uc_deductions.month2025_12.total_units
+  provenance_class: administrative
   record_set_spec_id: dwp.uc_deductions.month2025_12.total_units.v1
   source_record_id_prefix: dwp.uc_deductions.month2025_12.total_units
   period: 2025-12
   rows: [*december]
 - <<: *derived
   record_set_id: dwp.uc_deductions.month2026_01.total_units
+  provenance_class: administrative
   record_set_spec_id: dwp.uc_deductions.month2026_01.total_units.v1
   source_record_id_prefix: dwp.uc_deductions.month2026_01.total_units
   period: 2026-01
   rows: [*january]
 - <<: *derived
   record_set_id: dwp.uc_deductions.month2026_02.total_units
+  provenance_class: administrative
   record_set_spec_id: dwp.uc_deductions.month2026_02.total_units.v1
   source_record_id_prefix: dwp.uc_deductions.month2026_02.total_units
   period: 2026-02
