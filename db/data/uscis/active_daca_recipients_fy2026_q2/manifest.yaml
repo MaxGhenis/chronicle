@@ -1,0 +1,12 @@
+source_id: uscis
+package_id: uscis-active-daca-recipients-fy2026-q2
+dataset: uscis_uscis-active-daca-recipients-fy2026-q2
+source_page: https://www.uscis.gov/tools/reports-and-studies/immigration-and-citizenship-data
+table: Active DACA Recipients, Fiscal Year 2026 Quarter 2, as of March 31, 2026
+files:
+  2026:
+    filename: active_daca_recipients_fy2026_q2_v1.xlsx
+    source_url: https://www.uscis.gov/sites/default/files/document/data/active_daca_recipients_fy2026_q2_v1.xlsx
+    sha256: e9b1a96c624de8c48d8461d5cdf05619c018f2991a8eb60757af018dcfb768eb
+    size_bytes: 56549
+    fetched_at: '2026-08-29T22:40:01+00:00'

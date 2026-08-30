@@ -1,0 +1,13 @@
+source_id: dhs_ohss
+package_id: ohss-lpr-population-2024
+dataset: dhs_ohss_ohss-lpr-population-2024
+source_page: https://ohss.dhs.gov/topics/immigration/lawful-permanent-residents/lawful-permanent-residents-population-estimates
+table: 'Estimated Resident LPR Population by Broad Class of Admission: January 2024,
+  Table 7'
+files:
+  2024:
+    filename: 2024_1108_ohss_lawful_permenent_resident_population_estimate_2024_and_revised_2023.pdf
+    source_url: https://ohss.dhs.gov/sites/default/files/2024-11/2024_1108_ohss_lawful_permenent_resident_population_estimate_2024_and_revised_2023.pdf
+    sha256: ba37017089af08d2319b6546329ce6d15d496dd390d9440e1fa7da33d36fd21f
+    size_bytes: 600371
+    fetched_at: '2026-08-29T22:40:04+00:00'

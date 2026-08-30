@@ -1,0 +1,13 @@
+source_id: uscis
+package_id: uscis-tps-cy2023-congressional-report
+dataset: uscis_uscis-tps-cy2023-congressional-report
+source_page: https://www.uscis.gov/sites/default/files/document/reports/TPS_CY23_Congressional_Report.pdf
+table: 'Temporary Protected Status: Calendar Year 2023 Annual Report, Tables 2 and
+  3'
+files:
+  2023:
+    filename: TPS_CY23_Congressional_Report.pdf
+    source_url: https://www.uscis.gov/sites/default/files/document/reports/TPS_CY23_Congressional_Report.pdf
+    sha256: 40f27976448a52f69d301eb9fe44065a952fd3eecdf86e05d724981435dff982
+    size_bytes: 1343545
+    fetched_at: '2026-08-29T22:40:02+00:00'

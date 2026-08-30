@@ -130,6 +130,7 @@ SOURCE_PACKAGE_ALIASES = {
         "fpb/economic_outlook_2026_2031_june_2026"
     ),
     "dft-nts-vehicle-ownership-2024": Path("dft/nts_vehicle_ownership_2024"),
+    "ohss-lpr-population-2024": Path("dhs_ohss/lpr_population_2024"),
     "dwp-benefit-cap-november-2025": Path("dwp/benefit_cap_november_2025"),
     "dwp-benefit-statistics-february-2026": Path(
         "dwp/benefit_statistics_february_2026"
@@ -358,6 +359,12 @@ SOURCE_PACKAGE_ALIASES = {
     "usda-snap-fy69-to-current": Path("usda_snap/fy69_to_current"),
     "usda-snap-fy2025-monthly-state-caseloads": Path(
         "usda_snap/fy2025_monthly_state_caseloads"
+    ),
+    "uscis-active-daca-recipients-fy2026-q2": Path(
+        "uscis/active_daca_recipients_fy2026_q2"
+    ),
+    "uscis-tps-cy2023-congressional-report": Path(
+        "uscis/tps_cy2023_congressional_report"
     ),
 }
 SOURCE_ARTIFACT_CACHE_ENV = "LEDGER_SOURCE_ARTIFACT_CACHE_DIR"
