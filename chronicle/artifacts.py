@@ -24,10 +24,12 @@ DEFAULT_R2_DERIVED_BUCKET = "ledger-derived"
 DEFAULT_R2_PREFIX = "raw"
 DEFAULT_R2_DERIVED_PREFIX = "derived"
 
-# New UK and New Zealand uploads are namespaced by country. US objects predate
-# the country segment and deliberately keep their legacy ``raw/{source_id}``
-# and ``derived/{source_id}`` shapes. Publisher directories are the stable
-# routing input because they are shared by packages/ and db/data/.
+# UK and New Zealand uploads are namespaced by country. The US is deliberately
+# a jurisdiction-wide legacy namespace: existing and newly onboarded US
+# publishers keep the ``raw/{source_id}`` and ``derived/{source_id}`` shapes
+# until a separate, consumer-audited US migration changes this contract.
+# Publisher directories are the stable routing input because they are shared
+# by packages/ and db/data/.
 R2_COUNTRY_PUBLISHERS = {
     "nz": frozenset({"ird", "mbie", "msd", "stats_nz"}),
     "uk": frozenset(

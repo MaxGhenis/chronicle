@@ -57,6 +57,8 @@ def test_build_derived_r2_key_is_build_scoped():
         ("ird", "db/data/ird/wff", "nz"),
         ("ons", "db/data/ons/mye", "uk"),
         ("irs_soi", "db/data/irs_soi/table_1_1", None),
+        ("uscis", "db/data/uscis/active_daca_recipients_fy2026_q2", None),
+        ("dhs_ohss", "packages/dhs_ohss/lpr_population_2024", None),
         ("irs_soi", "/work/ons/chronicle/db/data/irs_soi/table_1_1", None),
         ("ird", "/work/ons/chronicle/db/data/ird/wff", "nz"),
         ("ird", "/work/packages/ons/chronicle/db/data/ird/wff", "nz"),
@@ -91,9 +93,30 @@ def test_country_aware_r2_keys_preserve_legacy_us_layout():
         build_id="ledger.build.v1:abc123",
         artifact_name="facts.jsonl",
     )
+    uscis_key = build_r2_key(
+        source_id="uscis",
+        package_id="uscis-active-daca-recipients-fy2026-q2",
+        year=2026,
+        sha256="abc123",
+        filename="daca.xlsx",
+    )
+    dhs_ohss_key = build_derived_r2_key(
+        source_id="dhs_ohss",
+        package_id="ohss-lpr-population-2024",
+        year=2024,
+        build_id="ledger.build.v1:abc123",
+        artifact_name="facts.jsonl",
+    )
 
     assert nz_key.startswith("raw/nz/ird/")
     assert uk_key.startswith("derived/uk/ons/")
+    assert uscis_key == (
+        "raw/uscis/uscis-active-daca-recipients-fy2026-q2/2026/abc123/daca.xlsx"
+    )
+    assert dhs_ohss_key == (
+        "derived/dhs_ohss/ohss-lpr-population-2024/2024/"
+        "ledger.build.v1:abc123/facts.jsonl"
+    )
 
 
 def test_country_aware_r2_prefix_rejects_wrong_country():

@@ -59,10 +59,12 @@ For example, an IRD artifact uses:
 raw/nz/ird/ird-working-for-families-statistics-sept-2025/2024/{sha256}/working-for-families-statistics---sept-2025.xlsx
 ```
 
-The implemented country segments are `nz` and `uk`. US objects deliberately
-retain the legacy shape `raw/{source_id}/...`; migrating those keys requires a
-separate consumer audit. The fetch and raw-publish commands infer the country
-from the package publisher directory. Raw publication refuses to replace a
+The implemented country segments are `nz` and `uk`. The US is deliberately a
+jurisdiction-wide legacy namespace, including for publishers added after
+country routing was introduced. All US raw keys therefore retain the
+`raw/{source_id}/...` shape until a separate consumer-audited US migration
+changes the contract. The fetch and raw-publish commands infer the country from
+the package publisher directory. Raw publication refuses to replace a
 manifest-recorded key that disagrees with the inferred country path.
 
 New UK and New Zealand derived build artifacts use the same country segment
@@ -79,7 +81,8 @@ derived/uk/ons/ons-mye-2024-uk/2024/{build_id}/source_cells.jsonl
 derived/nz/ird/ird-working-for-families-statistics-sept-2025/2024/{build_id}/ledger.db
 ```
 
-Legacy US derived keys likewise remain `derived/{source_id}/...`.
+All US derived keys likewise remain `derived/{source_id}/...` until that
+jurisdiction-wide migration.
 
 Derived artifacts are reproducible and may be replaced by a new build, but a
 specific `{build_id}` path should be immutable once published.
