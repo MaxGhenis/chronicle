@@ -1,0 +1,397 @@
+schema_version: ledger.source_package.v1
+package_id: uscis-tps-cy2023-congressional-report
+label: USCIS Temporary Protected Status Calendar Year 2023 annual report
+artifact:
+  source_name: uscis
+  source_table: >-
+    Temporary Protected Status: Calendar Year 2023 Annual Report, Tables 2 and 3
+  resource_package: db
+  resource_directory: data/uscis/tps_cy2023_congressional_report
+  manifest: manifest.yaml
+  vintage: uscis_tps_cy2023_annual_report
+  extracted_at: "2026-08-29"
+  extraction_method: pypdf text-line number extraction from the full USCIS report to Congress
+  parser: pdf_text_numbers
+  artifact_year: 2023
+record_sets:
+  - record_set_id: uscis.tps.2023_12.beneficiaries_by_designated_country
+    provenance_class: administrative
+    record_set_spec_id: uscis.tps.beneficiaries_by_designated_country.v1
+    source_record_id_prefix: uscis.tps.2023_12.beneficiaries_by_designated_country
+    sheet_name: document_numbers
+    period_type: month
+    period: "2023-12"
+    period_coverage: &tps_snapshot
+      basis: calendar
+      source_period_label: Close of calendar year 2023
+      start_date: "2023-12-31"
+      end_date: "2023-12-31"
+      notes: >-
+        USCIS Table 2 is a point-in-time estimate at the close of calendar year
+        2023, not a count of FY or CY application approvals. The report states
+        that these counts include TPS holders who adjusted to LPR status.
+    geography_id: 0100000US
+    geography_level: country
+    geography_name: United States
+    geography_vintage: current
+    entity: person
+    entity_role: temporary_protected_status_beneficiary
+    domain: immigration_status
+    groupby_dimension: uscis_tps_designated_country
+    rows:
+      - &tps_total
+        value_id: total
+        label: All TPS beneficiaries
+        ordinal: 0
+        row_number: 510
+        expected_row_header_column: D
+        expected_row_header: 870,332
+        table_record_kind: total
+        constraints:
+          - &current_tps
+            variable: uscis_tps_beneficiary_status
+            operator: "=="
+            value: beneficiary_at_close_of_cy2023
+            label: USCIS TPS beneficiary at the close of calendar year 2023
+        guard_cells:
+          - column: A
+            row: 510
+            expected_value: 11
+            label: PDF page number
+          - column: C
+            row: 510
+            expected_value: Total 870,332 654,418 429,630 406,052 410,747
+            label: Table 2 total line
+      - value_id: afghanistan
+        label: Afghanistan TPS beneficiaries
+        ordinal: 1
+        row_number: 447
+        expected_row_header_column: D
+        expected_row_header: 5,762
+        table_record_kind: detail
+        constraints:
+          - *current_tps
+          - &country_afghanistan
+            variable: uscis_tps_designated_country
+            operator: "=="
+            value: Afghanistan
+            label: TPS designated country
+      - value_id: burma
+        label: Burma TPS beneficiaries
+        ordinal: 2
+        row_number: 449
+        expected_row_header_column: D
+        expected_row_header: 2,224
+        table_record_kind: detail
+        constraints:
+          - *current_tps
+          - variable: uscis_tps_designated_country
+            operator: "=="
+            value: Burma
+            label: TPS designated country
+      - value_id: cameroon
+        label: Cameroon TPS beneficiaries
+        ordinal: 3
+        row_number: 452
+        expected_row_header_column: D
+        expected_row_header: 2,399
+        table_record_kind: detail
+        constraints:
+          - *current_tps
+          - variable: uscis_tps_designated_country
+            operator: "=="
+            value: Cameroon
+            label: TPS designated country
+      - value_id: el_salvador
+        label: El Salvador TPS beneficiaries
+        ordinal: 4
+        row_number: 454
+        expected_row_header_column: D
+        expected_row_header: 236,270
+        table_record_kind: detail
+        constraints:
+          - *current_tps
+          - variable: uscis_tps_designated_country
+            operator: "=="
+            value: El Salvador
+            label: TPS designated country
+      - value_id: ethiopia
+        label: Ethiopia TPS beneficiaries
+        ordinal: 5
+        row_number: 459
+        expected_row_header_column: D
+        expected_row_header: 2,083
+        table_record_kind: detail
+        constraints:
+          - *current_tps
+          - variable: uscis_tps_designated_country
+            operator: "=="
+            value: Ethiopia
+            label: TPS designated country
+      - value_id: haiti
+        label: Haiti TPS beneficiaries
+        ordinal: 6
+        row_number: 460
+        expected_row_header_column: D
+        expected_row_header: 204,759
+        table_record_kind: detail
+        constraints:
+          - *current_tps
+          - variable: uscis_tps_designated_country
+            operator: "=="
+            value: Haiti
+            label: TPS designated country
+      - value_id: honduras
+        label: Honduras TPS beneficiaries
+        ordinal: 7
+        row_number: 465
+        expected_row_header_column: D
+        expected_row_header: 74,572
+        table_record_kind: detail
+        constraints:
+          - *current_tps
+          - variable: uscis_tps_designated_country
+            operator: "=="
+            value: Honduras
+            label: TPS designated country
+      - value_id: nepal
+        label: Nepal TPS beneficiaries
+        ordinal: 8
+        row_number: 470
+        expected_row_header_column: D
+        expected_row_header: 13,896
+        table_record_kind: detail
+        constraints:
+          - *current_tps
+          - variable: uscis_tps_designated_country
+            operator: "=="
+            value: Nepal
+            label: TPS designated country
+      - value_id: nicaragua
+        label: Nicaragua TPS beneficiaries
+        ordinal: 9
+        row_number: 475
+        expected_row_header_column: D
+        expected_row_header: 4,041
+        table_record_kind: detail
+        constraints:
+          - *current_tps
+          - variable: uscis_tps_designated_country
+            operator: "=="
+            value: Nicaragua
+            label: TPS designated country
+      - value_id: somalia
+        label: Somalia TPS beneficiaries
+        ordinal: 10
+        row_number: 480
+        expected_row_header_column: E
+        expected_row_header: 562
+        table_record_kind: detail
+        constraints:
+          - *current_tps
+          - variable: uscis_tps_designated_country
+            operator: "=="
+            value: Somalia
+            label: TPS designated country
+      - value_id: south_sudan
+        label: South Sudan TPS beneficiaries
+        ordinal: 11
+        row_number: 485
+        expected_row_header_column: E
+        expected_row_header: 146
+        table_record_kind: detail
+        constraints:
+          - *current_tps
+          - variable: uscis_tps_designated_country
+            operator: "=="
+            value: South Sudan
+            label: TPS designated country
+      - value_id: sudan
+        label: Sudan TPS beneficiaries
+        ordinal: 12
+        row_number: 490
+        expected_row_header_column: D
+        expected_row_header: 1,260
+        table_record_kind: detail
+        constraints:
+          - *current_tps
+          - variable: uscis_tps_designated_country
+            operator: "=="
+            value: Sudan
+            label: TPS designated country
+      - value_id: syria
+        label: Syria TPS beneficiaries
+        ordinal: 13
+        row_number: 495
+        expected_row_header_column: D
+        expected_row_header: 6,142
+        table_record_kind: detail
+        constraints:
+          - *current_tps
+          - variable: uscis_tps_designated_country
+            operator: "=="
+            value: Syria
+            label: TPS designated country
+      - value_id: ukraine
+        label: Ukraine TPS beneficiaries
+        ordinal: 14
+        row_number: 500
+        expected_row_header_column: D
+        expected_row_header: 29,739
+        table_record_kind: detail
+        constraints:
+          - *current_tps
+          - variable: uscis_tps_designated_country
+            operator: "=="
+            value: Ukraine
+            label: TPS designated country
+      - value_id: venezuela
+        label: Venezuela TPS beneficiaries
+        ordinal: 15
+        row_number: 502
+        expected_row_header_column: D
+        expected_row_header: 284,207
+        table_record_kind: detail
+        constraints:
+          - *current_tps
+          - variable: uscis_tps_designated_country
+            operator: "=="
+            value: Venezuela
+            label: TPS designated country
+      - value_id: yemen
+        label: Yemen TPS beneficiaries
+        ordinal: 16
+        row_number: 505
+        expected_row_header_column: D
+        expected_row_header: 2,270
+        table_record_kind: detail
+        constraints:
+          - *current_tps
+          - variable: uscis_tps_designated_country
+            operator: "=="
+            value: Yemen
+            label: TPS designated country
+    measures:
+      - measure_id: tps_beneficiaries
+        label: TPS beneficiaries
+        ordinal: 0
+        column: E
+        source_column_id: numeric_value
+        expected_column_header_row: 1
+        expected_column_header: numeric_value
+        concept: uscis.temporary_protected_status_beneficiary_count
+        source_concept: uscis.tps_cy2023.table_2.beneficiary_count
+        concept_relation: source_label
+        concept_authority: uscis
+        concept_evidence_url: >-
+          https://www.uscis.gov/sites/default/files/document/reports/TPS_CY23_Congressional_Report.pdf
+        concept_evidence_notes: >-
+          USCIS Table 2 reports the estimated number of TPS beneficiaries under
+          each designated foreign state at the close of calendar year 2023.
+          The report explicitly states that the counts include TPS holders who
+          adjusted to lawful permanent resident status; no LPR exclusion should
+          be imposed on these targets.
+        unit: count
+        aggregation: sum
+        expected_cell_type: number
+  - record_set_id: uscis.tps.2023_12.self_reported_prior_granted_status
+    provenance_class: administrative
+    record_set_spec_id: uscis.tps.self_reported_prior_granted_status.v1
+    source_record_id_prefix: uscis.tps.2023_12.self_reported_prior_granted_status
+    sheet_name: document_numbers
+    period_type: month
+    period: "2023-12"
+    period_coverage: *tps_snapshot
+    geography_id: 0100000US
+    geography_level: country
+    geography_name: United States
+    geography_vintage: current
+    entity: person
+    entity_role: temporary_protected_status_beneficiary
+    domain: immigration_status_history
+    groupby_dimension: uscis_tps_prior_status_code
+    rows:
+      - value_id: asy_asylee
+        label: TPS beneficiaries self-reporting ASY (asylee) at initial filing
+        ordinal: 0
+        row_number: 623
+        expected_row_header_column: D
+        expected_row_header: 1,808
+        table_record_kind: detail
+        filters:
+          uscis_tps_prior_status_code: ASY
+        constraints:
+          - variable: uscis_tps_prior_status_code
+            operator: "=="
+            value: ASY
+            label: USCIS self-reported prior status code at initial TPS filing
+        guard_cells:
+          - column: C
+            row: 623
+            expected_value: 14 ASY (ASYLEE) 1,808 0.2
+            label: Table 3 ASY line
+      - value_id: re_refugee
+        label: TPS beneficiaries self-reporting RE (refugee) at initial filing
+        ordinal: 1
+        row_number: 626
+        expected_row_header_column: D
+        expected_row_header: 1,688
+        table_record_kind: detail
+        filters:
+          uscis_tps_prior_status_code: RE
+        constraints:
+          - variable: uscis_tps_prior_status_code
+            operator: "=="
+            value: RE
+            label: USCIS self-reported prior status code at initial TPS filing
+        guard_cells:
+          - column: C
+            row: 626
+            expected_value: 15 RE (REFUGEE) 1,688 0.2
+            label: Table 3 RE line
+      - value_id: re5_haitian_refugee
+        label: >-
+          TPS beneficiaries self-reporting RE5 (Haitian with refugee status in
+          the United States) at initial filing
+        ordinal: 2
+        row_number: 650
+        expected_row_header_column: E
+        expected_row_header: 619
+        table_record_kind: detail
+        filters:
+          uscis_tps_prior_status_code: RE5
+        constraints:
+          - variable: uscis_tps_prior_status_code
+            operator: "=="
+            value: RE5
+            label: USCIS self-reported prior status code at initial TPS filing
+        guard_cells:
+          - column: C
+            row: 650
+            expected_value: 23 RE5 (HAITIAN WITH REFUGEE STATUS IN U.S.) 619 0.1
+            label: Table 3 RE5 line
+    measures:
+      - measure_id: tps_beneficiaries_by_prior_status
+        label: TPS beneficiaries by self-reported prior status at initial filing
+        ordinal: 0
+        column: E
+        source_column_id: numeric_value
+        expected_column_header_row: 1
+        expected_column_header: numeric_value
+        concept: uscis.tps_beneficiary_count_by_self_reported_prior_status
+        source_concept: uscis.tps_cy2023.table_3.prior_status_frequency
+        concept_relation: source_label
+        concept_authority: uscis
+        concept_evidence_url: >-
+          https://www.uscis.gov/sites/default/files/document/reports/TPS_CY23_Congressional_Report.pdf
+        concept_evidence_notes: >-
+          USCIS Table 3 reports self-reported immigration status codes at the
+          beneficiary's initial TPS filing. ASY means asylee, RE means refugee,
+          and RE5 means Haitian with refugee status in the United States. These
+          are code-specific historical overlaps, not current-status counts and
+          not complete union totals for every refugee/asylee code. The much
+          larger asylum-applicant categories (AS, AO, and 999) are deliberately
+          excluded because they do not establish that asylum was granted.
+        unit: count
+        aggregation: sum
+        expected_cell_type: number

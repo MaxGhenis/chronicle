@@ -1,0 +1,94 @@
+schema_version: ledger.source_package.v1
+package_id: uscis-active-daca-recipients-fy2026-q2
+label: USCIS active DACA recipients as of March 31, 2026
+artifact:
+  source_name: uscis
+  source_table: Active DACA Recipients, Fiscal Year 2026 Quarter 2
+  resource_package: db
+  resource_directory: data/uscis/active_daca_recipients_fy2026_q2
+  manifest: manifest.yaml
+  vintage: uscis_fy2026_q2
+  extracted_at: "2026-08-29"
+  extraction_method: xlsx whole-workbook used-range cell parse
+  parser: xlsx_used_range
+  artifact_year: 2026
+record_sets:
+  - record_set_id: uscis.daca.2026_03.active_recipients
+    provenance_class: administrative
+    record_set_spec_id: uscis.daca.active_recipients.v1
+    source_record_id_prefix: uscis.daca.2026_03.active_recipients
+    sheet_name: Current_DACA_Pop_Rounded_FY26
+    period_type: month
+    period: "2026-03"
+    period_coverage:
+      basis: calendar
+      source_period_label: As of March 31, 2026
+      start_date: "2026-03-31"
+      end_date: "2026-03-31"
+      notes: >-
+        USCIS defines this snapshot as people with DACA expiration on or after
+        March 31, 2026 as of that date. Counts are rounded by the publisher.
+    geography_id: 0100000US
+    geography_level: country
+    geography_name: United States
+    geography_vintage: current
+    entity: person
+    entity_role: active_daca_recipient
+    domain: immigration_status
+    groupby_dimension: uscis.daca_active_status
+    rows:
+      - value_id: total
+        label: Active DACA recipients
+        ordinal: 0
+        row_number: 5
+        expected_row_header_column: A
+        expected_row_header: TOTAL 1
+        table_record_kind: total
+        constraints:
+          - variable: uscis_daca_population_status
+            operator: "=="
+            value: active_recipient
+            label: USCIS active DACA recipient population
+          - variable: uscis_daca_has_obtained_lawful_permanent_resident_status
+            operator: "=="
+            value: false
+            label: >-
+              USCIS excludes people who obtained lawful permanent resident
+              status
+          - variable: uscis_daca_has_obtained_us_citizenship
+            operator: "=="
+            value: false
+            label: USCIS excludes people who obtained U.S. citizenship
+        guard_cells:
+          - column: A
+            row: 3
+            expected_value: As of March 31, 2026
+            label: Snapshot date
+          - column: A
+            row: 5
+            expected_value: TOTAL 1
+            label: Total row
+    measures:
+      - measure_id: active_daca_recipients
+        label: Active DACA recipients
+        ordinal: 0
+        column: B
+        source_column_id: active_daca_recipients_rounded
+        expected_column_header_row: 4
+        expected_column_header: Active DACA Recipients (Rounded)
+        concept: uscis.active_daca_recipient_count
+        source_concept: uscis.active_daca_recipients_fy2026_q2.total
+        concept_relation: source_label
+        concept_authority: uscis
+        concept_evidence_url: >-
+          https://www.uscis.gov/sites/default/files/document/data/active_daca_recipients_fy2026_q2_v1.xlsx
+        concept_evidence_notes: >-
+          USCIS reports 455,170 active DACA recipients as of March 31, 2026.
+          The workbook defines the population as individuals with DACA
+          expiration on or after the snapshot date and explicitly excludes
+          individuals who obtained lawful permanent resident status or U.S.
+          citizenship. Counts are rounded and may differ from prior periods
+          because of system updates and post-adjudicative outcomes.
+        unit: count
+        aggregation: sum
+        expected_cell_type: number
