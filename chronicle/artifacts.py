@@ -1117,17 +1117,19 @@ def _recorded_r2(spec: Any) -> dict[str, Any]:
     return recorded if isinstance(recorded, dict) else {}
 
 
-def _r2_key_identity(key: Any) -> tuple[str, str]:
-    """Return the ``(sha256, filename)`` a raw R2 key is addressed by.
+def _r2_key_identity(recorded_r2: dict[str, Any]) -> tuple[str, str]:
+    """Return the ``(sha256, filename)`` a recorded R2 object is addressed by.
 
     Raw keys are ``{prefix}/{source_id}/{package_id}/{year}/{sha256}/{filename}``
     (see :func:`build_r2_key`), so the last two segments say which bytes the
-    object holds. A key in any other shape yields empty strings and therefore
-    never matches fetched bytes.
+    object holds; the URI ends in the same two segments and stands in for a
+    block that records only that. A locator in any other shape yields empty
+    strings and therefore never matches fetched bytes.
     """
-    if not isinstance(key, str):
+    locator = recorded_r2.get("key") or recorded_r2.get("uri")
+    if not isinstance(locator, str):
         return ("", "")
-    parts = [part for part in key.split("/") if part]
+    parts = [part for part in locator.split("/") if part]
     if len(parts) < 2:
         return ("", "")
     return (parts[-2], parts[-1])
@@ -1140,7 +1142,7 @@ def _r2_holds_these_bytes(
     filename: str,
 ) -> bool:
     """Whether a recorded ``storage.r2`` block addresses exactly these bytes."""
-    recorded_sha256, recorded_filename = _r2_key_identity(recorded_r2.get("key"))
+    recorded_sha256, recorded_filename = _r2_key_identity(recorded_r2)
     return bool(recorded_sha256) and (recorded_sha256, recorded_filename) == (
         sha256,
         Path(filename).name,
@@ -1159,7 +1161,7 @@ def _revision_error_message(
     r2_bucket: str,
 ) -> str:
     """Explain a refused fetch: recorded identity, fetched identity, next step."""
-    recorded_sha256, recorded_filename = _r2_key_identity(recorded_r2.get("key"))
+    recorded_sha256, recorded_filename = _r2_key_identity(recorded_r2)
     declared_sha256 = recorded_spec.get("sha256")
     recorded_size = (
         recorded_spec.get("size_bytes") if declared_sha256 == recorded_sha256 else None
@@ -1241,7 +1243,7 @@ def _superseding_storage(
     recorded_r2 = _recorded_r2(recorded_spec)
     if recorded_r2:
         entry = dict(recorded_r2)
-        recorded_sha256, _recorded_filename = _r2_key_identity(recorded_r2.get("key"))
+        recorded_sha256, _recorded_filename = _r2_key_identity(recorded_r2)
         if recorded_sha256:
             entry["sha256"] = recorded_sha256
         if recorded_spec.get("sha256") == recorded_sha256:
@@ -1423,7 +1425,7 @@ def _publish_raw_manifest_entry(
         # key that misdescribes its content or restate a URI that belongs to
         # the superseded bytes. Registering a publisher revision is
         # `fetch-artifact --record-revision`, not a publish-time rewrite.
-        recorded_sha256, recorded_filename = _r2_key_identity(recorded_r2.get("key"))
+        recorded_sha256, recorded_filename = _r2_key_identity(recorded_r2)
         return refuse(
             "recorded_r2_identity_mismatch:"
             f"recorded_sha256={recorded_sha256 or 'unknown'}:"

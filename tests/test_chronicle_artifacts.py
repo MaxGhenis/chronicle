@@ -1043,3 +1043,72 @@ def test_fetch_artifact_cli_refuses_a_revision_then_records_it_on_request(
     assert recorded["r2_location"]["key"].endswith(
         f"/{recorded['sha256']}/{REPUBLISHED_FILENAME}"
     )
+
+
+def test_record_revision_without_an_upload_records_no_current_object(
+    tmp_path, monkeypatch
+):
+    """An offline revision keeps history without claiming the new bytes exist.
+
+    Registering a revision without ``--upload-r2`` leaves the entry with no
+    ``storage.r2`` at all rather than a pointer to bytes R2 does not hold. The
+    superseded object stays addressable, and a later publish-raw completes the
+    registration.
+    """
+    output_dir = tmp_path / "db" / "data" / "irs_soi" / "soi-table-5"
+    log = tmp_path / "wrangler.log"
+    wrangler = _wrangler_stub(tmp_path, log)
+    manifest_path = output_dir / "manifest.yaml"
+    _serve(monkeypatch, FIRST_PUBLICATION)
+    first_report = _fetch_republished(output_dir, wrangler)
+
+    _serve(monkeypatch, SECOND_PUBLICATION)
+    _fetch_republished(output_dir, wrangler, upload_r2=False, record_revision=True)
+    registered = yaml.safe_load(manifest_path.read_text())["files"][2022]
+
+    assert "r2" not in registered["storage"]
+    assert [entry["sha256"] for entry in registered["storage"]["previous_r2"]] == [
+        first_report.sha256
+    ]
+
+    report = publish_source_artifacts(output_dir, wrangler_command=str(wrangler))
+    published = yaml.safe_load(manifest_path.read_text())["files"][2022]
+    revised_sha256 = hashlib.sha256(SECOND_PUBLICATION).hexdigest()
+
+    assert report.valid
+    assert published["storage"]["r2"]["key"].endswith(
+        f"/{revised_sha256}/{REPUBLISHED_FILENAME}"
+    )
+    assert [entry["sha256"] for entry in published["storage"]["previous_r2"]] == [
+        first_report.sha256
+    ]
+
+
+def test_a_recorded_block_that_only_carries_a_uri_is_still_recognized(
+    tmp_path, monkeypatch
+):
+    """Identity reads the URI when a hand-written block records no key."""
+    output_dir = tmp_path / "db" / "data" / "irs_soi" / "soi-table-5"
+    wrangler = _wrangler_stub(tmp_path, tmp_path / "wrangler.log")
+    manifest_path = output_dir / "manifest.yaml"
+    _serve(monkeypatch, FIRST_PUBLICATION)
+    _fetch_republished(output_dir, wrangler)
+    manifest = yaml.safe_load(manifest_path.read_text())
+    recorded = manifest["files"][2022]["storage"]["r2"]
+    manifest["files"][2022]["storage"]["r2"] = {
+        "provider": recorded["provider"],
+        "bucket": recorded["bucket"],
+        "uri": recorded["uri"],
+    }
+    manifest_path.write_text(yaml.safe_dump(manifest, sort_keys=False))
+    uri_only = manifest["files"][2022]["storage"]["r2"]
+
+    report = _fetch_republished(output_dir, wrangler)
+    preserved = yaml.safe_load(manifest_path.read_text())["files"][2022]
+
+    assert report.valid
+    assert preserved["storage"]["r2"] == uri_only
+
+    _serve(monkeypatch, SECOND_PUBLICATION)
+    with pytest.raises(SourceArtifactRevisionError):
+        _fetch_republished(output_dir, wrangler)
