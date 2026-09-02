@@ -2,7 +2,8 @@
 
 Chronicle's operational stores migrate by dual-run (PolicyEngine/chronicle#143,
 mechanism 3): ``CHRONICLE_*`` names win, ledger-era names keep working behind a
-deprecation warning. Every test here is hermetic — the fixture strips every
+deprecation warning. Every test here is hermetic — the suite-wide
+``isolated_rename_window_env`` fixture in ``tests/conftest.py`` strips every
 variable in the rename window from the ambient environment first.
 """
 
@@ -27,26 +28,12 @@ from chronicle.env import (
     env_flag,
     env_names,
     env_value,
-    reset_env_deprecation_state,
 )
 from chronicle.harness import main as harness_main
 from chronicle.source_package import (
     SOURCE_ARTIFACT_CACHE_ENV,
     SOURCE_ARTIFACT_FETCH_ENV,
 )
-
-RENAME_WINDOW_PREFIXES = (CHRONICLE_ENV_PREFIX, *LEGACY_ENV_PREFIXES)
-
-
-@pytest.fixture(autouse=True)
-def isolated_rename_window_env(monkeypatch):
-    """Run each test with no rename-window variable inherited from the shell."""
-    for name in list(os.environ):
-        if name.startswith(RENAME_WINDOW_PREFIXES):
-            monkeypatch.delenv(name, raising=False)
-    reset_env_deprecation_state()
-    yield
-    reset_env_deprecation_state()
 
 
 def _fake_wrangler(tmp_path, log):
@@ -59,6 +46,22 @@ def _fake_wrangler(tmp_path, log):
 # ---------------------------------------------------------------------------
 # Lookup order
 # ---------------------------------------------------------------------------
+
+
+def test_every_test_runs_with_the_rename_window_cleared():
+    """Isolation is suite-wide (tests/conftest.py), not module-scoped.
+
+    Modules well outside this one assert the defaults these variables override
+    — the raw and derived bucket names, the Supabase schema — so an operator's
+    shell must not reach any test.
+    """
+    leaked = sorted(
+        name
+        for name in os.environ
+        if name.startswith((CHRONICLE_ENV_PREFIX, *LEGACY_ENV_PREFIXES))
+    )
+
+    assert leaked == []
 
 
 def test_env_names_puts_chronicle_first_then_ledger_era_names():
