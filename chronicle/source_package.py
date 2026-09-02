@@ -32,6 +32,10 @@ from chronicle.core import (
     build_label,
 )
 from chronicle.env import env_flag, env_value
+from chronicle.registration import (
+    MicrodataReleaseNotParseableError,
+    is_microdata_release,
+)
 from chronicle.sources.cells import (
     SourceArtifactMetadata,
     SourceCell,
@@ -834,16 +838,38 @@ class SourceArtifactSpec:
             raw_r2_uri=raw_r2.get("uri"),
         )
 
-    def _artifact_content(
-        self,
-        year: int,
-    ) -> tuple[bytes, str, str, dict[str, str]]:
+    def manifest_payload(self) -> dict[str, Any]:
+        """Load the artifact manifest this package spec points at."""
         manifest_path = files(self.resource_package).joinpath(
             self.resource_directory,
             self.manifest,
         )
         with manifest_path.open("r", encoding="utf-8") as file:
-            manifest = yaml.safe_load(file)
+            return yaml.safe_load(file) or {}
+
+    def assert_parseable_manifest(self) -> None:
+        """Refuse to parse a manifest that registers a microdata release.
+
+        Microdata registration is manifest-level identity: no source package
+        parses a release, and no microdata row, cell, or fact enters Chronicle
+        (``docs/adr-chronicle-raw-microdata-identity.md``).
+        """
+        manifest = self.manifest_payload()
+        if is_microdata_release(manifest):
+            raise MicrodataReleaseNotParseableError(
+                f"{self.resource_directory}/{self.manifest} registers a "
+                "microdata release. Registration is identity only: no source "
+                "package parses a microdata release and no microdata rows, "
+                "cells, or facts enter Chronicle."
+            )
+
+    def _artifact_content(
+        self,
+        year: int,
+    ) -> tuple[bytes, str, str, dict[str, str]]:
+        manifest = self.manifest_payload()
+        if is_microdata_release(manifest):
+            self.assert_parseable_manifest()
         spec = _year_mapping(manifest["files"], self.artifact_year or year)
         artifact_path = files(self.resource_package).joinpath(
             self.resource_directory,
@@ -1189,6 +1215,31 @@ def validate_source_package(
             year=year,
             counts=counts,
             errors=tuple(errors),
+        )
+
+    try:
+        package.artifact.assert_parseable_manifest()
+    except MicrodataReleaseNotParseableError as exc:
+        errors.append(
+            SourcePackageIssue(
+                code="microdata_release_not_parseable",
+                message=str(exc),
+            )
+        )
+        return SourcePackageValidationReport(
+            package_id=package.package_id,
+            package_path=str(package.package_path),
+            year=year,
+            counts=counts,
+            errors=tuple(errors),
+            warnings=tuple(warnings),
+        )
+    except (FileNotFoundError, OSError, ValueError) as exc:
+        errors.append(
+            SourcePackageIssue(
+                code="source_artifact_manifest_unreadable",
+                message=str(exc),
+            )
         )
 
     try:

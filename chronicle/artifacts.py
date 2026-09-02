@@ -25,6 +25,19 @@ from chronicle.database import (
     LEGACY_CHRONICLE_DB_FILENAME,
 )
 from chronicle.env import env_value
+from chronicle.registration import (
+    ACCESS_PUBLIC,
+    MICRODATA_RELEASE_KIND,
+    ListSpecRejected,
+    ManifestAccessError,
+    is_hash_only,
+    iter_file_specs,
+    normalize_access,
+    recorded_r2,
+    safe_entry_access,
+    safe_manifest_kind,
+    validate_file_entry,
+)
 
 
 R2_RAW_BUCKET_ENV = "CHRONICLE_R2_RAW_BUCKET"
@@ -301,10 +314,13 @@ class ArtifactInventoryEntry:
     source_url: str | None
     r2: dict[str, Any] | None
     errors: tuple[str, ...]
+    access: str = ACCESS_PUBLIC
+    licence: str | None = None
+    hash_only: bool = False
 
     @property
     def valid(self) -> bool:
-        """Whether this artifact is locally available and checksum-valid."""
+        """Whether this registration is complete and, if public, available."""
         return not self.errors
 
     def to_dict(self) -> dict[str, Any]:
@@ -316,6 +332,9 @@ class ArtifactInventoryEntry:
             "filename": self.filename,
             "local_path": self.local_path,
             "exists": self.exists,
+            "access": self.access,
+            "licence": self.licence,
+            "hash_only": self.hash_only,
             "sha256_expected": self.sha256_expected,
             "sha256_actual": self.sha256_actual,
             "size_bytes": self.size_bytes,
@@ -365,10 +384,13 @@ class RawArtifactPublishEntry:
     r2_location: ArtifactStorageLocation | None
     upload: ArtifactCommandResult | None
     errors: tuple[str, ...] = ()
+    skipped: str | None = None
 
     @property
     def valid(self) -> bool:
-        """Whether this raw artifact uploaded and was registered."""
+        """Whether this raw artifact uploaded, or was correctly not uploaded."""
+        if self.skipped is not None:
+            return not self.errors
         return not self.errors and self.upload is not None and self.upload.ok
 
     def to_dict(self) -> dict[str, Any]:
@@ -385,6 +407,7 @@ class RawArtifactPublishEntry:
             "size_bytes": self.size_bytes,
             "r2_location": (self.r2_location.to_dict() if self.r2_location else None),
             "upload": self.upload.to_dict() if self.upload else None,
+            "skipped": self.skipped,
             "errors": list(self.errors),
         }
 
@@ -406,11 +429,17 @@ class RawArtifactPublishReport:
     def counts(self) -> dict[str, int]:
         """Return summary counts."""
         manifest_paths = {entry.manifest_path for entry in self.entries}
+        uploaded = [
+            entry for entry in self.entries if entry.skipped is None and entry.valid
+        ]
         return {
             "manifest_count": len(manifest_paths),
             "artifact_count": len(self.entries),
-            "uploaded_count": sum(1 for entry in self.entries if entry.valid),
+            "uploaded_count": len(uploaded),
             "failed_count": sum(1 for entry in self.entries if not entry.valid),
+            "hash_only_refused_count": sum(
+                1 for entry in self.entries if entry.skipped is not None
+            ),
             "r2_link_count": sum(
                 1 for entry in self.entries if entry.r2_location is not None
             ),
@@ -536,6 +565,8 @@ def fetch_source_artifact(
     table: str | None = None,
     filename: str | None = None,
     manifest_filename: str = DEFAULT_MANIFEST_FILENAME,
+    access: str = ACCESS_PUBLIC,
+    licence: str | None = None,
     upload_r2: bool = False,
     record_revision: bool = False,
     r2_bucket: str | None = None,
@@ -555,10 +586,22 @@ def fetch_source_artifact(
     the superseded object moves to ``storage.previous_r2``. Without it, bytes
     that disagree with the entry's recorded identity raise
     :class:`SourceArtifactRevisionError` before anything is overwritten.
+
+    Only ``public`` artifacts travel this path: it writes bytes into the package
+    tree and can upload them to the raw bucket. Licensed and restricted
+    artifacts are registered hash-only with
+    :func:`chronicle.registration.register_hash_only_artifact`.
     """
     r2_bucket = r2_bucket or default_r2_raw_bucket()
     output = Path(output_dir)
     manifest_path = _manifest_path(output, manifest_filename)
+    access_class = normalize_access(access)
+    if is_hash_only(access_class):
+        raise ManifestAccessError(
+            f"fetch-artifact stores bytes and refuses access={access_class!r}. "
+            "Register a licensed or restricted artifact by identity with "
+            "`chronicle register-artifact`."
+        )
     resolved_r2_prefix = resolve_r2_prefix(
         prefix=r2_prefix,
         default_prefix=DEFAULT_R2_PREFIX,
@@ -568,8 +611,19 @@ def fetch_source_artifact(
     # Read and validate the entry being written before anything is fetched: a
     # manifest Chronicle cannot read, or a recorded block that names two
     # different objects, is a refusal that need not touch the publisher.
+    existing_manifest = _read_manifest(manifest_path)
+    licence_text = licence.strip() if isinstance(licence, str) else None
+    if (
+        safe_manifest_kind(existing_manifest)[0] == MICRODATA_RELEASE_KIND
+        and not licence_text
+    ):
+        raise ManifestAccessError(
+            f"{manifest_path} registers a microdata release, so every entry "
+            "must record its publisher licence; pass --licence."
+        )
+    _assert_no_hash_only_entry(existing_manifest, manifest_path, year, filename)
     recorded_identity = _recorded_identity(
-        _manifest_file_spec(_read_manifest(manifest_path), year),
+        _manifest_file_spec(existing_manifest, year),
         manifest_path=manifest_path,
         year=year,
     )
@@ -579,6 +633,12 @@ def fetch_source_artifact(
     artifact_filename = filename or inferred_filename
     if not artifact_filename:
         raise ValueError("Could not infer artifact filename; pass --filename.")
+    _assert_no_hash_only_entry(
+        existing_manifest,
+        manifest_path,
+        year,
+        artifact_filename,
+    )
 
     sha256 = hashlib.sha256(content).hexdigest()
     size_bytes = len(content)
@@ -637,6 +697,8 @@ def fetch_source_artifact(
         sha256=sha256,
         size_bytes=size_bytes,
         fetched_at=fetched_at,
+        access=access_class,
+        licence=licence_text,
         r2_location=(r2_location if upload_r2 and r2_upload and r2_upload.ok else None),
         record_revision=record_revision,
     )
@@ -785,8 +847,15 @@ def publish_source_artifacts(
     r2_bucket: str | None = None,
     r2_prefix: str | None = None,
     wrangler_command: str = "npx wrangler",
+    skip_hash_only: bool = False,
 ) -> RawArtifactPublishReport:
-    """Upload manifest-declared raw source artifacts and record R2 locations."""
+    """Upload manifest-declared raw source artifacts and record R2 locations.
+
+    Only ``public`` artifacts are uploaded. A licensed or restricted entry is
+    refused: no bytes are read or sent, and the entry carries a
+    ``hash_only_access_refuses_bytes`` error unless ``skip_hash_only`` marks the
+    scan as deliberately mixed.
+    """
     r2_bucket = r2_bucket or default_r2_raw_bucket()
     root_path = Path(root)
     if not root_path.exists():
@@ -829,22 +898,29 @@ def publish_source_artifacts(
             errors.append(f"Could not resolve R2 prefix for {manifest_path}: {exc}")
             continue
 
+        kind, kind_error = safe_manifest_kind(manifest)
+        if kind_error:
+            errors.append(f"{kind_error}: {manifest_path}")
         updated = False
         for year, spec in files.items():
-            entry, updated_spec = _publish_raw_manifest_entry(
-                manifest_path,
-                manifest_source_id,
-                manifest_package_id,
-                year,
-                spec,
-                r2_bucket=r2_bucket,
-                r2_prefix=resolved_r2_prefix,
-                wrangler_command=wrangler_command,
-            )
-            entries.append(entry)
-            if updated_spec is not None and isinstance(spec, dict):
-                spec.update(updated_spec)
-                updated = True
+            for file_spec in iter_file_specs(spec, kind=kind):
+                entry, updated_spec = _publish_raw_manifest_entry(
+                    manifest_path,
+                    manifest_source_id,
+                    manifest_package_id,
+                    year,
+                    file_spec,
+                    manifest=manifest,
+                    kind=kind,
+                    r2_bucket=r2_bucket,
+                    r2_prefix=resolved_r2_prefix,
+                    wrangler_command=wrangler_command,
+                    skip_hash_only=skip_hash_only,
+                )
+                entries.append(entry)
+                if updated_spec is not None and isinstance(file_spec, dict):
+                    file_spec.update(updated_spec)
+                    updated = True
         if updated:
             manifest.setdefault("source_id", manifest_source_id)
             manifest.setdefault("package_id", manifest_package_id)
@@ -918,6 +994,7 @@ def inventory_source_artifacts(
                 "artifact_count": 0,
                 "missing_count": 0,
                 "checksum_mismatch_count": 0,
+                "hash_only_count": 0,
                 "r2_link_count": 0,
             },
             entries=(),
@@ -934,16 +1011,29 @@ def inventory_source_artifacts(
         if not isinstance(files, dict):
             errors.append(f"Manifest files must be a mapping: {manifest_path}")
             continue
+        kind, kind_error = safe_manifest_kind(manifest)
+        if kind_error:
+            errors.append(f"{kind_error}: {manifest_path}")
         for year, spec in files.items():
-            entries.append(_inventory_entry(manifest_path, year, spec))
+            for file_spec in iter_file_specs(spec, kind=kind):
+                entries.append(
+                    _inventory_entry(
+                        manifest_path,
+                        year,
+                        file_spec,
+                        manifest=manifest,
+                        kind=kind,
+                    )
+                )
 
     counts = {
         "manifest_count": len(manifests),
         "artifact_count": len(entries),
-        "missing_count": sum(1 for entry in entries if not entry.exists),
+        "missing_count": sum(1 for entry in entries if "missing_file" in entry.errors),
         "checksum_mismatch_count": sum(
             1 for entry in entries if "checksum_mismatch" in entry.errors
         ),
+        "hash_only_count": sum(1 for entry in entries if entry.hash_only),
         "r2_link_count": sum(1 for entry in entries if entry.r2 is not None),
     }
     return ArtifactInventoryReport(
@@ -1561,6 +1651,8 @@ def _upsert_manifest(
     sha256: str,
     size_bytes: int,
     fetched_at: str,
+    access: str,
+    licence: str | None,
     r2_location: ArtifactStorageLocation | None,
     record_revision: bool = False,
 ) -> None:
@@ -1571,14 +1663,36 @@ def _upsert_manifest(
     payload.setdefault("source_page", source_page)
     payload.setdefault("table", table)
     payload.setdefault("files", {})
+    # Access is written explicitly on every entry this command touches, so a
+    # manifest never relies on the inferred ``public`` default once rewritten.
     file_entry: dict[str, Any] = {
         "filename": filename,
         "source_url": source_url,
-        "sha256": sha256,
-        "size_bytes": size_bytes,
-        "fetched_at": fetched_at,
+        "access": access,
     }
-    recorded_spec = _manifest_file_spec(payload, year)
+    if licence:
+        file_entry["licence"] = licence
+    file_entry.update(
+        {
+            "sha256": sha256,
+            "size_bytes": size_bytes,
+            "fetched_at": fetched_at,
+        }
+    )
+    existing = (
+        payload["files"].get(year) if isinstance(payload["files"], dict) else None
+    )
+    if isinstance(existing, list):
+        recorded_spec = next(
+            (
+                entry
+                for entry in existing
+                if isinstance(entry, dict) and entry.get("filename") == filename
+            ),
+            {},
+        )
+    else:
+        recorded_spec = existing if isinstance(existing, dict) else {}
     recorded_storage = _recorded_storage(recorded_spec)
     identity = _recorded_identity(recorded_spec, manifest_path=manifest_path, year=year)
     new_r2 = r2_location.to_dict() if r2_location is not None else None
@@ -1619,11 +1733,56 @@ def _upsert_manifest(
     # revision over a never-published entry supersedes nothing.
     if storage:
         file_entry["storage"] = storage
-    payload["files"][year] = file_entry
+    if isinstance(existing, list):
+        replaced = [
+            entry
+            for entry in existing
+            if not (isinstance(entry, dict) and entry.get("filename") == filename)
+        ]
+        payload["files"][year] = [*replaced, file_entry]
+    else:
+        payload["files"][year] = file_entry
     manifest_path.write_text(
-        yaml.safe_dump(payload, sort_keys=False),
+        yaml.safe_dump(payload, sort_keys=False, allow_unicode=True),
         encoding="utf-8",
     )
+
+
+def _load_manifest_payload(manifest_path: Path) -> dict[str, Any]:
+    """Load a manifest mapping, or an empty mapping when absent or unreadable."""
+    if not manifest_path.exists():
+        return {}
+    payload = yaml.safe_load(manifest_path.read_text(encoding="utf-8")) or {}
+    if not isinstance(payload, dict):
+        raise ValueError(f"Manifest must be a mapping: {manifest_path}")
+    return payload
+
+
+def _assert_no_hash_only_entry(
+    manifest: dict[str, Any],
+    manifest_path: Path,
+    year: Any,
+    filename: str | None,
+) -> None:
+    """Refuse to fetch bytes over an existing hash-only registration."""
+    if not filename:
+        return
+    files = manifest.get("files")
+    if not isinstance(files, dict):
+        return
+    kind, _kind_error = safe_manifest_kind(manifest)
+    for spec in iter_file_specs(files.get(year), kind=kind):
+        if not isinstance(spec, dict):
+            continue
+        if spec.get("filename") != filename:
+            continue
+        access = safe_entry_access(spec)
+        if is_hash_only(access):
+            raise ManifestAccessError(
+                f"{manifest_path} registers {filename!r} for {year} as "
+                f"access={access!r}. Its bytes must not enter a Chronicle "
+                "store; keep the hash-only registration."
+            )
 
 
 def _upload_r2_object(
@@ -1655,15 +1814,70 @@ def _publish_raw_manifest_entry(
     year: Any,
     spec: Any,
     *,
+    manifest: dict[str, Any] | None = None,
+    kind: str | None = None,
     r2_bucket: str,
     r2_prefix: str,
     wrangler_command: str,
+    skip_hash_only: bool = False,
 ) -> tuple[RawArtifactPublishEntry, dict[str, Any] | None]:
     errors: list[str] = []
+    if isinstance(spec, ListSpecRejected):
+        return (
+            RawArtifactPublishEntry(
+                manifest_path=str(manifest_path),
+                source_id=source_id,
+                package_id=package_id,
+                year=str(year),
+                filename="",
+                local_path=str(manifest_path.parent),
+                sha256=None,
+                size_bytes=None,
+                r2_location=None,
+                upload=None,
+                errors=("list_file_spec_requires_microdata_release_kind",),
+            ),
+            None,
+        )
     if not isinstance(spec, dict):
         spec = {}
         errors.append("malformed_file_spec")
     filename = str(spec.get("filename") or "")
+    access = safe_entry_access(spec)
+    if is_hash_only(access):
+        # Refuse before touching bytes: no Chronicle store holds a licensed or
+        # restricted artifact, so there is nothing here to upload.
+        return (
+            RawArtifactPublishEntry(
+                manifest_path=str(manifest_path),
+                source_id=source_id,
+                package_id=package_id,
+                year=str(year),
+                filename=filename,
+                local_path=str(manifest_path.parent / filename),
+                sha256=spec.get("sha256"),
+                size_bytes=spec.get("size_bytes"),
+                r2_location=None,
+                upload=None,
+                errors=(
+                    ()
+                    if skip_hash_only
+                    else (f"hash_only_access_refuses_bytes:{access}",)
+                ),
+                skipped=f"hash_only_access:{access}",
+            ),
+            None,
+        )
+    errors.extend(
+        validate_file_entry(
+            spec,
+            kind=kind or safe_manifest_kind(manifest)[0],
+            manifest=manifest,
+            local_file_exists=(manifest_path.parent / filename).exists()
+            if filename
+            else False,
+        )
+    )
     artifact_path = manifest_path.parent / filename
     sha256_expected = spec.get("sha256")
     sha256_actual = None
@@ -1799,19 +2013,51 @@ def _inventory_entry(
     manifest_path: Path,
     year: Any,
     spec: Any,
+    *,
+    manifest: dict[str, Any] | None = None,
+    kind: str | None = None,
 ) -> ArtifactInventoryEntry:
     errors: list[str] = []
+    original_spec = spec
+    if isinstance(spec, ListSpecRejected):
+        return ArtifactInventoryEntry(
+            manifest_path=str(manifest_path),
+            year=str(year),
+            filename="",
+            local_path=str(manifest_path.parent),
+            exists=False,
+            sha256_expected=None,
+            sha256_actual=None,
+            size_bytes=None,
+            source_url=None,
+            r2=None,
+            errors=("list_file_spec_requires_microdata_release_kind",),
+        )
     if not isinstance(spec, dict):
         spec = {}
         errors.append("malformed_file_spec")
     filename = str(spec.get("filename") or "")
     artifact_path = manifest_path.parent / filename
     exists = bool(filename) and artifact_path.exists()
+    access = safe_entry_access(spec)
+    hash_only = is_hash_only(access)
+    errors.extend(
+        validate_file_entry(
+            original_spec,
+            kind=kind or safe_manifest_kind(manifest)[0],
+            manifest=manifest,
+            local_file_exists=exists,
+        )
+    )
     sha256_expected = spec.get("sha256")
     sha256_actual = None
-    size_bytes = None
+    size_bytes = spec.get("size_bytes") if hash_only else None
     if not filename:
         errors.append("missing_filename")
+    elif hash_only:
+        # A licensed or restricted registration is identity only: Chronicle
+        # never holds the bytes, so a missing local file is the correct state.
+        pass
     elif not exists:
         errors.append("missing_file")
     else:
@@ -1820,8 +2066,7 @@ def _inventory_entry(
         size_bytes = len(content)
         if sha256_expected and sha256_actual != sha256_expected:
             errors.append("checksum_mismatch")
-    storage = spec.get("storage") if isinstance(spec, dict) else None
-    r2 = storage.get("r2") if isinstance(storage, dict) else None
+    r2 = recorded_r2(spec)
     return ArtifactInventoryEntry(
         manifest_path=str(manifest_path),
         year=str(year),
@@ -1832,8 +2077,11 @@ def _inventory_entry(
         sha256_actual=sha256_actual,
         size_bytes=size_bytes,
         source_url=spec.get("source_url"),
-        r2=r2,
-        errors=tuple(errors),
+        r2=dict(r2) if r2 is not None else None,
+        errors=tuple(dict.fromkeys(errors)),
+        access=access,
+        licence=spec.get("licence"),
+        hash_only=hash_only,
     )
 
 

@@ -51,6 +51,11 @@ from chronicle.pe_source_plan import (
     write_pe_source_plan_json,
     write_pe_source_plan_markdown,
 )
+from chronicle.registration import (
+    ACCESS_CLASSES,
+    ArtifactRegistrationReport,
+    register_hash_only_artifact,
+)
 from chronicle.sources.cells import (
     SourceCell,
     SourceCellReport,
@@ -341,6 +346,8 @@ def fetch_artifact_file(
     table: str | None = None,
     filename: str | None = None,
     manifest_filename: str = DEFAULT_MANIFEST_FILENAME,
+    access: str = "public",
+    licence: str | None = None,
     upload_r2: bool = False,
     record_revision: bool = False,
     r2_bucket: str | None = None,
@@ -365,11 +372,67 @@ def fetch_artifact_file(
         table=table,
         filename=filename,
         manifest_filename=manifest_filename,
+        access=access,
+        licence=licence,
         upload_r2=upload_r2,
         record_revision=record_revision,
         r2_bucket=r2_bucket,
         r2_prefix=r2_prefix,
         wrangler_command=wrangler_command,
+    )
+
+
+def register_artifact_file(
+    *,
+    source_id: str,
+    package_id: str,
+    year: int,
+    output_dir: str | Path,
+    filename: str,
+    sha256: str,
+    licence: str,
+    access: str,
+    vintage: str,
+    size_bytes: int | None = None,
+    source_page: str | None = None,
+    source_url: str | None = None,
+    access_route: str | None = None,
+    doi: str | None = None,
+    study: str | None = None,
+    dataset: str | None = None,
+    table: str | None = None,
+    publisher: str | None = None,
+    fetched_at: str | None = None,
+    verified_at: str | None = None,
+    hash_source: str | None = None,
+    notes: str | None = None,
+    allow_reissue: bool = False,
+) -> ArtifactRegistrationReport:
+    """Register a licensed or restricted artifact by identity, without bytes."""
+    return register_hash_only_artifact(
+        source_id=source_id,
+        package_id=package_id,
+        year=year,
+        output_dir=output_dir,
+        filename=filename,
+        sha256=sha256,
+        licence=licence,
+        access=access,
+        vintage=vintage,
+        size_bytes=size_bytes,
+        source_page=source_page,
+        source_url=source_url,
+        access_route=access_route,
+        doi=doi,
+        study=study,
+        dataset=dataset,
+        table=table,
+        publisher=publisher,
+        fetched_at=fetched_at,
+        verified_at=verified_at,
+        hash_source=hash_source,
+        notes=notes,
+        allow_reissue=allow_reissue,
     )
 
 
@@ -391,6 +454,7 @@ def publish_raw_artifact_files(
     r2_bucket: str | None = None,
     r2_prefix: str | None = None,
     wrangler_command: str = "npx wrangler",
+    skip_hash_only: bool = False,
 ) -> RawArtifactPublishReport:
     """Publish manifest-declared raw source artifacts to R2."""
     return publish_source_artifacts(
@@ -401,6 +465,7 @@ def publish_raw_artifact_files(
         r2_bucket=r2_bucket,
         r2_prefix=r2_prefix,
         wrangler_command=wrangler_command,
+        skip_hash_only=skip_hash_only,
     )
 
 
@@ -912,6 +977,23 @@ def main(argv: list[str] | None = None) -> int:
         help="Override artifact filename inferred from URL/path.",
     )
     artifact_parser.add_argument(
+        "--access",
+        default="public",
+        choices=list(ACCESS_CLASSES),
+        help=(
+            "Publisher access class. Only public artifacts may be fetched; "
+            "licensed and restricted artifacts are registered hash-only with "
+            "`chronicle register-artifact`."
+        ),
+    )
+    artifact_parser.add_argument(
+        "--licence",
+        help=(
+            "Publisher terms identifier or URL. Required for entries in a "
+            "microdata-release manifest."
+        ),
+    )
+    artifact_parser.add_argument(
         "--upload-r2",
         action="store_true",
         help="Upload the artifact to R2 after local checksum capture.",
@@ -950,6 +1032,126 @@ def main(argv: list[str] | None = None) -> int:
         help="Wrangler command prefix to use for R2 uploads.",
     )
 
+    registration_parser = subparsers.add_parser(
+        "register-artifact",
+        help="Register a licensed or restricted artifact by identity, no bytes",
+        description=(
+            "Register a raw artifact Chronicle may not redistribute. The "
+            "manifest records the checksum, size, vintage, licence, and access "
+            "route; no bytes are fetched, stored, or uploaded, and no R2 key "
+            "is recorded."
+        ),
+    )
+    registration_parser.add_argument(
+        "--source-id",
+        required=True,
+        help="Stable source ID, such as dwp.",
+    )
+    registration_parser.add_argument(
+        "--package-id",
+        required=True,
+        help="Stable package ID, such as dwp-frs-2023-24.",
+    )
+    registration_parser.add_argument(
+        "--year",
+        type=int,
+        required=True,
+        help="Artifact vintage year to record in manifest.yaml",
+    )
+    registration_parser.add_argument(
+        "--out-dir",
+        type=Path,
+        required=True,
+        help="Directory where manifest.yaml should live. No bytes are written.",
+    )
+    registration_parser.add_argument(
+        "--filename",
+        required=True,
+        help="Publisher filename this registration identifies.",
+    )
+    registration_parser.add_argument(
+        "--sha256",
+        required=True,
+        help="Lowercase 64-character SHA-256 of the publisher bytes.",
+    )
+    registration_parser.add_argument(
+        "--size-bytes",
+        type=int,
+        help="Size of the publisher bytes, when known.",
+    )
+    registration_parser.add_argument(
+        "--vintage",
+        required=True,
+        help="Publisher vintage label, such as 2023_24.",
+    )
+    registration_parser.add_argument(
+        "--licence",
+        required=True,
+        help="Publisher terms identifier or URL, such as a UKDS licence.",
+    )
+    registration_parser.add_argument(
+        "--access",
+        required=True,
+        choices=["licensed", "restricted"],
+        help="Access class. Public artifacts are registered with fetch-artifact.",
+    )
+    registration_parser.add_argument(
+        "--source-page",
+        help="Publisher or archive landing page for the release.",
+    )
+    registration_parser.add_argument(
+        "--source-url",
+        help="Direct publisher URL, when the release has one behind its licence.",
+    )
+    registration_parser.add_argument(
+        "--access-route",
+        help="How an authorized consumer obtains the bytes.",
+    )
+    registration_parser.add_argument(
+        "--doi",
+        help="Persistent identifier for the study, such as a UKDS DOI.",
+    )
+    registration_parser.add_argument(
+        "--study",
+        help="Archive study reference, such as a UK Data Service study number.",
+    )
+    registration_parser.add_argument(
+        "--dataset",
+        help="Manifest dataset ID. Defaults to <source-id>_<package-id>.",
+    )
+    registration_parser.add_argument(
+        "--table",
+        help="Human-readable release title.",
+    )
+    registration_parser.add_argument(
+        "--publisher",
+        help="Publishing body, when it differs from the source ID.",
+    )
+    registration_parser.add_argument(
+        "--fetched-at",
+        help="When the authorized environment fetched the bytes, if known.",
+    )
+    registration_parser.add_argument(
+        "--verified-at",
+        help="When this checksum was verified against the reviewed pin.",
+    )
+    registration_parser.add_argument(
+        "--hash-source",
+        help="Where the checksum came from, such as a consumer source manifest.",
+    )
+    registration_parser.add_argument(
+        "--notes",
+        help="Free-text provenance notes for the registration.",
+    )
+    registration_parser.add_argument(
+        "--allow-reissue",
+        action="store_true",
+        help=(
+            "Register different bytes for a filename already registered in "
+            "this year, keeping both registrations."
+        ),
+    )
+
     artifact_inventory_parser = subparsers.add_parser(
         "inventory-artifacts",
         help="Inventory local manifest-declared source artifacts",
@@ -980,6 +1182,14 @@ def main(argv: list[str] | None = None) -> int:
         "--manifest",
         default="manifest.yaml",
         help="Manifest filename to scan for.",
+    )
+    raw_publish_parser.add_argument(
+        "--skip-hash-only",
+        action="store_true",
+        help=(
+            "Treat licensed and restricted registrations as deliberately "
+            "skipped rather than refused, so a mixed tree can be published."
+        ),
     )
     raw_publish_parser.add_argument(
         "--source-id",
@@ -1376,6 +1586,8 @@ def main(argv: list[str] | None = None) -> int:
                 table=args.table,
                 filename=args.filename,
                 manifest_filename=args.manifest,
+                access=args.access,
+                licence=args.licence,
                 upload_r2=args.upload_r2,
                 record_revision=args.record_revision,
                 r2_bucket=args.r2_bucket,
@@ -1387,6 +1599,34 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         print(json.dumps(report.to_dict(), indent=2, sort_keys=True))
         return 0 if report.valid else 1
+    if args.command == "register-artifact":
+        registration = register_artifact_file(
+            source_id=args.source_id,
+            package_id=args.package_id,
+            year=args.year,
+            output_dir=args.out_dir,
+            filename=args.filename,
+            sha256=args.sha256,
+            licence=args.licence,
+            access=args.access,
+            vintage=args.vintage,
+            size_bytes=args.size_bytes,
+            source_page=args.source_page,
+            source_url=args.source_url,
+            access_route=args.access_route,
+            doi=args.doi,
+            study=args.study,
+            dataset=args.dataset,
+            table=args.table,
+            publisher=args.publisher,
+            fetched_at=args.fetched_at,
+            verified_at=args.verified_at,
+            hash_source=args.hash_source,
+            notes=args.notes,
+            allow_reissue=args.allow_reissue,
+        )
+        print(json.dumps(registration.to_dict(), indent=2, sort_keys=True))
+        return 0 if registration.valid else 1
     if args.command == "inventory-artifacts":
         report = inventory_artifact_files(
             args.root,
@@ -1403,6 +1643,7 @@ def main(argv: list[str] | None = None) -> int:
             r2_bucket=args.r2_bucket,
             r2_prefix=args.r2_prefix,
             wrangler_command=args.wrangler_command,
+            skip_hash_only=args.skip_hash_only,
         )
         print(json.dumps(report.to_dict(), indent=2, sort_keys=True))
         return 0 if report.valid else 1
