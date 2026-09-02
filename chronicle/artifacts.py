@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import mimetypes
+from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -28,6 +29,7 @@ from chronicle.env import env_value
 from chronicle.registration import (
     ACCESS_PUBLIC,
     MICRODATA_RELEASE_KIND,
+    manifest_kind as normalize_manifest_kind,
     ListSpecRejected,
     ManifestAccessError,
     is_hash_only,
@@ -567,6 +569,7 @@ def fetch_source_artifact(
     manifest_filename: str = DEFAULT_MANIFEST_FILENAME,
     access: str = ACCESS_PUBLIC,
     licence: str | None = None,
+    kind: str | None = None,
     upload_r2: bool = False,
     record_revision: bool = False,
     r2_bucket: str | None = None,
@@ -613,14 +616,19 @@ def fetch_source_artifact(
     # different objects, is a refusal that need not touch the publisher.
     existing_manifest = _read_manifest(manifest_path)
     licence_text = licence.strip() if isinstance(licence, str) else None
+    # A public microdata release is archived like any other public artifact,
+    # but its manifest still declares the release kind so a source package is
+    # refused and several files may share one vintage.
+    manifest_kind_value = (
+        normalize_manifest_kind({'kind': kind})
+        if kind is not None
+        else safe_manifest_kind(existing_manifest)[0]
+    )
     # The byte boundary is checked first: overwriting a hash-only registration
     # with bytes is the more serious refusal, and its message is the one the
     # caller needs, not a prompt to supply a licence.
     _assert_no_hash_only_entry(existing_manifest, manifest_path, year, filename)
-    if (
-        safe_manifest_kind(existing_manifest)[0] == MICRODATA_RELEASE_KIND
-        and not licence_text
-    ):
+    if manifest_kind_value == MICRODATA_RELEASE_KIND and not licence_text:
         raise ManifestAccessError(
             f"{manifest_path} registers a microdata release, so every entry "
             "must record its publisher licence; pass --licence."
@@ -702,6 +710,7 @@ def fetch_source_artifact(
         fetched_at=fetched_at,
         access=access_class,
         licence=licence_text,
+        kind=manifest_kind_value,
         r2_location=(r2_location if upload_r2 and r2_upload and r2_upload.ok else None),
         record_revision=record_revision,
     )
@@ -1656,6 +1665,7 @@ def _upsert_manifest(
     fetched_at: str,
     access: str,
     licence: str | None,
+    kind: str,
     r2_location: ArtifactStorageLocation | None,
     record_revision: bool = False,
 ) -> None:
@@ -1736,19 +1746,33 @@ def _upsert_manifest(
     # revision over a never-published entry supersedes nothing.
     if storage:
         file_entry["storage"] = storage
-    if isinstance(existing, list):
-        replaced = [
-            entry
-            for entry in existing
-            if not (isinstance(entry, dict) and entry.get("filename") == filename)
-        ]
-        payload["files"][year] = [*replaced, file_entry]
-    else:
+    if kind == MICRODATA_RELEASE_KIND:
+        payload["kind"] = kind
+    entries = list(existing) if isinstance(existing, list) else _as_entry_list(existing)
+    # A registration is a durable statement, so a fetch replaces only the entry
+    # for its own filename and never silently drops another one. Overwriting a
+    # hash-only registration is refused outright by _assert_no_hash_only_entry.
+    kept = [
+        entry
+        for entry in entries
+        if not (isinstance(entry, dict) and entry.get("filename") == filename)
+    ]
+    if not kept and not isinstance(existing, list) and kind != MICRODATA_RELEASE_KIND:
+        # A single-file publisher table keeps the historical mapping shape.
         payload["files"][year] = file_entry
+    else:
+        payload["files"][year] = [*kept, file_entry]
     manifest_path.write_text(
         yaml.safe_dump(payload, sort_keys=False, allow_unicode=True),
         encoding="utf-8",
     )
+
+
+def _as_entry_list(existing: Any) -> list[Any]:
+    """Return an existing ``files[year]`` value as a list of entries."""
+    if existing is None:
+        return []
+    return [existing]
 
 
 def _load_manifest_payload(manifest_path: Path) -> dict[str, Any]:
@@ -1761,20 +1785,37 @@ def _load_manifest_payload(manifest_path: Path) -> dict[str, Any]:
     return payload
 
 
+def _iter_manifest_entries(manifest: dict[str, Any]) -> Iterator[tuple[Any, Any]]:
+    """Yield every ``(year, entry)`` a manifest declares, whatever its shape.
+
+    Deliberately not gated on the manifest ``kind``: a guard must see the
+    entries a manifest actually holds, including a list under a manifest whose
+    kind is absent or misspelled. Reporting that shape as malformed is the
+    validator's job, not the guard's.
+    """
+    files = manifest.get("files")
+    if not isinstance(files, dict):
+        return
+    for year, spec in files.items():
+        for entry in spec if isinstance(spec, list) else (spec,):
+            yield year, entry
+
+
 def _assert_no_hash_only_entry(
     manifest: dict[str, Any],
     manifest_path: Path,
     year: Any,
     filename: str | None,
 ) -> None:
-    """Refuse to fetch bytes over an existing hash-only registration."""
+    """Refuse to fetch bytes over an existing hash-only registration.
+
+    The write target is a path in the package directory, so the search spans
+    every vintage rather than the requested one: a licensed release registered
+    under one year must not be fetched into the tree under another.
+    """
     if not filename:
         return
-    files = manifest.get("files")
-    if not isinstance(files, dict):
-        return
-    kind, _kind_error = safe_manifest_kind(manifest)
-    for spec in iter_file_specs(files.get(year), kind=kind):
+    for entry_year, spec in _iter_manifest_entries(manifest):
         if not isinstance(spec, dict):
             continue
         if spec.get("filename") != filename:
@@ -1782,7 +1823,7 @@ def _assert_no_hash_only_entry(
         access = safe_entry_access(spec)
         if is_hash_only(access):
             raise ManifestAccessError(
-                f"{manifest_path} registers {filename!r} for {year} as "
+                f"{manifest_path} registers {filename!r} for {entry_year} as "
                 f"access={access!r}. Its bytes must not enter a Chronicle "
                 "store; keep the hash-only registration."
             )
@@ -1849,7 +1890,21 @@ def _publish_raw_manifest_entry(
     access = safe_entry_access(spec)
     if is_hash_only(access):
         # Refuse before touching bytes: no Chronicle store holds a licensed or
-        # restricted artifact, so there is nothing here to upload.
+        # restricted artifact, so there is nothing here to upload. The entry is
+        # still validated, because bytes on disk or a recorded R2 key are
+        # contract violations that --skip-hash-only must not hide.
+        hash_only_errors = list(
+            validate_file_entry(
+                spec,
+                kind=kind or safe_manifest_kind(manifest)[0],
+                manifest=manifest,
+                local_file_exists=(manifest_path.parent / filename).exists()
+                if filename
+                else False,
+            )
+        )
+        if not skip_hash_only:
+            hash_only_errors.insert(0, f"hash_only_access_refuses_bytes:{access}")
         return (
             RawArtifactPublishEntry(
                 manifest_path=str(manifest_path),
@@ -1862,11 +1917,7 @@ def _publish_raw_manifest_entry(
                 size_bytes=spec.get("size_bytes"),
                 r2_location=None,
                 upload=None,
-                errors=(
-                    ()
-                    if skip_hash_only
-                    else (f"hash_only_access_refuses_bytes:{access}",)
-                ),
+                errors=tuple(dict.fromkeys(hash_only_errors)),
                 skipped=f"hash_only_access:{access}",
             ),
             None,

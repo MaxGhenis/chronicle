@@ -458,6 +458,10 @@ def register_hash_only_artifact(
     payload.setdefault("files", {})
 
     entries = _existing_entries(payload["files"], year)
+    # Two passes, so re-registering an existing pin stays idempotent even after
+    # a reissue has added a second entry for the same filename. A single pass
+    # would raise on the first filename match with a different checksum before
+    # it could reach the exact match further down the list.
     replaced = False
     for index, existing in enumerate(entries):
         if not isinstance(existing, Mapping):
@@ -468,16 +472,21 @@ def register_hash_only_artifact(
             entries[index] = entry
             replaced = True
             break
-        if not allow_reissue:
+    if not replaced:
+        superseded = [
+            existing
+            for existing in entries
+            if isinstance(existing, Mapping)
+            and _text(existing.get("filename")) == artifact_name
+        ]
+        if superseded and not allow_reissue:
             raise HashOnlyRegistrationError(
                 f"{manifest_path} already registers {artifact_name!r} for "
-                f"{year} with sha256={existing.get('sha256')!r}. Different "
+                f"{year} with sha256={superseded[0].get('sha256')!r}. Different "
                 "bytes are a new publisher release, not a pin replacement; "
                 "pass --allow-reissue to register both."
             )
-    else:
-        # No identical (filename, sha256) entry: this is a new registration,
-        # which for a reissue sits alongside the pin it supersedes.
+        # A reissue sits alongside the pin it supersedes.
         entries.append(entry)
 
     payload["files"][year] = sorted(entries, key=_entry_sort_key)

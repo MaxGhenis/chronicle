@@ -47,6 +47,8 @@ from chronicle.source_package import SourceArtifactSpec, validate_source_package
 REPO_ROOT = Path(__file__).resolve().parents[1]
 FRS_PACKAGE = REPO_ROOT / "db" / "data" / "dwp" / "frs_2023_24"
 SPI_PACKAGE = REPO_ROOT / "db" / "data" / "hmrc" / "spi_public_use_tape_2022_23"
+# Read-only consumer checkout the emit/plan script resolves pins against.
+MICROCOSM_ROOT = Path.home() / "PolicyEngine" / "populace"
 
 # A syntactically valid checksum that identifies no real publisher bytes.
 FIXTURE_SHA = "a" * 64
@@ -722,6 +724,283 @@ def test_cli_register_artifact_rejects_public_access(tmp_path):
                 "public",
             ]
         )
+
+
+# --------------------------------------------------------------------------
+# Regressions: the byte boundary must not be escapable
+# --------------------------------------------------------------------------
+
+
+def _licensed_manifest(package: Path, payload: dict) -> Path:
+    package.mkdir(parents=True, exist_ok=True)
+    (package / "manifest.yaml").write_text(yaml.safe_dump(payload))
+    return package
+
+
+def test_fetch_refuses_a_registration_recorded_under_another_vintage(tmp_path):
+    # The write target is a path in the package directory, not a year, so a
+    # registration under 2022 must still block a fetch requested for 2023.
+    package = _licensed_manifest(
+        tmp_path / "pkg",
+        {
+            "source_id": "dwp",
+            "package_id": "dwp-frs-2023-24",
+            "kind": "microdata_release",
+            "files": {
+                2022: [
+                    {
+                        "filename": "adult.tab",
+                        "access": "licensed",
+                        "licence": "UK Data Service End User Licence",
+                        "vintage": "2022_23",
+                        "sha256": FIXTURE_SHA,
+                        "doi": "10.5255/UKDA-SN-9367-2",
+                        "verified_at": "2026-09-02",
+                    }
+                ]
+            },
+        },
+    )
+    source = tmp_path / "adult.tab"
+    source.write_bytes(b"licensed microdata")
+
+    with pytest.raises(ManifestAccessError, match="for 2022 as access='licensed'"):
+        fetch_source_artifact(
+            str(source),
+            source_id="dwp",
+            package_id="dwp-frs-2023-24",
+            year=2023,
+            output_dir=package,
+            filename="adult.tab",
+            licence="UK Data Service End User Licence",
+            access="public",
+        )
+
+    assert not (package / "adult.tab").exists()
+
+
+def test_fetch_refuses_a_list_entry_in_a_manifest_without_a_kind(tmp_path):
+    # A missing or misspelled kind must not make the guard blind to the
+    # entries the manifest actually holds.
+    package = _licensed_manifest(
+        tmp_path / "pkg",
+        {
+            "source_id": "dwp",
+            "package_id": "dwp-frs-2023-24",
+            "files": {
+                2023: [
+                    {
+                        "filename": "adult.tab",
+                        "access": "licensed",
+                        "licence": "UK Data Service End User Licence",
+                        "sha256": FIXTURE_SHA,
+                    }
+                ]
+            },
+        },
+    )
+    source = tmp_path / "adult.tab"
+    source.write_bytes(b"licensed microdata")
+
+    with pytest.raises(ManifestAccessError, match="Its bytes must not enter"):
+        fetch_source_artifact(
+            str(source),
+            source_id="dwp",
+            package_id="dwp-frs-2023-24",
+            year=2023,
+            output_dir=package,
+            filename="adult.tab",
+            access="public",
+        )
+
+    assert not (package / "adult.tab").exists()
+
+
+def test_fetch_never_drops_an_existing_registration(tmp_path):
+    output_dir = tmp_path / "pkg"
+    _register(output_dir)
+    source = tmp_path / "other.csv"
+    source.write_bytes(b"a public table in the same package")
+
+    fetch_source_artifact(
+        str(source),
+        source_id="dwp",
+        package_id="dwp-frs-2023-24",
+        year=2023,
+        output_dir=output_dir,
+        filename="other.csv",
+        licence="Open Government Licence",
+        access="public",
+    )
+
+    manifest = yaml.safe_load((output_dir / "manifest.yaml").read_text())
+    entries = manifest["files"][2023]
+
+    assert [entry["filename"] for entry in entries] == ["adult.tab", "other.csv"]
+    assert entries[0]["access"] == "licensed"
+    assert entries[0]["sha256"] == FIXTURE_SHA
+
+
+def test_publish_raw_reports_a_violation_even_when_skipping(tmp_path, monkeypatch):
+    root = _hash_only_tree(tmp_path)
+    (root / "dwp" / "frs_2023_24" / "adult.tab").write_bytes(b"leaked bytes")
+    monkeypatch.setattr(
+        "chronicle.artifacts._upload_r2_object",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("no upload")),
+    )
+
+    report = publish_source_artifacts(root, skip_hash_only=True)
+
+    # --skip-hash-only turns off the refusal, not the contract check.
+    assert not report.valid
+    assert "bytes_present_for_hash_only_entry" in report.entries[0].errors
+
+
+def test_reregistering_the_current_pin_stays_idempotent_after_a_reissue(tmp_path):
+    output_dir = tmp_path / "pkg"
+    _register(output_dir, sha256=FIXTURE_SHA)
+    _register(output_dir, sha256="b" * 64, allow_reissue=True)
+
+    report = _register(output_dir, sha256="b" * 64)
+
+    assert report.replaced is True
+    entries = yaml.safe_load((output_dir / "manifest.yaml").read_text())["files"][2023]
+    assert [entry["sha256"] for entry in entries] == [FIXTURE_SHA, "b" * 64]
+
+
+# --------------------------------------------------------------------------
+# Public microdata releases
+# --------------------------------------------------------------------------
+
+
+def test_fetch_can_declare_a_public_microdata_release(tmp_path):
+    output_dir = tmp_path / "pkg"
+    household = tmp_path / "csv_hus.zip"
+    household.write_bytes(b"public household pums")
+    person = tmp_path / "csv_pus.zip"
+    person.write_bytes(b"public person pums")
+
+    for source in (household, person):
+        fetch_source_artifact(
+            str(source),
+            source_id="census_acs",
+            package_id="census-acs-pums-2022-1yr",
+            year=2022,
+            output_dir=output_dir,
+            licence="U.S. Census Bureau public-use file",
+            access="public",
+            kind="microdata_release",
+        )
+
+    manifest = yaml.safe_load((output_dir / "manifest.yaml").read_text())
+    entries = manifest["files"][2022]
+
+    # A release may hold several files under one vintage, and both are kept.
+    assert manifest["kind"] == "microdata_release"
+    assert [entry["filename"] for entry in entries] == ["csv_hus.zip", "csv_pus.zip"]
+    assert all(entry["access"] == "public" for entry in entries)
+    assert all(entry["licence"] for entry in entries)
+
+    report = inventory_source_artifacts(output_dir)
+    assert report.valid
+    assert report.counts["hash_only_count"] == 0
+
+
+def test_fetch_rejects_an_unknown_manifest_kind(tmp_path):
+    source = tmp_path / "table.xlsx"
+    source.write_bytes(b"publisher table")
+
+    with pytest.raises(ManifestAccessError, match="Unknown manifest kind"):
+        fetch_source_artifact(
+            str(source),
+            source_id="irs_soi",
+            package_id="soi-table-1-2",
+            year=2023,
+            output_dir=tmp_path / "pkg",
+            kind="microdata_rows",
+        )
+
+
+# --------------------------------------------------------------------------
+# The generated fetch plan
+# --------------------------------------------------------------------------
+
+
+def test_planned_fetch_commands_parse_against_the_real_cli():
+    """Every command `plan` prints must be runnable as printed."""
+    import argparse
+    import contextlib
+    import shlex
+    import subprocess
+    import sys
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(REPO_ROOT / "scripts" / "register_microdata_releases.py"),
+            "--microcosm-root",
+            str(MICROCOSM_ROOT),
+            "plan",
+        ],
+        capture_output=True,
+        text=True,
+        cwd=REPO_ROOT,
+    )
+    if result.returncode != 0:
+        pytest.skip(f"No readable microcosm checkout: {result.stderr.strip()[:120]}")
+
+    commands = [
+        line
+        for line in result.stdout.splitlines()
+        if line.startswith("uv run chronicle")
+    ]
+    assert commands
+
+    captured: dict[str, argparse.ArgumentParser] = {}
+    real_parse = argparse.ArgumentParser.parse_args
+
+    def capture(self, args=None, namespace=None):
+        captured["parser"] = self
+        raise SystemExit(0)
+
+    argparse.ArgumentParser.parse_args = capture
+    try:
+        with contextlib.suppress(SystemExit):
+            harness_main(["--help"])
+    finally:
+        argparse.ArgumentParser.parse_args = real_parse
+
+    parser = captured["parser"]
+    for command in commands:
+        argv = shlex.split(command)[3:]
+        namespace = parser.parse_args(argv)
+        assert namespace.command == "fetch-artifact"
+        assert namespace.access == "public"
+        assert namespace.licence
+        assert namespace.kind == "microdata_release"
+
+
+def test_plan_never_prints_a_fabricated_url():
+    """A release Microcosm does not pin a URL for prints TODO, not a guess."""
+    import subprocess
+    import sys
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(REPO_ROOT / "scripts" / "register_microdata_releases.py"),
+            "--microcosm-root",
+            str(MICROCOSM_ROOT),
+            "plan",
+        ],
+        capture_output=True,
+        text=True,
+        cwd=REPO_ROOT,
+    )
+    if result.returncode != 0:
+        pytest.skip("No readable microcosm checkout")
+
+    assert "TODO_PUBLISHER_URL" in result.stdout
 
 
 # --------------------------------------------------------------------------

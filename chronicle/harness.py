@@ -53,6 +53,7 @@ from chronicle.pe_source_plan import (
 )
 from chronicle.registration import (
     ACCESS_CLASSES,
+    MANIFEST_KINDS,
     ArtifactRegistrationReport,
     register_hash_only_artifact,
 )
@@ -348,6 +349,7 @@ def fetch_artifact_file(
     manifest_filename: str = DEFAULT_MANIFEST_FILENAME,
     access: str = "public",
     licence: str | None = None,
+    kind: str | None = None,
     upload_r2: bool = False,
     record_revision: bool = False,
     r2_bucket: str | None = None,
@@ -374,6 +376,7 @@ def fetch_artifact_file(
         manifest_filename=manifest_filename,
         access=access,
         licence=licence,
+        kind=kind,
         upload_r2=upload_r2,
         record_revision=record_revision,
         r2_bucket=r2_bucket,
@@ -994,6 +997,16 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     artifact_parser.add_argument(
+        "--kind",
+        choices=list(MANIFEST_KINDS),
+        help=(
+            "Manifest kind to declare. Pass microdata_release to archive a "
+            "public-use microdata release, which may hold several files under "
+            "one vintage and is never parsed by a source package. Defaults to "
+            "the existing manifest's kind, or publisher_table."
+        ),
+    )
+    artifact_parser.add_argument(
         "--upload-r2",
         action="store_true",
         help="Upload the artifact to R2 after local checksum capture.",
@@ -1588,6 +1601,7 @@ def main(argv: list[str] | None = None) -> int:
                 manifest_filename=args.manifest,
                 access=args.access,
                 licence=args.licence,
+                kind=args.kind,
                 upload_r2=args.upload_r2,
                 record_revision=args.record_revision,
                 r2_bucket=args.r2_bucket,

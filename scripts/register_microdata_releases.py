@@ -49,6 +49,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from chronicle.registration import (  # noqa: E402
     ACCESS_PUBLIC,
+    MICRODATA_RELEASE_KIND,
     HashOnlyRegistrationError,
     register_hash_only_artifact,
 )
@@ -685,7 +686,7 @@ def fetch_command(
         str(release.year),
         "--out-dir",
         str(root / release.package_dir),
-        "--source-url",
+        "--url",
         url,
     ]
     if release.source_page:
@@ -697,6 +698,10 @@ def fetch_command(
         ACCESS_PUBLIC,
         "--licence",
         release.licence,
+        # A public microdata release is archived, but it is still a release:
+        # several files share one vintage and no source package parses it.
+        "--kind",
+        MICRODATA_RELEASE_KIND,
         "--upload-r2",
         "--r2-bucket",
         r2_bucket,
