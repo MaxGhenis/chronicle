@@ -22,6 +22,15 @@ For already-downloaded manifest artifacts, agents should run
 `uv run chronicle publish-raw --root db/data` to upload checksum-verified bytes to
 R2 and write `storage.r2` metadata back into each manifest entry.
 
+Both commands treat a recorded `storage.r2` block as a claim about specific
+bytes, because raw keys are content-addressed. Re-fetching or publishing bytes
+the recorded object does not hold is refused; when a publisher has re-published
+under the same URL and vintage, register the revision with
+`uv run chronicle fetch-artifact ... --record-revision`, which stores the new
+bytes under their own key and keeps the superseded object in
+`storage.previous_r2`. See
+[Publisher Revisions](storage-architecture.md#publisher-revisions).
+
 Builds do not require production raw bytes to be committed to Git. Source
 packages first read packaged fixture bytes, then
 `CHRONICLE_SOURCE_ARTIFACT_CACHE_DIR` (defaulting to

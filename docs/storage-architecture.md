@@ -91,6 +91,68 @@ Legacy US derived keys likewise remain `derived/{source_id}/...`.
 Derived artifacts are reproducible and may be replaced by a new build, but a
 specific `{build_id}` path should be immutable once published.
 
+## Publisher Revisions
+
+A raw key embeds the sha256 of the bytes it holds, so a manifest's recorded
+`storage.r2` block is a claim about specific bytes, not a pointer to a file
+name. Publishers do not always honor that: on 2026-09-02 the IRS re-published
+`22in05ira.xlsx` and `22in06ira.xlsx` under their existing URLs
+(PolicyEngine/chronicle#225).
+
+`fetch-artifact` therefore compares the recorded key's `{sha256}/{filename}`
+tail with the bytes it just fetched, before it writes anything:
+
+- **Identical** — the recorded block is preserved exactly, whichever bucket is
+  configured now. Re-fetching after the bucket rename copies bytes; it does not
+  restate where they were first published.
+- **Different** — the fetch is refused. Nothing is overwritten: not the cached
+  artifact, not the manifest entry, and no object is uploaded. The error names
+  the recorded and the fetched `sha256`/`size_bytes`. Per
+  `docs/adr-chronicle-fact-identity-v2.md`, the same vintage with new bytes is a
+  new release revision, so registering it is a decision an operator makes, not a
+  silent rewrite.
+
+`--record-revision` makes that decision explicit. The fetched bytes get their
+own content-addressed key under the configured bucket — never the recorded key —
+and the superseded block moves to `storage.previous_r2`:
+
+```yaml
+files:
+  2022:
+    filename: 22in05ira.xlsx
+    sha256: <sha256 of the revised bytes>
+    size_bytes: <size of the revised bytes>
+    fetched_at: "2026-09-02T17:04:11+00:00"
+    storage:
+      r2:
+        provider: r2
+        bucket: chronicle-raw
+        key: raw/irs_soi/soi-table-5/2022/<revised sha256>/22in05ira.xlsx
+        uri: r2://chronicle-raw/raw/irs_soi/soi-table-5/2022/<revised sha256>/22in05ira.xlsx
+      previous_r2:
+        - provider: r2
+          bucket: ledger-raw
+          key: raw/irs_soi/soi-table-5/2022/<original sha256>/22in05ira.xlsx
+          uri: r2://ledger-raw/raw/irs_soi/soi-table-5/2022/<original sha256>/22in05ira.xlsx
+          sha256: <original sha256>
+          size_bytes: <size of the original bytes>
+          fetched_at: "2026-06-11T14:22:05+00:00"
+          superseded_at: "2026-09-02T17:04:11+00:00"
+```
+
+`storage.r2` only ever names the object that holds the entry's current bytes,
+and `previous_r2` lists superseded objects oldest first, so the bytes an
+archived witness record pinned stay addressable at the URI it pinned. Every
+reader — `inventory-artifacts`, `publish-raw`, source-package artifact loading,
+and the suite's raw-R2-link acceptance check — reads `storage.r2` alone, so a
+revised entry reads exactly like an unrevised one; `publish-raw` preserves the
+rest of the `storage` block when it writes back.
+
+`publish-raw` applies the same identity check before treating a recorded block
+as history. A local file the recorded object does not hold is reported as
+`recorded_r2_identity_mismatch` and nothing is uploaded: registering a revision
+is a fetch-time decision, not a publish-time rewrite.
+
 ## Relational Registry Contract
 
 The hosted `chronicle` schema should be the lookup surface for Chronicle, not the place
@@ -121,7 +183,10 @@ The intended flow is:
 
 1. Register raw source artifacts with `uv run chronicle fetch-artifact`, which
    writes local bytes, records checksums in `manifest.yaml`, and can upload the
-   exact bytes to the raw archive. Existing manifest-declared artifacts can be
+   exact bytes to the raw archive. Re-fetching an entry whose bytes the
+   publisher has changed is refused unless the revision is registered with
+   `--record-revision`; see [Publisher Revisions](#publisher-revisions).
+   Existing manifest-declared artifacts can be
    checksum-validated, uploaded, and linked with `uv run chronicle publish-raw`.
    Production package specs may omit raw bytes from Git as long as the manifest
    keeps `source_url` and SHA-256 metadata; builds can fill
@@ -217,8 +282,10 @@ exception to the last step. Archived witness records pin raw R2 URLs by hash, so
 deleted, and manifests keep the `storage.r2` URIs they already recorded as
 historical truth. A backfill copies bytes into the new bucket; it never rewrites
 where those bytes were first published. `publish-raw` and `fetch-artifact`
-enforce that: both refuse to restate a recorded `storage.r2` block under a
-different bucket.
+enforce that: a recorded block that addresses the bytes in hand is preserved
+whichever bucket is configured, and `publish-raw` refuses to restate it under a
+different one. Bytes that the recorded object does not hold are not that
+object's history at all; see [Publisher Revisions](#publisher-revisions).
 
 The cutover therefore has one irreversible-looking step that is in fact additive
 (creating and filling the new buckets), one cheap reversible step (flipping the

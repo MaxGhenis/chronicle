@@ -367,6 +367,13 @@ uv run chronicle fetch-artifact \
   --table "Publication 1304 Table 1.2" \
   --upload-r2
 
+# Re-fetching is safe: identical bytes keep the recorded storage.r2 block, and
+# bytes that disagree with it are refused. When a publisher has re-published
+# under the same URL and vintage, register the revision explicitly — the new
+# bytes get their own content-addressed key and the superseded object is kept
+# in storage.previous_r2:
+uv run chronicle fetch-artifact ... --record-revision
+
 # Audit local manifests and checksums:
 uv run chronicle inventory-artifacts --root db/data
 
