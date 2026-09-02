@@ -11,6 +11,7 @@ import yaml
 
 from chronicle.cli import main as cli_main
 from chronicle.artifacts import (
+    SourceArtifactRevisionError,
     build_artifact_rows,
     build_derived_r2_key,
     bootstrap_r2_buckets,
@@ -755,4 +756,290 @@ def test_fetch_artifact_keeps_an_already_recorded_bucket(tmp_path, monkeypatch):
     assert "chronicle-raw" in log.read_text()
     assert (
         second["files"][2023]["storage"]["r2"] == first["files"][2023]["storage"]["r2"]
+    )
+
+
+# ---------------------------------------------------------------------------
+# Publisher revisions
+#
+# A raw R2 key is content-addressed, so a recorded storage.r2 block is a claim
+# about specific bytes. On 2026-09-02 the IRS re-published 22in05ira.xlsx and
+# 22in06ira.xlsx under their existing URLs (PolicyEngine/chronicle#225): a
+# repeated fetch must never pair those new bytes with the old object's URI.
+# ---------------------------------------------------------------------------
+
+REPUBLISHED_URL = "https://www.irs.gov/pub/irs-soi/22in05ira.xlsx"
+REPUBLISHED_FILENAME = "22in05ira.xlsx"
+FIRST_PUBLICATION = b"IRA table 5, first publication"
+SECOND_PUBLICATION = b"IRA table 5, silently re-published with revised rows"
+
+
+def _wrangler_stub(tmp_path, log):
+    wrangler = tmp_path / "wrangler"
+    wrangler.write_text(f"#!/bin/sh\nprintf '%s\\n' \"$*\" >> {log}\necho ok\n")
+    wrangler.chmod(0o755)
+    return wrangler
+
+
+def _serve(monkeypatch, content):
+    """Serve ``content`` from the publisher URL, without touching the network."""
+
+    def _fake_read_artifact(source_url):
+        assert source_url == REPUBLISHED_URL
+        return content, REPUBLISHED_FILENAME
+
+    monkeypatch.setattr("chronicle.artifacts._read_artifact", _fake_read_artifact)
+
+
+def _fetch_republished(output_dir, wrangler, *, upload_r2=True, **kwargs):
+    return fetch_source_artifact(
+        REPUBLISHED_URL,
+        source_id="irs_soi",
+        package_id="soi-table-5",
+        year=2022,
+        output_dir=output_dir,
+        upload_r2=upload_r2,
+        wrangler_command=str(wrangler),
+        **kwargs,
+    )
+
+
+def test_repeated_fetch_of_identical_bytes_preserves_the_recorded_block(
+    tmp_path, monkeypatch
+):
+    """Same bytes: the recorded block survives whatever bucket is configured."""
+    output_dir = tmp_path / "db" / "data" / "irs_soi" / "soi-table-5"
+    log = tmp_path / "wrangler.log"
+    wrangler = _wrangler_stub(tmp_path, log)
+    manifest_path = output_dir / "manifest.yaml"
+    _serve(monkeypatch, FIRST_PUBLICATION)
+    _fetch_republished(output_dir, wrangler)
+    first = yaml.safe_load(manifest_path.read_text())["files"][2022]
+
+    monkeypatch.setenv("CHRONICLE_R2_RAW_BUCKET", "chronicle-raw")
+    report = _fetch_republished(output_dir, wrangler)
+    second = yaml.safe_load(manifest_path.read_text())["files"][2022]
+
+    assert report.valid
+    # The backfill copy really goes to the renamed bucket, but the manifest
+    # keeps recording where these bytes were first published.
+    assert report.r2_location.bucket == "chronicle-raw"
+    assert "chronicle-raw" in log.read_text()
+    assert second["storage"] == first["storage"]
+    assert second["storage"]["r2"]["bucket"] == "ledger-raw"
+    assert "previous_r2" not in second["storage"]
+    assert second["sha256"] == first["sha256"]
+
+
+@pytest.mark.parametrize(
+    ("upload_r2", "configured_bucket"),
+    [
+        pytest.param(True, None, id="reuploaded"),
+        # The two routes that reached a manifest in the wild: a fetch that only
+        # registers the bytes, and a fetch once the bucket default has moved.
+        # Both preserved the recorded block while rewriting sha256/size_bytes.
+        pytest.param(False, None, id="registered-without-upload"),
+        pytest.param(True, "chronicle-raw", id="after-the-bucket-rename"),
+    ],
+)
+def test_repeated_fetch_of_different_bytes_is_refused(
+    tmp_path, monkeypatch, upload_r2, configured_bucket
+):
+    """A publisher revision must not inherit the recorded object's provenance."""
+    output_dir = tmp_path / "db" / "data" / "irs_soi" / "soi-table-5"
+    log = tmp_path / "wrangler.log"
+    wrangler = _wrangler_stub(tmp_path, log)
+    manifest_path = output_dir / "manifest.yaml"
+    artifact_path = output_dir / REPUBLISHED_FILENAME
+    _serve(monkeypatch, FIRST_PUBLICATION)
+    first_report = _fetch_republished(output_dir, wrangler)
+    manifest_before = manifest_path.read_bytes()
+    uploads_before = log.read_text()
+
+    if configured_bucket:
+        monkeypatch.setenv("CHRONICLE_R2_RAW_BUCKET", configured_bucket)
+    _serve(monkeypatch, SECOND_PUBLICATION)
+    with pytest.raises(SourceArtifactRevisionError) as raised:
+        _fetch_republished(output_dir, wrangler, upload_r2=upload_r2)
+
+    message = str(raised.value)
+    assert first_report.sha256 in message
+    assert hashlib.sha256(SECOND_PUBLICATION).hexdigest() in message
+    assert f"size_bytes={len(FIRST_PUBLICATION)}" in message
+    assert f"size_bytes={len(SECOND_PUBLICATION)}" in message
+    assert "release revision" in message
+    assert "--record-revision" in message
+    # Nothing was overwritten, copied or uploaded on the way to the refusal.
+    assert manifest_path.read_bytes() == manifest_before
+    assert artifact_path.read_bytes() == FIRST_PUBLICATION
+    assert log.read_text() == uploads_before
+
+
+def test_record_revision_writes_a_new_key_and_keeps_the_previous_object(
+    tmp_path, monkeypatch
+):
+    """The opt-in records the new bytes' own key under the configured bucket."""
+    output_dir = tmp_path / "db" / "data" / "irs_soi" / "soi-table-5"
+    log = tmp_path / "wrangler.log"
+    wrangler = _wrangler_stub(tmp_path, log)
+    manifest_path = output_dir / "manifest.yaml"
+    _serve(monkeypatch, FIRST_PUBLICATION)
+    first_report = _fetch_republished(output_dir, wrangler)
+    superseded = yaml.safe_load(manifest_path.read_text())["files"][2022]
+
+    monkeypatch.setenv("CHRONICLE_R2_RAW_BUCKET", "chronicle-raw")
+    _serve(monkeypatch, SECOND_PUBLICATION)
+    report = _fetch_republished(output_dir, wrangler, record_revision=True)
+    revised = yaml.safe_load(manifest_path.read_text())["files"][2022]
+    revised_sha256 = hashlib.sha256(SECOND_PUBLICATION).hexdigest()
+
+    assert report.valid
+    # storage.r2 names the object that holds the entry's current bytes...
+    assert revised["sha256"] == revised_sha256
+    assert revised["size_bytes"] == len(SECOND_PUBLICATION)
+    assert revised["storage"]["r2"]["bucket"] == "chronicle-raw"
+    assert revised["storage"]["r2"]["key"] == (
+        f"raw/irs_soi/soi-table-5/2022/{revised_sha256}/{REPUBLISHED_FILENAME}"
+    )
+    assert revised["storage"]["r2"]["uri"] == (
+        f"r2://chronicle-raw/{revised['storage']['r2']['key']}"
+    )
+    # ...and never the superseded key, which stays addressable as history.
+    previous = revised["storage"]["previous_r2"]
+    assert [entry["uri"] for entry in previous] == [superseded["storage"]["r2"]["uri"]]
+    assert previous[0]["bucket"] == "ledger-raw"
+    assert previous[0]["sha256"] == first_report.sha256
+    assert previous[0]["size_bytes"] == len(FIRST_PUBLICATION)
+    assert previous[0]["fetched_at"] == superseded["fetched_at"]
+    assert previous[0]["superseded_at"] == revised["fetched_at"]
+    assert (output_dir / REPUBLISHED_FILENAME).read_bytes() == SECOND_PUBLICATION
+    assert f"chronicle-raw/{revised['storage']['r2']['key']}" in log.read_text()
+
+
+def test_a_revised_manifest_still_reads_as_one_r2_linked_artifact(
+    tmp_path, monkeypatch
+):
+    """storage.previous_r2 is a sibling key, so every storage.r2 reader is intact."""
+    output_dir = tmp_path / "db" / "data" / "irs_soi" / "soi-table-5"
+    wrangler = _wrangler_stub(tmp_path, tmp_path / "wrangler.log")
+    _serve(monkeypatch, FIRST_PUBLICATION)
+    _fetch_republished(output_dir, wrangler)
+    _serve(monkeypatch, SECOND_PUBLICATION)
+    _fetch_republished(output_dir, wrangler, record_revision=True)
+
+    inventory = inventory_source_artifacts(output_dir)
+
+    assert inventory.valid
+    assert inventory.counts["r2_link_count"] == 1
+    assert inventory.counts["checksum_mismatch_count"] == 0
+    assert inventory.entries[0].r2["bucket"] == "ledger-raw"
+    assert inventory.entries[0].sha256_actual == (
+        hashlib.sha256(SECOND_PUBLICATION).hexdigest()
+    )
+
+
+def test_publish_raw_refuses_a_file_the_recorded_object_does_not_hold(
+    tmp_path, monkeypatch
+):
+    """Recorded sha256 != local sha256 is a revision, not a backfill."""
+    output_dir = tmp_path / "db" / "data" / "irs_soi" / "soi-table-5"
+    log = tmp_path / "wrangler.log"
+    wrangler = _wrangler_stub(tmp_path, log)
+    manifest_path = output_dir / "manifest.yaml"
+    _serve(monkeypatch, FIRST_PUBLICATION)
+    first_report = _fetch_republished(output_dir, wrangler)
+
+    # Reproduce the state a pre-fix fetch left behind: new bytes on disk, the
+    # entry's own hash rewritten, the recorded key still addressing the old
+    # bytes.
+    revised_sha256 = hashlib.sha256(SECOND_PUBLICATION).hexdigest()
+    (output_dir / REPUBLISHED_FILENAME).write_bytes(SECOND_PUBLICATION)
+    manifest = yaml.safe_load(manifest_path.read_text())
+    manifest["files"][2022]["sha256"] = revised_sha256
+    manifest["files"][2022]["size_bytes"] = len(SECOND_PUBLICATION)
+    manifest_path.write_text(yaml.safe_dump(manifest, sort_keys=False))
+    manifest_before = manifest_path.read_bytes()
+    uploads_before = log.read_text()
+
+    report = publish_source_artifacts(output_dir, wrangler_command=str(wrangler))
+
+    assert not report.valid
+    assert report.entries[0].upload is None
+    assert report.entries[0].r2_location is None
+    assert report.entries[0].errors == (
+        "recorded_r2_identity_mismatch:"
+        f"recorded_sha256={first_report.sha256}:"
+        f"recorded_filename={REPUBLISHED_FILENAME}:"
+        f"local_sha256={revised_sha256}:"
+        f"local_filename={REPUBLISHED_FILENAME}",
+    )
+    assert log.read_text() == uploads_before
+    assert manifest_path.read_bytes() == manifest_before
+
+
+def test_publish_raw_uploads_a_registered_revision_and_keeps_its_history(
+    tmp_path, monkeypatch
+):
+    """Once the revision is registered, publishing it is ordinary work."""
+    output_dir = tmp_path / "db" / "data" / "irs_soi" / "soi-table-5"
+    log = tmp_path / "wrangler.log"
+    wrangler = _wrangler_stub(tmp_path, log)
+    manifest_path = output_dir / "manifest.yaml"
+    _serve(monkeypatch, FIRST_PUBLICATION)
+    first_report = _fetch_republished(output_dir, wrangler)
+    _serve(monkeypatch, SECOND_PUBLICATION)
+    _fetch_republished(output_dir, wrangler, record_revision=True)
+    revised_sha256 = hashlib.sha256(SECOND_PUBLICATION).hexdigest()
+
+    report = publish_source_artifacts(output_dir, wrangler_command=str(wrangler))
+    published = yaml.safe_load(manifest_path.read_text())["files"][2022]
+
+    assert report.valid
+    assert published["storage"]["r2"]["key"].endswith(
+        f"/{revised_sha256}/{REPUBLISHED_FILENAME}"
+    )
+    assert [entry["sha256"] for entry in published["storage"]["previous_r2"]] == [
+        first_report.sha256
+    ]
+
+
+def test_fetch_artifact_cli_refuses_a_revision_then_records_it_on_request(
+    tmp_path, monkeypatch, capsys
+):
+    output_dir = tmp_path / "db" / "data" / "irs_soi" / "soi-table-5"
+    wrangler = _wrangler_stub(tmp_path, tmp_path / "wrangler.log")
+    argv = [
+        "fetch-artifact",
+        "--url",
+        REPUBLISHED_URL,
+        "--source-id",
+        "irs_soi",
+        "--package-id",
+        "soi-table-5",
+        "--year",
+        "2022",
+        "--out-dir",
+        str(output_dir),
+        "--upload-r2",
+        "--wrangler-command",
+        str(wrangler),
+    ]
+    _serve(monkeypatch, FIRST_PUBLICATION)
+    assert harness_main(argv) == 0
+    capsys.readouterr()
+
+    _serve(monkeypatch, SECOND_PUBLICATION)
+    refused = harness_main(argv)
+    refusal = capsys.readouterr()
+
+    assert refused == 1
+    assert "--record-revision" in refusal.err
+    assert refusal.out == ""
+
+    assert harness_main([*argv, "--record-revision"]) == 0
+    recorded = json.loads(capsys.readouterr().out)
+
+    assert recorded["sha256"] == hashlib.sha256(SECOND_PUBLICATION).hexdigest()
+    assert recorded["r2_location"]["key"].endswith(
+        f"/{recorded['sha256']}/{REPUBLISHED_FILENAME}"
     )

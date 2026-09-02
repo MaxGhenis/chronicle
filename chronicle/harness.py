@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import shlex
+import sys
 from pathlib import Path
 
 from chronicle.artifacts import (
@@ -15,6 +16,7 @@ from chronicle.artifacts import (
     DerivedArtifactPublishReport,
     R2BootstrapReport,
     RawArtifactPublishReport,
+    SourceArtifactRevisionError,
     bootstrap_r2_buckets,
     fetch_source_artifact,
     inventory_source_artifacts,
@@ -337,11 +339,17 @@ def fetch_artifact_file(
     table: str | None = None,
     filename: str | None = None,
     upload_r2: bool = False,
+    record_revision: bool = False,
     r2_bucket: str | None = None,
     r2_prefix: str | None = None,
     wrangler_command: str = "npx wrangler",
 ) -> ArtifactFetchReport:
-    """Fetch/register a raw source artifact and optionally upload it to R2."""
+    """Fetch/register a raw source artifact and optionally upload it to R2.
+
+    Raises :class:`SourceArtifactRevisionError` when the fetched bytes are not
+    the bytes the manifest's recorded R2 object holds, unless
+    ``record_revision`` opts into registering the publisher revision.
+    """
     return fetch_source_artifact(
         source_url,
         source_id=source_id,
@@ -353,6 +361,7 @@ def fetch_artifact_file(
         table=table,
         filename=filename,
         upload_r2=upload_r2,
+        record_revision=record_revision,
         r2_bucket=r2_bucket,
         r2_prefix=r2_prefix,
         wrangler_command=wrangler_command,
@@ -889,6 +898,17 @@ def main(argv: list[str] | None = None) -> int:
         help="Upload the artifact to R2 after local checksum capture.",
     )
     artifact_parser.add_argument(
+        "--record-revision",
+        action="store_true",
+        help=(
+            "Register a publisher revision: the fetched bytes get their own "
+            "content-addressed key under the configured bucket and the "
+            "superseded object moves to storage.previous_r2. Without this "
+            "flag, bytes that disagree with the recorded R2 object are "
+            "refused."
+        ),
+    )
+    artifact_parser.add_argument(
         "--r2-bucket",
         default=None,
         help=(
@@ -1321,21 +1341,26 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(report.to_dict(), indent=2, sort_keys=True))
         return 0
     if args.command == "fetch-artifact":
-        report = fetch_artifact_file(
-            args.url,
-            source_id=args.source_id,
-            package_id=args.package_id,
-            year=args.year,
-            output_dir=args.out_dir,
-            dataset=args.dataset,
-            source_page=args.source_page,
-            table=args.table,
-            filename=args.filename,
-            upload_r2=args.upload_r2,
-            r2_bucket=args.r2_bucket,
-            r2_prefix=args.r2_prefix,
-            wrangler_command=args.wrangler_command,
-        )
+        try:
+            report = fetch_artifact_file(
+                args.url,
+                source_id=args.source_id,
+                package_id=args.package_id,
+                year=args.year,
+                output_dir=args.out_dir,
+                dataset=args.dataset,
+                source_page=args.source_page,
+                table=args.table,
+                filename=args.filename,
+                upload_r2=args.upload_r2,
+                record_revision=args.record_revision,
+                r2_bucket=args.r2_bucket,
+                r2_prefix=args.r2_prefix,
+                wrangler_command=args.wrangler_command,
+            )
+        except SourceArtifactRevisionError as error:
+            print(f"error: {error}", file=sys.stderr)
+            return 1
         print(json.dumps(report.to_dict(), indent=2, sort_keys=True))
         return 0 if report.valid else 1
     if args.command == "inventory-artifacts":
