@@ -118,6 +118,56 @@ with a regression test on this branch. Plan, in dependency order:
   and uri; every key is content-addressed; every declared `sha256`/`filename`
   agrees with its key tail; no `uri` contradicts its `key`. Strict locator
   validation therefore refuses nothing that is tracked today.
+- All seven findings are applied, each with a regression test, and each
+  reproduced against this branch's previous head (`34d1d0f`) first.
+
+### What each fix does
+
+1. `chronicle/env.py` gains `default_chronicle_schema()`: one home for the
+   `CHRONICLE_SCHEMA` -> `POLICYENGINE_LEDGER_SCHEMA` -> `LEDGER_SCHEMA` ->
+   `"ledger"` ladder. `load_supabase_mirror`, its harness wrapper and the
+   `--schema` CLI default all resolve through it when no schema is supplied;
+   an explicit `--schema` still wins. Defaults unchanged.
+2. `chronicle/consumer_contract.py` matches the whole final dot-segment of a
+   `source_record_id` against both `ledger_derived` and `chronicle_derived`.
+3. `fetch-artifact --manifest <filename>` selects which of a package's
+   manifests the entry belongs to (default `manifest.yaml`); the name must be
+   a filename inside `--out-dir`.
+4. Revision protection now compares against the entry's recorded identity --
+   the recorded key's `{sha256}/{filename}` once published, the declared
+   `sha256` before that -- so a registered-but-unpublished entry, or one whose
+   upload failed, is protected exactly like a published one.
+5. `_validated_recorded_r2` cross-checks every supplied locator field against
+   every other and against the content-addressed key shape. A contradiction is
+   `RecordedR2LocatorError` at fetch time and `recorded_r2_locator_invalid` at
+   publish time, never a preserved block.
+6. `_read_manifest` refuses a non-mapping or unparseable document
+   (`MalformedManifestError`) before the publisher is read at all;
+   `inventory-artifacts` and `publish-raw` report it instead of crashing.
+7. `db.supabase_client` resolves both schemas per call rather than at import,
+   and `tests/conftest.py` strips the rename window in `pytest_configure`, so
+   no module can read or warn from an operator's shell during collection.
+
+All four refusals share a `SourceArtifactManifestError` base, so the
+`fetch-artifact` CLI reports every one as exit 1 with nothing written.
+
+### Reproduced against `34d1d0f` (the round-1 head)
+
+Running the same operations against a checkout of the previous head:
+
+1. `load_supabase_mirror` default `schema='ledger'`; with
+   `CHRONICLE_SCHEMA=chronicle_probe` the load still reports `schema='ledger'`.
+2. `'.chronicle_derived'.endswith('.ledger_derived')` is False: the boundary
+   never fired for the chronicle spelling.
+3. `fetch_source_artifact()` rejects `manifest_filename` as an unexpected
+   keyword; a fetch into `ira_contributions/` writes `manifest.yaml`.
+4. A fetch of different bytes over a registered (unpublished) entry was
+   accepted silently: the entry's `sha256` was rewritten with no refusal.
+5. A block whose `key` and `uri` named different objects was preserved
+   verbatim, key sha `c63744a4...` beside uri sha `1e9b3fdb...`.
+6. A list-valued `manifest.yaml` was overwritten by the fetch.
+7. Importing `db.supabase_client` under `LEDGER_SCHEMA=zzz` bound
+   `LEDGER_SCHEMA='zzz'` and emitted a `FutureWarning` at collection.
 
 ## Verification
 
