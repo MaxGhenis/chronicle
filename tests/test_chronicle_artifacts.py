@@ -826,6 +826,8 @@ def test_repeated_fetch_of_identical_bytes_preserves_the_recorded_block(
     assert report.r2_location.bucket == "chronicle-raw"
     assert "chronicle-raw" in log.read_text()
     assert second["storage"] == first["storage"]
+    # Field order too, so the block is byte-for-byte identical once dumped.
+    assert list(second["storage"]["r2"].items()) == list(first["storage"]["r2"].items())
     assert second["storage"]["r2"]["bucket"] == "ledger-raw"
     assert "previous_r2" not in second["storage"]
     assert second["sha256"] == first["sha256"]
