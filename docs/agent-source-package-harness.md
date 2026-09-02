@@ -14,8 +14,9 @@ lineage, provenance, constraints, and a passing `build-suite` report.
 The first gate for a new package is source-artifact acquisition. Agents should
 register raw source files with `uv run chronicle fetch-artifact` before authoring
 selectors. This writes the local artifact, captures checksum and retrieval
-metadata in `manifest.yaml`, and can upload the exact bytes to the private
-`ledger-raw` R2 bucket when Wrangler is authenticated. Agents can audit the local
+metadata in `manifest.yaml`, and can upload the exact bytes to the private raw
+R2 bucket (`ledger-raw` today; overridable with `CHRONICLE_R2_RAW_BUCKET`) when
+Wrangler is authenticated. Agents can audit the local
 artifact registry with `uv run chronicle inventory-artifacts --root db/data`.
 For already-downloaded manifest artifacts, agents should run
 `uv run chronicle publish-raw --root db/data` to upload checksum-verified bytes to
@@ -23,12 +24,15 @@ R2 and write `storage.r2` metadata back into each manifest entry.
 
 Builds do not require production raw bytes to be committed to Git. Source
 packages first read packaged fixture bytes, then
-`LEDGER_SOURCE_ARTIFACT_CACHE_DIR` (defaulting to
+`CHRONICLE_SOURCE_ARTIFACT_CACHE_DIR` (defaulting to
 `~/.cache/policyengine-chronicle/source-artifacts`). If a manifest artifact is
-missing locally, set `LEDGER_SOURCE_ARTIFACT_FETCH=1` to fetch it from the
+missing locally, set `CHRONICLE_SOURCE_ARTIFACT_FETCH=1` to fetch it from the
 manifest `source_url`, verify the declared SHA-256, and write it to that cache.
-The old `CHRONICLE_`-prefixed environment variables remain accepted only as
-migration fallbacks.
+The ledger-era spellings `LEDGER_SOURCE_ARTIFACT_CACHE_DIR` and
+`LEDGER_SOURCE_ARTIFACT_FETCH` are still honored during the rename window and
+emit a one-time deprecation warning naming the `CHRONICLE_` variable to set
+instead; see "Environment Variable Rename Window" in
+[`docs/storage-architecture.md`](storage-architecture.md#environment-variable-rename-window).
 
 For broad PE source migration, generate the agent queue from the manifest before
 assigning work:
@@ -603,16 +607,19 @@ uv run chronicle build-suite packages/irs_soi/table_1_1 \
   --require-axiom-validation
 ```
 
-The SQLite `ledger.db` is the source of hosted mirrors. To prepare tables for
+The SQLite `chronicle.db` is the source of hosted mirrors. To prepare tables for
 Supabase/Postgres bulk loading, export the DB artifact rather than inserting
 cells through the Supabase client:
 
 ```bash
-uv run chronicle export-db-tables --db /tmp/chronicle-suite/ledger.db --out /tmp/chronicle-mirror --replace
+uv run chronicle export-db-tables --db /tmp/chronicle-suite/chronicle.db --out /tmp/chronicle-mirror --replace
 ```
 
-Accepted build-suite outputs can be published to the private `ledger-derived` R2
-bucket after validation:
+Builds produced before the rename wrote `ledger.db`. That name is still read and
+published unchanged, so point `--db` at whichever file the build emitted.
+
+Accepted build-suite outputs can be published to the private derived R2 bucket
+after validation:
 
 ```bash
 uv run chronicle publish-derived \

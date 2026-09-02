@@ -11,6 +11,8 @@ Lane C5's handoff notes previously lived here; its durable record is
 - Out of scope and deliberately untouched: the `ledger` console-script alias,
   the Supabase `"ledger"` schema and mirror table names, governance role ids and
   concept authorities, hash domains and schema ids, anything under `releases/`.
+- This PR does not touch the source-data boundary. No package spec, parser,
+  selector, manifest, or fact value changes.
 
 ## Done
 
@@ -24,18 +26,40 @@ Lane C5's handoff notes previously lived here; its durable record is
   `LEDGER_MIRROR_PRIMARY_KEYS`, and `LEDGER_DB_SCHEMA_VERSION` are module
   constants, not env reads, and name out-of-scope surfaces.
 - Added `chronicle/env.py`: one shared `env_value`/`env_flag`/`env_names`
-  helper reading `CHRONICLE_<X>` first, then `LEDGER_<X>` and
-  `POLICYENGINE_LEDGER_<X>` with a once-per-process
-  `ChronicleEnvDeprecationWarning` naming the preferred variable.
+  helper reading `CHRONICLE_<X>` first, then `POLICYENGINE_LEDGER_<X>` and
+  `LEDGER_<X>` with a once-per-process `ChronicleEnvDeprecationWarning` naming
+  the preferred variable.
 - Replaced all three ad-hoc helpers (`db/supabase_client._env`,
   `chronicle/source_package._env_value`/`_truthy_env`,
   `db/pe_source_inventory._env_value`) with the shared helper.
+- Made the R2 bucket names configurable via `CHRONICLE_R2_RAW_BUCKET` and
+  `CHRONICLE_R2_DERIVED_BUCKET`, plumbed through fetch-artifact, publish-raw,
+  publish-derived and bootstrap-r2. Defaults unchanged at `ledger-raw` and
+  `ledger-derived`. Both manifest write paths now preserve a recorded
+  `storage.r2` block instead of restating it under a renamed bucket.
+- Emitted `chronicle.db` for new suite outputs, with `ledger.db` still accepted
+  on read and on derived-artifact kind inference.
+- Added `tests/test_chronicle_env.py` plus artifact tests: 75 hermetic tests
+  covering the lookup ladder, precedence, the once-per-process warning, and every
+  real call site.
+- Swept the docs. `docs/storage-architecture.md` gained an "Environment Variable
+  Rename Window" section (the old text stated the fallback direction backwards)
+  and a "Bucket Cutover" section; `docs/agent-source-package-harness.md` and
+  `README.md` follow. Verified 186 distinct `ledger-raw` objects across 154
+  tracked manifest files, every key content-addressed by sha256.
+
+## Verification
+
+- `uv run pytest -q`: green.
+- `uv run ruff check .`: clean.
+- `uv run ruff format --check .`: clean for every file this branch touches. 13
+  files are unformatted on `main` already and are byte-identical here; CI runs
+  `ruff check` only, so they are pre-existing and out of scope.
+- CI's db CLI gate (`chronicle init` / `load all` / `stats`): passes.
 
 ## Next
 
-- Make R2 bucket names configurable with unchanged `ledger-*` defaults.
-- Emit `chronicle.db` for new suite outputs; keep reading `ledger.db`.
-- Fix the backwards fallback statement in the docs and sweep every env-name,
-  bucket-name, and db-filename mention in README/AGENTS/docs.
-- Add the hermetic dual-read tests; run pytest, ruff check, ruff format --check.
-- Push and open the PR. Do not merge.
+- Push and open the PR against `main`. Do not merge.
+- Follow-up PR, after Max creates and backfills the new buckets: flip
+  `DEFAULT_R2_RAW_BUCKET` / `DEFAULT_R2_DERIVED_BUCKET` to `chronicle-raw` /
+  `chronicle-derived`.
