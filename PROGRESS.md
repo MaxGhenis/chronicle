@@ -48,6 +48,42 @@ Lane C5's handoff notes previously lived here; its durable record is
   `README.md` follow. Verified 186 distinct `ledger-raw` objects across 154
   tracked manifest files, every key content-addressed by sha256.
 
+## Review fixes (gate round 1)
+
+The Fable+Sol gate requested changes; both findings are applied on this branch.
+
+- **[high] `fetch-artifact` could attach a recorded R2 URI to new bytes.** The
+  preserve rule keyed on the bucket, so a repeated fetch that did not re-upload
+  into the same bucket kept the recorded `storage.r2` block while rewriting the
+  entry's `sha256`/`size_bytes`. Reproduced against this branch's parent: the
+  entry ends up declaring `109dcf49…` with a key addressed by `c63744a4…`, both
+  when the fetch only registers the bytes and when the bucket default has moved.
+  The rule now keys on identity — the recorded key's `{sha256}/{filename}` tail
+  against the fetched bytes. Identical preserves the block exactly; different
+  raises `SourceArtifactRevisionError` before the cached artifact or its
+  manifest entry is touched, naming recorded and fetched `sha256`/`size_bytes`
+  and the ADR rule that same vintage plus new bytes is a new release revision.
+  `--record-revision` opts in: the new bytes get their own content-addressed key
+  under the configured bucket, never the old key, and the superseded block moves
+  to `storage.previous_r2`. `publish-raw` applies the same check before treating
+  a recorded block as history (`recorded_r2_identity_mismatch`, nothing
+  uploaded).
+- **[low] Env isolation was scoped to one module.** The autouse fixture moved to
+  `tests/conftest.py` and now clears all three prefixes for every test.
+  `db.supabase_client` resolves `LEDGER_SCHEMA` at import — during collection,
+  before any fixture — so `tests/test_chronicle_namespace.py` re-imports it
+  under the cleared environment instead of asserting the constant it bound at
+  collection time.
+
+`storage.previous_r2` is a sibling key, chosen because every reader
+(`inventory-artifacts`, `publish-raw`, `source_package._artifact_content`, the
+suite's raw-R2-link acceptance check) reads `storage.r2` alone, and
+`publish-raw` already spreads the rest of the `storage` block when it writes
+back, so a revision survives publication untouched. All 180 tracked manifest
+entries that carry a `storage.r2` block are content-addressed and agree with
+their declared `sha256` and `filename`, so the identity check never fires on
+tracked data.
+
 ## Verification
 
 - `uv run pytest -q`: green.
@@ -56,6 +92,10 @@ Lane C5's handoff notes previously lived here; its durable record is
   files are unformatted on `main` already and are byte-identical here; CI runs
   `ruff check` only, so they are pre-existing and out of scope.
 - CI's db CLI gate (`chronicle init` / `load all` / `stats`): passes.
+- `CHRONICLE_R2_RAW_BUCKET=zzz CHRONICLE_SCHEMA=zzz uv run pytest -q`: green.
+  Before the shared fixture it failed five tests — four bucket-default
+  assertions in `tests/test_chronicle_artifacts.py` and the collection-time
+  schema constant in `tests/test_chronicle_namespace.py`.
 
 ## Next
 
