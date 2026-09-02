@@ -18,11 +18,38 @@ from urllib.parse import unquote, urlparse
 import httpx
 import yaml
 
+from chronicle.database import (
+    CHRONICLE_DB_FILENAME,
+    CHRONICLE_DB_FILENAMES,
+    LEGACY_CHRONICLE_DB_FILENAME,
+)
+from chronicle.env import env_value
 
+
+R2_RAW_BUCKET_ENV = "CHRONICLE_R2_RAW_BUCKET"
+R2_DERIVED_BUCKET_ENV = "CHRONICLE_R2_DERIVED_BUCKET"
+
+# The bucket defaults stay at their ledger-era names. Archived witness records
+# pin raw R2 URLs by hash, so ledger-raw and ledger-derived are preserved
+# read-only forever and no recorded manifest URI is ever rewritten. The env
+# vars exist so the cutover in docs/storage-architecture.md can be rehearsed,
+# and so flipping to chronicle-raw/chronicle-derived is a default change rather
+# than a code change (PolicyEngine/chronicle#143, mechanism 3).
 DEFAULT_R2_RAW_BUCKET = "ledger-raw"
 DEFAULT_R2_DERIVED_BUCKET = "ledger-derived"
 DEFAULT_R2_PREFIX = "raw"
 DEFAULT_R2_DERIVED_PREFIX = "derived"
+
+
+def default_r2_raw_bucket() -> str:
+    """Resolve the raw bucket: ``$CHRONICLE_R2_RAW_BUCKET`` or the default."""
+    return env_value(R2_RAW_BUCKET_ENV, default=DEFAULT_R2_RAW_BUCKET)
+
+
+def default_r2_derived_bucket() -> str:
+    """Resolve the derived bucket: ``$CHRONICLE_R2_DERIVED_BUCKET`` or default."""
+    return env_value(R2_DERIVED_BUCKET_ENV, default=DEFAULT_R2_DERIVED_BUCKET)
+
 
 # New UK and New Zealand uploads are namespaced by country. US objects predate
 # the country segment and deliberately keep their legacy ``raw/{source_id}``
@@ -390,11 +417,12 @@ def fetch_source_artifact(
     table: str | None = None,
     filename: str | None = None,
     upload_r2: bool = False,
-    r2_bucket: str = DEFAULT_R2_RAW_BUCKET,
+    r2_bucket: str | None = None,
     r2_prefix: str | None = None,
     wrangler_command: str = "npx wrangler",
 ) -> ArtifactFetchReport:
     """Fetch/register a source artifact and optionally upload it to R2."""
+    r2_bucket = r2_bucket or default_r2_raw_bucket()
     output = Path(output_dir)
     resolved_r2_prefix = resolve_r2_prefix(
         prefix=r2_prefix,
@@ -480,12 +508,13 @@ def publish_derived_artifacts(
     package_id: str,
     year: int,
     build_id: str | None = None,
-    r2_bucket: str = DEFAULT_R2_DERIVED_BUCKET,
+    r2_bucket: str | None = None,
     r2_prefix: str | None = None,
     wrangler_command: str = "npx wrangler",
     build_artifacts_output: str | Path | None = None,
 ) -> DerivedArtifactPublishReport:
     """Upload a deterministic build output directory to the derived R2 bucket."""
+    r2_bucket = r2_bucket or default_r2_derived_bucket()
     input_path = Path(input_dir)
     if not input_path.exists():
         return DerivedArtifactPublishReport(
@@ -596,11 +625,12 @@ def publish_source_artifacts(
     manifest_filename: str = "manifest.yaml",
     source_id: str | None = None,
     package_id: str | None = None,
-    r2_bucket: str = DEFAULT_R2_RAW_BUCKET,
+    r2_bucket: str | None = None,
     r2_prefix: str | None = None,
     wrangler_command: str = "npx wrangler",
 ) -> RawArtifactPublishReport:
     """Upload manifest-declared raw source artifacts and record R2 locations."""
+    r2_bucket = r2_bucket or default_r2_raw_bucket()
     root_path = Path(root)
     if not root_path.exists():
         return RawArtifactPublishReport(
@@ -770,12 +800,15 @@ def inventory_source_artifacts(
 
 def bootstrap_r2_buckets(
     *,
-    raw_bucket: str = DEFAULT_R2_RAW_BUCKET,
-    derived_bucket: str = DEFAULT_R2_DERIVED_BUCKET,
+    raw_bucket: str | None = None,
+    derived_bucket: str | None = None,
     wrangler_command: str = "npx wrangler",
 ) -> R2BootstrapReport:
     """Create the R2 buckets Chronicle expects, if Wrangler is authenticated."""
-    buckets = (raw_bucket, derived_bucket)
+    buckets = (
+        raw_bucket or default_r2_raw_bucket(),
+        derived_bucket or default_r2_derived_bucket(),
+    )
     commands: list[ArtifactCommandResult] = []
     errors: list[str] = []
 
@@ -987,9 +1020,9 @@ def infer_build_id(input_dir: str | Path) -> str | None:
         if build_id:
             return str(build_id)
 
-    db_path = input_path / "ledger.db"
+    db_path = input_path / CHRONICLE_DB_FILENAME
     if not db_path.exists():
-        db_path = input_path / "ledger.db"
+        db_path = input_path / LEGACY_CHRONICLE_DB_FILENAME
     if db_path.exists():
         with sqlite3.connect(db_path) as connection:
             row = connection.execute(
@@ -1018,6 +1051,17 @@ def _read_artifact(source_url: str) -> tuple[bytes, str]:
 def _filename_from_url(source_url: str) -> str:
     parsed = urlparse(source_url)
     return Path(unquote(parsed.path)).name
+
+
+def _recorded_r2(spec: Any) -> dict[str, Any]:
+    """Return a manifest file spec's recorded ``storage.r2`` block, if any."""
+    if not isinstance(spec, dict):
+        return {}
+    storage = spec.get("storage")
+    if not isinstance(storage, dict):
+        return {}
+    recorded = storage.get("r2")
+    return recorded if isinstance(recorded, dict) else {}
 
 
 def _upsert_manifest(
@@ -1053,8 +1097,18 @@ def _upsert_manifest(
         "size_bytes": size_bytes,
         "fetched_at": fetched_at,
     }
-    if r2_location is not None:
-        file_entry["storage"] = {"r2": r2_location.to_dict()}
+    recorded_r2 = _recorded_r2(payload["files"].get(year))
+    new_r2 = r2_location.to_dict() if r2_location is not None else None
+    if recorded_r2 and (
+        new_r2 is None or recorded_r2.get("bucket") != new_r2.get("bucket")
+    ):
+        # A recorded storage.r2 block is historical truth: archived witness
+        # records pin raw R2 URLs by hash. Re-fetching under a renamed bucket
+        # copies bytes; it does not restate where the bytes were first
+        # published (PolicyEngine/chronicle#143, mechanism 3).
+        file_entry["storage"] = {"r2": recorded_r2}
+    elif new_r2 is not None:
+        file_entry["storage"] = {"r2": new_r2}
     payload["files"][year] = file_entry
     manifest_path.write_text(
         yaml.safe_dump(payload, sort_keys=False),
@@ -1146,8 +1200,32 @@ def _publish_raw_manifest_entry(
             package_path=manifest_path,
         ),
     )
-    storage = spec.get("storage") if isinstance(spec.get("storage"), dict) else {}
-    recorded_r2 = storage.get("r2") if isinstance(storage.get("r2"), dict) else {}
+    recorded_r2 = _recorded_r2(spec)
+    recorded_bucket = recorded_r2.get("bucket")
+    if recorded_bucket and recorded_bucket != location.bucket:
+        # The recorded bucket is preserved history. Publishing the same bytes
+        # into a renamed bucket is a backfill copy, not a restatement, so the
+        # manifest must not be rewritten to point at the new bucket.
+        errors.append(
+            "recorded_r2_bucket_is_preserved_history:"
+            f"recorded={recorded_bucket}:requested={location.bucket}"
+        )
+        return (
+            RawArtifactPublishEntry(
+                manifest_path=str(manifest_path),
+                source_id=source_id,
+                package_id=package_id,
+                year=str(year),
+                filename=filename,
+                local_path=str(artifact_path),
+                sha256=sha256_actual,
+                size_bytes=size_bytes,
+                r2_location=None,
+                upload=None,
+                errors=tuple(errors),
+            ),
+            None,
+        )
     recorded_key = recorded_r2.get("key")
     if recorded_key and recorded_key != location.key:
         errors.append(
@@ -1252,7 +1330,7 @@ def _inventory_entry(
 
 
 def _derived_artifact_kind(artifact_name: str) -> str:
-    if artifact_name in {"ledger.db", "ledger.db"}:
+    if artifact_name in CHRONICLE_DB_FILENAMES:
         return "sqlite_database"
     if artifact_name.endswith(".jsonl"):
         return "jsonl"

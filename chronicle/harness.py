@@ -8,6 +8,8 @@ import shlex
 from pathlib import Path
 
 from chronicle.artifacts import (
+    DEFAULT_R2_DERIVED_BUCKET,
+    DEFAULT_R2_RAW_BUCKET,
     ArtifactFetchReport,
     ArtifactInventoryReport,
     DerivedArtifactPublishReport,
@@ -335,7 +337,7 @@ def fetch_artifact_file(
     table: str | None = None,
     filename: str | None = None,
     upload_r2: bool = False,
-    r2_bucket: str = "ledger-raw",
+    r2_bucket: str | None = None,
     r2_prefix: str | None = None,
     wrangler_command: str = "npx wrangler",
 ) -> ArtifactFetchReport:
@@ -372,7 +374,7 @@ def publish_raw_artifact_files(
     manifest_filename: str = "manifest.yaml",
     source_id: str | None = None,
     package_id: str | None = None,
-    r2_bucket: str = "ledger-raw",
+    r2_bucket: str | None = None,
     r2_prefix: str | None = None,
     wrangler_command: str = "npx wrangler",
 ) -> RawArtifactPublishReport:
@@ -390,8 +392,8 @@ def publish_raw_artifact_files(
 
 def bootstrap_r2_storage(
     *,
-    raw_bucket: str = "ledger-raw",
-    derived_bucket: str = "ledger-derived",
+    raw_bucket: str | None = None,
+    derived_bucket: str | None = None,
     wrangler_command: str = "npx wrangler",
 ) -> R2BootstrapReport:
     """Create Chronicle R2 buckets when Wrangler is authenticated."""
@@ -409,7 +411,7 @@ def publish_derived_artifact_files(
     package_id: str,
     year: int,
     build_id: str | None = None,
-    r2_bucket: str = "ledger-derived",
+    r2_bucket: str | None = None,
     r2_prefix: str | None = None,
     wrangler_command: str = "npx wrangler",
     build_artifacts_output: str | Path | None = None,
@@ -888,8 +890,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     artifact_parser.add_argument(
         "--r2-bucket",
-        default="ledger-raw",
-        help="R2 bucket for raw artifacts when --upload-r2 is set.",
+        default=None,
+        help=(
+            "R2 bucket for raw artifacts when --upload-r2 is set. Defaults to "
+            f"$CHRONICLE_R2_RAW_BUCKET, else {DEFAULT_R2_RAW_BUCKET}."
+        ),
     )
     artifact_parser.add_argument(
         "--r2-prefix",
@@ -923,7 +928,7 @@ def main(argv: list[str] | None = None) -> int:
 
     raw_publish_parser = subparsers.add_parser(
         "publish-raw",
-        help="Upload manifest-declared raw source artifacts to ledger-raw R2",
+        help="Upload manifest-declared raw source artifacts to the raw R2 bucket",
     )
     raw_publish_parser.add_argument(
         "--root",
@@ -946,8 +951,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     raw_publish_parser.add_argument(
         "--r2-bucket",
-        default="ledger-raw",
-        help="R2 bucket for immutable raw artifacts.",
+        default=None,
+        help=(
+            "R2 bucket for immutable raw artifacts. Defaults to "
+            f"$CHRONICLE_R2_RAW_BUCKET, else {DEFAULT_R2_RAW_BUCKET}."
+        ),
     )
     raw_publish_parser.add_argument(
         "--r2-prefix",
@@ -969,13 +977,19 @@ def main(argv: list[str] | None = None) -> int:
     )
     r2_parser.add_argument(
         "--raw-bucket",
-        default="ledger-raw",
-        help="R2 bucket name for immutable raw source artifacts.",
+        default=None,
+        help=(
+            "R2 bucket name for immutable raw source artifacts. Defaults to "
+            f"$CHRONICLE_R2_RAW_BUCKET, else {DEFAULT_R2_RAW_BUCKET}."
+        ),
     )
     r2_parser.add_argument(
         "--derived-bucket",
-        default="ledger-derived",
-        help="R2 bucket name for derived Chronicle build artifacts.",
+        default=None,
+        help=(
+            "R2 bucket name for derived Chronicle build artifacts. Defaults to "
+            f"$CHRONICLE_R2_DERIVED_BUCKET, else {DEFAULT_R2_DERIVED_BUCKET}."
+        ),
     )
     r2_parser.add_argument(
         "--wrangler-command",
@@ -985,7 +999,7 @@ def main(argv: list[str] | None = None) -> int:
 
     derived_publish_parser = subparsers.add_parser(
         "publish-derived",
-        help="Upload deterministic Chronicle build outputs to ledger-derived R2",
+        help="Upload deterministic Chronicle build outputs to the derived R2 bucket",
     )
     derived_publish_parser.add_argument(
         "--dir",
@@ -1011,12 +1025,18 @@ def main(argv: list[str] | None = None) -> int:
     )
     derived_publish_parser.add_argument(
         "--build-id",
-        help="Build ID. Defaults to the ID inferred from reports or ledger.db.",
+        help=(
+            "Build ID. Defaults to the ID inferred from reports, chronicle.db, "
+            "or a legacy ledger.db."
+        ),
     )
     derived_publish_parser.add_argument(
         "--r2-bucket",
-        default="ledger-derived",
-        help="R2 bucket for derived build artifacts.",
+        default=None,
+        help=(
+            "R2 bucket for derived build artifacts. Defaults to "
+            f"$CHRONICLE_R2_DERIVED_BUCKET, else {DEFAULT_R2_DERIVED_BUCKET}."
+        ),
     )
     derived_publish_parser.add_argument(
         "--r2-prefix",

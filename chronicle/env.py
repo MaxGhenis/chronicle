@@ -75,7 +75,11 @@ def env_names(name: str) -> tuple[str, ...]:
 
 
 def _warn_legacy(found: str, preferred: str) -> None:
-    """Warn once per process that a ledger-era variable supplied a value."""
+    """Warn once per process that a ledger-era variable supplied a value.
+
+    ``stacklevel=4`` walks out through :func:`_first_set` and its public
+    wrapper so the notice points at the code that asked for the setting.
+    """
     if found in _WARNED_LEGACY_NAMES:
         return
     _WARNED_LEGACY_NAMES.add(found)
@@ -84,7 +88,7 @@ def _warn_legacy(found: str, preferred: str) -> None:
         f"set {preferred} instead. The old name is still honored during the "
         "Chronicle rename window and will be removed once consumers migrate.",
         ChronicleEnvDeprecationWarning,
-        stacklevel=3,
+        stacklevel=4,
     )
 
 
@@ -93,12 +97,11 @@ def reset_env_deprecation_state() -> None:
     _WARNED_LEGACY_NAMES.clear()
 
 
-def env_value(*names: str, default: _Default = None) -> str | _Default:
-    """Read the first set value across ``names``, chronicle-preferred first.
+def _first_set(names: tuple[str, ...]) -> str | None:
+    """Return the first set value across ``names``, warning on a legacy hit.
 
-    Each name is expanded through :func:`env_names`, so a caller can pass the
-    chronicle name and still pick up a value set under a ledger-era name.
-    Empty values are treated as unset, matching the helpers this replaces.
+    Both public readers call this at the same stack depth so the deprecation
+    warning is always attributed to their caller, not to this module.
     """
     for name in names:
         candidates = env_names(name)
@@ -109,12 +112,27 @@ def env_value(*names: str, default: _Default = None) -> str | _Default:
                 if candidate != preferred:
                     _warn_legacy(candidate, preferred)
                 return value
-    return default
+    return None
+
+
+def env_value(*names: str, default: _Default = None) -> str | _Default:
+    """Read the first set value across ``names``, chronicle-preferred first.
+
+    Each name is expanded through :func:`env_names`, so a caller can pass the
+    chronicle name and still pick up a value set under a ledger-era name.
+    Empty values are treated as unset, matching the helpers this replaces.
+    """
+    value = _first_set(names)
+    return default if value is None else value
 
 
 def env_flag(*names: str) -> bool:
-    """Return whether the first set value across ``names`` reads as true."""
-    value = env_value(*names)
+    """Return whether the first set value across ``names`` reads as true.
+
+    The chronicle-preferred name wins even when it reads false, so an operator
+    who has migrated can turn a flag off without unsetting the legacy name.
+    """
+    value = _first_set(names)
     if value is None:
         return False
     return value.strip().lower() in TRUTHY_ENV_VALUES

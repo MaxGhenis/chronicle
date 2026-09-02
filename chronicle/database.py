@@ -35,6 +35,15 @@ from chronicle.sources.rows import (
 
 LEDGER_DB_SCHEMA_VERSION = "ledger.relational.v1"
 
+# New suite outputs write chronicle.db. Existing builds wrote ledger.db and are
+# still read and published unchanged, so the legacy name stays accepted for
+# inference and artifact classification (PolicyEngine/chronicle#143,
+# mechanism 3). The relational schema id above is a frozen machine surface that
+# migrates with the epoch lane, not with this rename.
+CHRONICLE_DB_FILENAME = "chronicle.db"
+LEGACY_CHRONICLE_DB_FILENAME = "ledger.db"
+CHRONICLE_DB_FILENAMES = (CHRONICLE_DB_FILENAME, LEGACY_CHRONICLE_DB_FILENAME)
+
 
 @dataclass(frozen=True)
 class ChronicleDbBuildReport:

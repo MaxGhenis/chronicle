@@ -276,14 +276,15 @@ def cmd_query(args):
 
 
 def _pe_source_root_env_default(jurisdiction: str) -> str | None:
+    from chronicle.env import env_value
+
     from .pe_source_inventory import (
         PE_UK_DATA_ROOT_ENV,
         PE_US_DATA_ROOT_ENV,
-        _env_value,
     )
 
     env_var = PE_US_DATA_ROOT_ENV if jurisdiction == "us" else PE_UK_DATA_ROOT_ENV
-    return _env_value(env_var)
+    return env_value(env_var)
 
 
 def main():

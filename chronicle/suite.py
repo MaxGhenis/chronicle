@@ -22,7 +22,11 @@ from chronicle.core import (
     build_fact_key,
     validate_facts,
 )
-from chronicle.database import ChronicleDbBuildReport, build_chronicle_db
+from chronicle.database import (
+    CHRONICLE_DB_FILENAME,
+    ChronicleDbBuildReport,
+    build_chronicle_db,
+)
 from chronicle.sources.cells import (
     SourceCell,
     SourceCellReport,
@@ -371,7 +375,7 @@ def build_source_suite(
         concept_report.to_dict(),
     )
 
-    db_path = output_path / "ledger.db"
+    db_path = output_path / CHRONICLE_DB_FILENAME
     db_report = build_chronicle_db(
         facts,
         db_path,
@@ -1646,7 +1650,7 @@ def _write_package_sidecars(output_path: Path, *, source: str, year: int) -> Non
         output_path / "source_regions.jsonl",
         output_path / "facts.jsonl",
         output_path / "consumer_facts.jsonl",
-        output_path / "ledger.db",
+        output_path / CHRONICLE_DB_FILENAME,
         output_path / "reports" / "source_rows.json",
         output_path / "reports" / "source_cells.json",
         output_path / "reports" / "source_regions.json",

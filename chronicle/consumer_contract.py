@@ -390,6 +390,24 @@ def validate_consumer_fact_contract(
     )
 
 
+def _r2_uri_parts(uri: str) -> tuple[str, str]:
+    """Split an ``r2://bucket/key`` URI into its bucket and key."""
+    if not uri.startswith("r2://"):
+        return "", ""
+    bucket, _, key = uri[len("r2://") :].partition("/")
+    return bucket, key
+
+
+def _points_at_derived(bucket: str, key: str) -> bool:
+    """Whether an R2 bucket/key pair addresses derived build output.
+
+    Matched on shape rather than on the ledger-era bucket names, so the guard
+    keeps firing once the buckets are renamed (PolicyEngine/chronicle#143,
+    mechanism 3).
+    """
+    return bucket.endswith("-derived") or key.startswith("derived/")
+
+
 def _derived_source_provenance_issue(fact: AggregateFact) -> str | None:
     """Return a boundary error if a fact is a downstream target derivation."""
     source = fact.source
@@ -411,20 +429,14 @@ def _derived_source_provenance_issue(fact: AggregateFact) -> str | None:
             "itself. Target construction, aging, and reconciliation belong in "
             "Microcosm."
         )
-    if source_file.startswith("ledger-derived:"):
+    source_file_bucket, bucket_separator, _ = source_file.partition(":")
+    if bucket_separator and source_file_bucket.endswith("-derived"):
         return (
             "Chronicle consumer facts must cite raw publisher artifacts. Derived "
             "target-construction artifacts belong in Microcosm."
         )
-    if (
-        raw_r2_bucket.endswith("-derived")
-        or raw_r2_key.startswith("derived/")
-        or raw_r2_uri.startswith(
-            (
-                "r2://ledger-derived/",
-                "r2://ledger-raw/derived/",
-            )
-        )
+    if _points_at_derived(raw_r2_bucket, raw_r2_key) or _points_at_derived(
+        *_r2_uri_parts(raw_r2_uri)
     ):
         return (
             "Chronicle consumer facts must point at raw source artifacts, not "
@@ -450,7 +462,10 @@ def _fact_provenance_class_issue(
             "provenance_class",
         )
     if fact.provenance_class == "survey_aggregate":
-        if type(fact.survey_instrument) is not str or not fact.survey_instrument.strip():
+        if (
+            type(fact.survey_instrument) is not str
+            or not fact.survey_instrument.strip()
+        ):
             return (
                 "missing_survey_instrument",
                 "Survey aggregates need a non-empty survey instrument.",

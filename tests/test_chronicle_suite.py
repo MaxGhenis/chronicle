@@ -94,7 +94,7 @@ def test_build_source_suite_writes_artifacts_and_reports(tmp_path):
     assert (output_dir / "source_regions.jsonl").exists()
     assert (output_dir / "facts.jsonl").exists()
     assert (output_dir / "consumer_facts.jsonl").exists()
-    assert (output_dir / "ledger.db").exists()
+    assert (output_dir / "chronicle.db").exists()
     assert (output_dir / "datapackage.json").exists()
     assert (output_dir / "ro-crate-metadata.json").exists()
     assert (output_dir / "reports" / "source_regions.json").exists()
@@ -122,7 +122,7 @@ def test_build_source_suite_writes_artifacts_and_reports(tmp_path):
         "source_regions.jsonl",
         "facts.jsonl",
         "consumer_facts.jsonl",
-        "ledger.db",
+        "chronicle.db",
         "reports/build_summary.json",
         "reports/source_regions.json",
         "reports/selectors.json",
@@ -148,7 +148,7 @@ def test_build_source_suite_writes_artifacts_and_reports(tmp_path):
         "concept_alignment_validation_skipped"
     ]
 
-    with sqlite3.connect(output_dir / "ledger.db") as connection:
+    with sqlite3.connect(output_dir / "chronicle.db") as connection:
         facts_count = connection.execute(
             "SELECT COUNT(*) FROM aggregate_facts"
         ).fetchone()[0]
@@ -182,7 +182,7 @@ def test_build_source_suite_supports_soi_table_1_4(tmp_path):
         "concept_alignment_validation_skipped"
     )
     assert (output_dir / "source_regions.jsonl").exists()
-    assert (output_dir / "ledger.db").exists()
+    assert (output_dir / "chronicle.db").exists()
 
 
 def test_agent_acceptance_accepts_aggregate_income_range_source_rows():
@@ -676,7 +676,7 @@ def test_build_suite_cli_emits_json_summary(tmp_path, capsys):
     assert payload["outputs"]["source_regions"] == str(
         output_dir / "source_regions.jsonl"
     )
-    assert payload["outputs"]["database"] == str(output_dir / "ledger.db")
+    assert payload["outputs"]["database"] == str(output_dir / "chronicle.db")
     assert payload["outputs"]["consumer_facts"] == str(
         output_dir / "consumer_facts.jsonl"
     )

@@ -18,7 +18,7 @@ from chronicle.jurisdictions.us.soi import (
 
 
 def test_export_chronicle_db_tables_writes_jsonl_and_manifest(tmp_path):
-    db_path = tmp_path / "ledger.db"
+    db_path = tmp_path / "chronicle.db"
     output_dir = tmp_path / "mirror"
     build_chronicle_db(
         build_soi_table_1_1_facts(2023),
@@ -53,7 +53,7 @@ def test_export_chronicle_db_tables_writes_jsonl_and_manifest(tmp_path):
 
 
 def test_export_chronicle_db_tables_orders_rows_deterministically(tmp_path):
-    db_path = tmp_path / "ledger.db"
+    db_path = tmp_path / "chronicle.db"
     first_output_dir = tmp_path / "mirror-first"
     second_output_dir = tmp_path / "mirror-second"
     build_chronicle_db(
@@ -72,7 +72,7 @@ def test_export_chronicle_db_tables_orders_rows_deterministically(tmp_path):
 
 
 def test_export_db_tables_cli_emits_manifest_summary(tmp_path, capsys):
-    db_path = tmp_path / "ledger.db"
+    db_path = tmp_path / "chronicle.db"
     output_dir = tmp_path / "mirror"
     build_chronicle_db(
         build_soi_table_1_1_facts(2023),
@@ -99,7 +99,7 @@ def test_export_db_tables_cli_emits_manifest_summary(tmp_path, capsys):
 
 
 def test_load_supabase_mirror_dry_run_counts_exported_rows(tmp_path):
-    db_path = tmp_path / "ledger.db"
+    db_path = tmp_path / "chronicle.db"
     output_dir = tmp_path / "mirror"
     build_chronicle_db(
         build_soi_table_1_1_facts(2023),
