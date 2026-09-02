@@ -384,6 +384,22 @@ uv run chronicle inventory-artifacts --root db/data
 # Upload all existing manifest-declared local artifacts to the raw archive and
 # write storage.r2 metadata back into the manifests:
 uv run chronicle publish-raw --root db/data
+
+# Register a licensed or restricted release by identity alone. No bytes are
+# fetched, stored, or uploaded, and no R2 key is recorded:
+uv run chronicle register-artifact \
+  --source-id dwp \
+  --package-id dwp-frs-2023-24 \
+  --year 2023 \
+  --out-dir db/data/dwp/frs_2023_24 \
+  --filename adult.tab \
+  --sha256 e09f9647d03585c81a528636028b2ed495f8f1fbcf64c5e7b4fe521b67367e06 \
+  --size-bytes 35323384 \
+  --vintage 2023_24 \
+  --licence "UK Data Service End User Licence" \
+  --access licensed \
+  --doi 10.5255/UKDA-SN-9367-2 \
+  --verified-at 2026-09-02
 ```
 
 To coordinate broad PE source migration without jumping straight to semantic

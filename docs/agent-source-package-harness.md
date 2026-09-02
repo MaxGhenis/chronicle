@@ -46,6 +46,64 @@ emit a one-time deprecation warning naming the `CHRONICLE_` variable to set
 instead; see "Environment Variable Rename Window" in
 [`docs/storage-architecture.md`](storage-architecture.md#environment-variable-rename-window).
 
+## Hash-Only Registrations
+
+Not every raw artifact a build starts from may be redistributed. Every manifest
+file entry carries an `access` class from a closed set — `public`, `licensed`,
+or `restricted` — and a `licence` naming the publisher's terms as an identifier
+or URL. `public` is inferred when an entry omits `access`, and `fetch-artifact`
+now writes the class explicitly onto every entry it touches. Both fields are
+required on a `kind: microdata_release` manifest.
+
+Only `public` bytes enter a Chronicle store. A `licensed` or `restricted`
+artifact is registered *hash-only*: the manifest records the checksum, size,
+vintage, licence, access route, and verification timestamp, and no bytes are
+fetched, written, or uploaded. Agents should register one with:
+
+```bash
+uv run chronicle register-artifact \
+  --source-id dwp \
+  --package-id dwp-frs-2023-24 \
+  --year 2023 \
+  --out-dir db/data/dwp/frs_2023_24 \
+  --filename adult.tab \
+  --sha256 e09f9647d03585c81a528636028b2ed495f8f1fbcf64c5e7b4fe521b67367e06 \
+  --size-bytes 35323384 \
+  --vintage 2023_24 \
+  --licence "UK Data Service End User Licence" \
+  --access licensed \
+  --doi 10.5255/UKDA-SN-9367-2 \
+  --verified-at 2026-09-02
+```
+
+Agents should never invent a checksum to satisfy the command: `--sha256` must be
+a lowercase 64-character digest taken from a reviewed pin, and a release whose
+checksum nobody has published is a blocker to record, not a value to guess. The
+command refuses `--access public`, refuses bytes sitting beside the manifest,
+and refuses to write into a `publisher_table` manifest.
+
+The other commands enforce the same boundary from their side. `fetch-artifact`
+refuses a `licensed` or `restricted` access class before reading anything, and
+refuses to pull bytes over an entry already registered hash-only. `publish-raw`
+refuses such an entry without reading or uploading its bytes; pass
+`--skip-hash-only` to publish a tree that deliberately mixes both kinds.
+`inventory-artifacts` treats a hash-only entry with no local file as valid — the
+absent bytes are the correct state — and reports an error if the bytes appear.
+
+Because several files can share one vintage, a `kind: microdata_release`
+manifest may give `files[year]` as a list of entries rather than a single
+mapping. A list under any other manifest kind is an error.
+
+No source package parses a microdata release. `validate-package` fails with
+`microdata_release_not_parseable` if a package spec points at one, and no
+microdata row, cell, or fact ever enters Chronicle. Registration is
+manifest-level identity; see `docs/adr-chronicle-raw-microdata-identity.md`.
+
+`scripts/register_microdata_releases.py` drives both halves from a read-only
+PolicyEngine/microcosm checkout: `emit` writes the hash-only manifests from
+Microcosm's reviewed pins, and `plan` prints the `fetch-artifact` commands to
+run for public releases from a networked machine.
+
 For broad PE source migration, generate the agent queue from the manifest before
 assigning work:
 

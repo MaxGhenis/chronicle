@@ -88,6 +88,20 @@ derived/nz/ird/ird-working-for-families-statistics-sept-2025/2024/{build_id}/chr
 
 Legacy US derived keys likewise remain `derived/{source_id}/...`.
 
+A registered microdata release uses the same content-addressed key as any other
+raw artifact, and it exists only when the release's `access` class is `public`.
+A Census public-use file is a US publisher, so it keeps the legacy shape:
+
+```text
+raw/census_cps/census-cps-asec-2023/2023/{sha256}/asecpub23csv.zip
+```
+
+A `licensed` or `restricted` release has no key at all. Its registration is
+`{source_id, package_id, year, sha256, filename}` recorded in `manifest.yaml`,
+and no object is written to either bucket — so the DWP Family Resources Survey
+tabs, which would otherwise route to `raw/uk/dwp/...`, occupy no key. See
+`docs/adr-chronicle-raw-microdata-identity.md`.
+
 Derived artifacts are reproducible and may be replaced by a new build, but a
 specific `{build_id}` path should be immutable once published.
 
