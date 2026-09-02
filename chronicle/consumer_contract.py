@@ -398,6 +398,20 @@ def _r2_uri_parts(uri: str) -> tuple[str, str]:
     return bucket, key
 
 
+# The marker a downstream target row carries in its source_record_id. It moves
+# with the rename window: producers write `ledger_derived` today and
+# `chronicle_derived` once they migrate (PolicyEngine/chronicle#143, mechanism
+# 3), so the boundary has to reject both spellings identically or the guard
+# stops firing the moment a producer renames.
+DERIVED_SOURCE_RECORD_SUFFIXES = frozenset({"ledger_derived", "chronicle_derived"})
+
+
+def _is_derived_source_record_id(source_record_id: str) -> bool:
+    """Whether a source_record_id marks a downstream derived target row."""
+    _, separator, suffix = source_record_id.rpartition(".")
+    return bool(separator) and suffix in DERIVED_SOURCE_RECORD_SUFFIXES
+
+
 def _points_at_derived(bucket: str, key: str) -> bool:
     """Whether an R2 bucket/key pair addresses derived build output.
 
@@ -442,7 +456,7 @@ def _derived_source_provenance_issue(fact: AggregateFact) -> str | None:
             "Chronicle consumer facts must point at raw source artifacts, not "
             "derived build artifacts."
         )
-    if source_record_id.endswith(".ledger_derived"):
+    if _is_derived_source_record_id(source_record_id):
         return (
             "Chronicle source_record_id must identify a publisher-backed row, not "
             "a downstream derived target row."

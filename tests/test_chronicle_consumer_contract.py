@@ -750,6 +750,18 @@ def test_export_consumer_facts_cli_rejects_contract_invalid_facts(tmp_path, caps
             },
             "publisher.raw.fact",
         ),
+        # The derived-row marker renames with everything else, so the guard has
+        # to reject the chronicle spelling the same way it rejects the ledger
+        # one (PolicyEngine/chronicle#143, mechanism 3).
+        (
+            {
+                "source_name": "irs_soi",
+                "source_file": "publisher.xlsx",
+                "raw_r2_bucket": "ledger-raw",
+                "raw_r2_uri": "r2://ledger-raw/raw/source/publisher.xlsx",
+            },
+            "irs_soi.ty2024.table.us.taxable_interest_amount.chronicle_derived",
+        ),
     ],
 )
 def test_consumer_contract_rejects_downstream_derived_target_facts(
@@ -767,6 +779,46 @@ def test_consumer_contract_rejects_downstream_derived_target_facts(
 
     assert not report.valid
     assert "derived_fact_provenance" in {error.code for error in report.errors}
+
+
+def test_derived_record_marker_is_rejected_in_either_spelling():
+    """Both rename-window spellings produce the identical boundary error."""
+    fact = _soi_agi_fact()
+    base = "irs_soi.ty2024.table.us.taxable_interest_amount"
+
+    reports = {
+        suffix: validate_consumer_fact_contract(
+            [replace(fact, source_record_id=f"{base}.{suffix}")]
+        )
+        for suffix in ("ledger_derived", "chronicle_derived")
+    }
+
+    ledger_errors = [
+        (error.code, error.message) for error in reports["ledger_derived"].errors
+    ]
+    chronicle_errors = [
+        (error.code, error.message) for error in reports["chronicle_derived"].errors
+    ]
+    assert ledger_errors == chronicle_errors
+    assert "derived_fact_provenance" in {code for code, _ in ledger_errors}
+
+
+@pytest.mark.parametrize(
+    "source_record_id",
+    [
+        # A publisher-backed row that merely contains the marker as a word, or
+        # carries it without the separating dot, is not a derived target row.
+        "irs_soi.ty2024.table.us.chronicle_derived_totals",
+        "irs_soi.ty2024.table.us.ledger_derived_totals",
+        "chronicle_derived",
+    ],
+)
+def test_derived_record_marker_matches_the_whole_final_segment(source_record_id):
+    fact = replace(_soi_agi_fact(), source_record_id=source_record_id)
+
+    report = validate_consumer_fact_contract([fact])
+
+    assert report.valid
 
 
 def test_export_consumer_facts_cli_preserves_decimal_values(tmp_path, capsys):
