@@ -90,9 +90,29 @@ refuses such an entry without reading or uploading its bytes; pass
 `inventory-artifacts` treats a hash-only entry with no local file as valid — the
 absent bytes are the correct state — and reports an error if the bytes appear.
 
+A `public` microdata release is different: its bytes are redistributable, so it
+is acquired with `fetch-artifact` like any other public artifact, and it does
+get an R2 key. Pass `--kind microdata_release` so the manifest still declares
+what it is:
+
+```bash
+uv run chronicle fetch-artifact \
+  --url https://www2.census.gov/programs-surveys/acs/data/pums/2022/1-Year/csv_hus.zip \
+  --source-id census_acs \
+  --package-id census-acs-pums-2022-1yr \
+  --year 2022 \
+  --out-dir db/data/census/acs_pums_2022_1yr \
+  --access public \
+  --licence "U.S. Census Bureau public-use file" \
+  --kind microdata_release \
+  --upload-r2
+```
+
 Because several files can share one vintage, a `kind: microdata_release`
 manifest may give `files[year]` as a list of entries rather than a single
-mapping. A list under any other manifest kind is an error.
+mapping — the ACS household and person files above land side by side. A list
+under any other manifest kind is an error. A fetch replaces only the entry for
+its own filename, so acquiring a second file never drops the first.
 
 No source package parses a microdata release. `validate-package` fails with
 `microdata_release_not_parseable` if a package spec points at one, and no
