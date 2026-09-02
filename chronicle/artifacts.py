@@ -1221,9 +1221,9 @@ def _read_manifest(manifest_path: Path) -> dict[str, Any]:
     try:
         payload = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
     except yaml.YAMLError as exc:
-        raise MalformedManifestError(f"{manifest_path} is not valid YAML: {exc}") from (
-            exc
-        )
+        raise MalformedManifestError(
+            f"{manifest_path} is not valid YAML: {exc}"
+        ) from exc
     if payload is None:
         return {}
     if not isinstance(payload, dict):
@@ -1274,6 +1274,24 @@ def _split_r2_uri(uri: str) -> tuple[str, str, str] | None:
     return (provider, bucket, key)
 
 
+def _validated_recorded_storage(
+    spec: Any,
+    *,
+    manifest_path: Path,
+    year: Any,
+) -> dict[str, Any]:
+    """Return the entry's ``storage`` mapping, refusing a malformed one."""
+    if not isinstance(spec, dict) or "storage" not in spec:
+        return {}
+    storage = spec["storage"]
+    if not isinstance(storage, dict):
+        raise MalformedManifestError(
+            f"{manifest_path} entry {year!r} storage must be a mapping; it is a "
+            f"{type(storage).__name__}."
+        )
+    return storage
+
+
 def _validated_recorded_r2(
     spec: Any,
     *,
@@ -1289,7 +1307,7 @@ def _validated_recorded_r2(
     field and trusting the rest is what lets a block that says two different
     things survive a preserve or a publish.
     """
-    storage = _recorded_storage_block(spec, manifest_path=manifest_path, year=year)
+    storage = _validated_recorded_storage(spec, manifest_path=manifest_path, year=year)
     if "r2" not in storage:
         return None
     block = storage["r2"]
@@ -1368,24 +1386,6 @@ def _validated_recorded_r2(
         sha256=segments[-2],
         filename=segments[-1],
     )
-
-
-def _recorded_storage_block(
-    spec: Any,
-    *,
-    manifest_path: Path,
-    year: Any,
-) -> dict[str, Any]:
-    """Return the entry's ``storage`` mapping, refusing a malformed one."""
-    if not isinstance(spec, dict) or "storage" not in spec:
-        return {}
-    storage = spec["storage"]
-    if not isinstance(storage, dict):
-        raise MalformedManifestError(
-            f"{manifest_path} entry {year!r} storage must be a mapping; it is a "
-            f"{type(storage).__name__}."
-        )
-    return storage
 
 
 def _recorded_identity(
