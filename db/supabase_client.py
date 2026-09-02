@@ -8,7 +8,6 @@ Provides connection to PolicyEngine Supabase database for:
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any, Dict, List, Optional
@@ -16,18 +15,14 @@ from unittest.mock import Mock
 
 from supabase import create_client, Client
 
+from chronicle.env import env_value
 
-def _env(*names: str) -> str | None:
-    """Read PolicyEngine-owned storage config."""
-    for name in names:
-        value = os.environ.get(name)
-        if value:
-            return value
-    return None
-
-
-LEDGER_SCHEMA = _env("POLICYENGINE_LEDGER_SCHEMA") or "ledger"
-TARGETS_SCHEMA = _env("POLICYENGINE_TARGETS_SCHEMA") or "targets"
+# The hosted Postgres schema is still named "ledger"; only the environment
+# variable that overrides it has moved to the chronicle prefix. Renaming the
+# schema itself is a later slice of PolicyEngine/chronicle#143, coordinated
+# with the CI writers that already target the ledger schema.
+LEDGER_SCHEMA = env_value("CHRONICLE_SCHEMA") or "ledger"
+TARGETS_SCHEMA = env_value("POLICYENGINE_TARGETS_SCHEMA") or "targets"
 
 
 @dataclass
@@ -49,14 +44,14 @@ class SupabaseConfig:
         Raises:
             ValueError: If required environment variables are missing
         """
-        url = _env("POLICYENGINE_SUPABASE_URL")
+        url = env_value("POLICYENGINE_SUPABASE_URL")
         if not url:
             raise ValueError(
                 "POLICYENGINE_SUPABASE_URL not set. "
                 "Set this to your Supabase project URL."
             )
 
-        secret_key = _env(
+        secret_key = env_value(
             "POLICYENGINE_SUPABASE_SERVICE_KEY",
             "POLICYENGINE_SUPABASE_SECRET_KEY",
         )

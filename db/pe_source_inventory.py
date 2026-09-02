@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
+
+from chronicle.env import env_value
 
 from .schema import Jurisdiction
 from .source_files import SourceArtifactSpec, make_slug, make_url_slug
 
-PE_US_DATA_ROOT_ENV = "LEDGER_PE_US_DATA_ROOT"
-PE_UK_DATA_ROOT_ENV = "LEDGER_PE_UK_DATA_ROOT"
+PE_US_DATA_ROOT_ENV = "CHRONICLE_PE_US_DATA_ROOT"
+PE_UK_DATA_ROOT_ENV = "CHRONICLE_PE_UK_DATA_ROOT"
 
 SOURCE_SUFFIXES = {
     ".csv",
@@ -271,21 +272,13 @@ UK_TARGET_URL_FILES = [
 ]
 
 
-def _env_value(*names: str) -> str | None:
-    for name in names:
-        value = os.environ.get(name)
-        if value:
-            return value
-    return None
-
-
 def _resolve_required_root(
     root: Path | None,
     *,
     flag: str,
     env_var: str,
 ) -> Path:
-    value = root if root is not None else _env_value(env_var)
+    value = root if root is not None else env_value(env_var)
     if value is None:
         raise ValueError(f"{flag} or {env_var} is required.")
     path = Path(value).expanduser()
@@ -611,8 +604,8 @@ def pe_source_specs(
 ) -> list[SourceArtifactSpec]:
     """Return source files used by the PE-US and PE-UK calibration pipelines."""
     specs: list[SourceArtifactSpec] = []
-    us_configured = pe_us_root is not None or _env_value(PE_US_DATA_ROOT_ENV)
-    uk_configured = pe_uk_root is not None or _env_value(PE_UK_DATA_ROOT_ENV)
+    us_configured = pe_us_root is not None or env_value(PE_US_DATA_ROOT_ENV)
+    uk_configured = pe_uk_root is not None or env_value(PE_UK_DATA_ROOT_ENV)
     if include_us and (us_configured or not include_uk or not uk_configured):
         specs.extend(pe_us_source_specs(pe_us_root))
     if include_uk and (uk_configured or not include_us or not us_configured):

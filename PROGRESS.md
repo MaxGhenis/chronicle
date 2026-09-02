@@ -1,51 +1,41 @@
-# Lane C5 progress
+# Operational rename, slice 1 (chronicle#143, mechanism 3)
+
+Lane C5's handoff notes previously lived here; its durable record is
+`LANE_C5_REPORT.md`. This file now tracks the active lane on this branch.
 
 ## State
 
-- Branch: `be-2025-vintages` from `origin/main` at `5c15bfd`.
-- Worktree inputs are staged under `.lane-raw/` and must remain uncommitted.
-- Lane C5 is complete, validated, independently reviewed, and ready for handoff.
-- The requested staged C2 report is absent, but root `LANE_C2_REPORT.md` is byte-identical
-  to the sibling lane's staged copy (SHA-256 `4590e0dc...50f06e7`) and is the pattern used.
+- Branch: `ops-rename-slice1`, cut from `origin/main` at `ff3efd3`.
+- Scope: env names, R2 bucket configurability, `ledger.db` -> `chronicle.db`,
+  and the docs for all three. Code and docs only; no infrastructure changes.
+- Out of scope and deliberately untouched: the `ledger` console-script alias,
+  the Supabase `"ledger"` schema and mirror table names, governance role ids and
+  concept authorities, hash domains and schema ids, anything under `releases/`.
 
 ## Done
 
-- Read the repository Chronicle boundary rules in `AGENTS.md`.
-- Read `.lane-raw/SOURCES.md` and confirmed all five named publisher artifacts are present.
-- Confirmed the worktree is otherwise clean apart from `.lane-raw/` and the shared `.venv` link.
-- Verified all five staged artifact SHA-256 pins exactly.
-- Mapped FPB workbook cells: 990 facts across T01/T06/T07/T11/T17/T24, with
-  2022–2025 observations and 2026–2031 `source_projection` facts.
-- Confirmed PDF boundary evidence: printed page 19 calls 2026 the first projection year;
-  annex table units appear on printed pages 45, 48, 49, 53, 58, and 65.
-- Chosen Eurostat layout: two vintage-specific source-package aliases share new manifest
-  entries, preserving the prior package YAMLs, raw bytes, and fact outputs unchanged.
-- Reproduced the Statbel curator logic: 18 NUTS1 × sex × age-band cells totaling 11,825,551.
-- Added the hash-pinned FPB workbook and publication PDF plus the
-  `fpb-economic-outlook-2026-2031-june-2026` package alias.
-- Built 990 line-specific publisher facts (99 per year): 396 observations for
-  2022–2025 and 594 `source_projection` facts for 2026–2031.
-- Passed FPB `validate-package` and `build-suite`: 990 facts, full cell lineage,
-  zero acceptance errors, and pinned 2025 cells 320578 / 77771 / 5602 million euro.
-- Re-ran the Statbel 2026 curator logic on the 2025 ZIP and added the hash-pinned
-  raw capture plus its deterministic 18-row curated CSV.
-- Passed Statbel 2025 `validate-package` and `build-suite`: 18 facts totaling
-  11,825,551, 66 constraints, full lineage, and zero acceptance errors.
-- Added the Eurostat `gov_10a_taxag` 2025 and `spr_exp_func` 2024 manifest
-  entries plus vintage-specific package aliases, without modifying either
-  prior artifact or prior package specification.
-- Passed both new Eurostat package validations and suite builds: 12 tax facts
-  and 9 ESSPROS facts, full lineage, and zero acceptance errors.
-- Extended Belgium and Eurostat regressions for FPB table counts/cells and
-  assertion boundary, vintage non-overlap, prior-output digests, Statbel pins,
-  and the declared 0.25% Statbel/FPB population comparison tolerance.
-- Passed 43 focused tests and the full merged-bundle regression: 157,177 facts,
-  148 packages, zero aggregate-key duplicates, and expected goldens throughout.
-- Recorded pins, counts, boundary evidence, curator commands, validation tails,
-  and consumer fact families in `LANE_C5_REPORT.md`.
-- Passed independent `ledger-source-fidelity` and `ledger-boundary` reviews with
-  no required corrections.
+- Read `AGENTS.md`, `docs/storage-architecture.md`,
+  `docs/agent-source-package-harness.md`, and the mechanism-3 migration spec in
+  the first comment of PolicyEngine/chronicle#143.
+- Enumerated every ledger-named env read in tracked Python: the four real
+  variables (`LEDGER_SOURCE_ARTIFACT_CACHE_DIR`, `LEDGER_SOURCE_ARTIFACT_FETCH`,
+  `LEDGER_PE_US_DATA_ROOT`, `LEDGER_PE_UK_DATA_ROOT`) plus
+  `POLICYENGINE_LEDGER_SCHEMA`. `LEDGER_MIRROR_TABLES`,
+  `LEDGER_MIRROR_PRIMARY_KEYS`, and `LEDGER_DB_SCHEMA_VERSION` are module
+  constants, not env reads, and name out-of-scope surfaces.
+- Added `chronicle/env.py`: one shared `env_value`/`env_flag`/`env_names`
+  helper reading `CHRONICLE_<X>` first, then `LEDGER_<X>` and
+  `POLICYENGINE_LEDGER_<X>` with a once-per-process
+  `ChronicleEnvDeprecationWarning` naming the preferred variable.
+- Replaced all three ad-hoc helpers (`db/supabase_client._env`,
+  `chronicle/source_package._env_value`/`_truthy_env`,
+  `db/pe_source_inventory._env_value`) with the shared helper.
 
 ## Next
 
-- None; ready for handoff. No push was performed.
+- Make R2 bucket names configurable with unchanged `ledger-*` defaults.
+- Emit `chronicle.db` for new suite outputs; keep reading `ledger.db`.
+- Fix the backwards fallback statement in the docs and sweep every env-name,
+  bucket-name, and db-filename mention in README/AGENTS/docs.
+- Add the hermetic dual-read tests; run pytest, ruff check, ruff format --check.
+- Push and open the PR. Do not merge.

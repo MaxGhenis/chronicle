@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-import os
 from dataclasses import dataclass, replace
 from importlib.resources import files
 from io import BytesIO
@@ -32,6 +31,7 @@ from chronicle.core import (
     AggregateFact,
     build_label,
 )
+from chronicle.env import env_flag, env_value
 from chronicle.sources.cells import (
     SourceArtifactMetadata,
     SourceCell,
@@ -364,8 +364,8 @@ SOURCE_PACKAGE_ALIASES = {
         "usda_snap/fy2025_monthly_state_caseloads"
     ),
 }
-SOURCE_ARTIFACT_CACHE_ENV = "LEDGER_SOURCE_ARTIFACT_CACHE_DIR"
-SOURCE_ARTIFACT_FETCH_ENV = "LEDGER_SOURCE_ARTIFACT_FETCH"
+SOURCE_ARTIFACT_CACHE_ENV = "CHRONICLE_SOURCE_ARTIFACT_CACHE_DIR"
+SOURCE_ARTIFACT_FETCH_ENV = "CHRONICLE_SOURCE_ARTIFACT_FETCH"
 DEFAULT_SOURCE_ARTIFACT_CACHE_DIR = (
     Path.home() / ".cache" / "policyengine-chronicle" / "source-artifacts"
 )
@@ -2218,7 +2218,7 @@ def _read_source_artifact_content(
     if cache_path.exists():
         return cache_path.read_bytes()
 
-    if not _truthy_env(SOURCE_ARTIFACT_FETCH_ENV):
+    if not env_flag(SOURCE_ARTIFACT_FETCH_ENV):
         raise FileNotFoundError(
             f"Source artifact {spec['filename']} is not packaged and was not "
             f"found in {cache_path}. Set {SOURCE_ARTIFACT_FETCH_ENV}=1 to fetch "
@@ -2240,7 +2240,7 @@ def _read_source_artifact_content(
 
 def _source_artifact_cache_path(spec: dict[str, Any]) -> Path:
     cache_root = Path(
-        _env_value(
+        env_value(
             SOURCE_ARTIFACT_CACHE_ENV,
             default=DEFAULT_SOURCE_ARTIFACT_CACHE_DIR,
         )
@@ -2275,21 +2275,6 @@ def _validate_source_artifact_sha(
             f"Source artifact checksum mismatch for {filename}: "
             f"expected {expected_sha}, got {actual_sha}"
         )
-
-
-def _env_value(*names: str, default: str | Path) -> str | Path:
-    for name in names:
-        value = os.environ.get(name)
-        if value:
-            return value
-    return default
-
-
-def _truthy_env(*names: str) -> bool:
-    return any(
-        os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "on"}
-        for name in names
-    )
 
 
 def _single_archive_member(archive: ZipFile, *, suffixes: tuple[str, ...]) -> str:

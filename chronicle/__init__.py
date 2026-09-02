@@ -13,6 +13,7 @@ __all__ = [
     "consumer_contract",
     "core",
     "database",
+    "env",
     "facts",
     "harness",
     "jurisdictions",
