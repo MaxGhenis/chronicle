@@ -1365,7 +1365,8 @@ def _validated_recorded_r2(
     if missing:
         raise RecordedR2LocatorError(
             f"{where}: records no {', '.join(missing)}. A recorded block has to "
-            "locate its object, by key and bucket or by uri."
+            "locate its object: provider, bucket and key, or a uri that "
+            "supplies them."
         )
 
     segments = key.split("/")
