@@ -99,8 +99,12 @@ name. Publishers do not always honor that: on 2026-09-02 the IRS re-published
 `22in05ira.xlsx` and `22in06ira.xlsx` under their existing URLs
 (PolicyEngine/chronicle#225).
 
-`fetch-artifact` therefore compares the recorded key's `{sha256}/{filename}`
-tail with the bytes it just fetched, before it writes anything:
+`fetch-artifact` therefore compares the entry's recorded identity with the
+bytes it just fetched, before it writes anything. That identity is the recorded
+key's `{sha256}/{filename}` tail once the entry has been published, and the
+entry's own declared `sha256` before then — an entry that was registered
+without an upload, or whose upload failed, still identifies its bytes, and gets
+the same protection:
 
 - **Identical** — the recorded block is preserved exactly, whichever bucket is
   configured now. Re-fetching after the bucket rename copies bytes; it does not
@@ -152,6 +156,31 @@ rest of the `storage` block when it writes back.
 as history. A local file the recorded object does not hold is reported as
 `recorded_r2_identity_mismatch` and nothing is uploaded: registering a revision
 is a fetch-time decision, not a publish-time rewrite.
+
+### Which manifest
+
+Most packages keep one `manifest.yaml`. A publisher directory that feeds
+several source packages keeps one manifest each —
+`db/data/irs_soi/ira_contributions/` holds
+`manifest_traditional_source_package.yaml` beside
+`manifest_roth_source_package.yaml` — and the entry being revised lives in
+exactly one of them. `fetch-artifact --manifest <filename>` selects it;
+defaulting to `manifest.yaml` there would write a third manifest neither
+package reads, and the recorded block would never be compared at all. The name
+must be a filename inside `--out-dir`, not a path.
+
+### What a recorded block has to say
+
+A `storage.r2` block's `provider`, `bucket`, `key` and `uri` all describe one
+object, so every field that is present is cross-checked against every other:
+the key against the URI's path, the bucket against its authority, the provider
+against its scheme, and the resulting key against the content-addressed
+`{sha256}/{filename}` shape. A block whose fields disagree does not answer
+"which bytes does this entry claim R2 holds", so it is an error rather than
+something to preserve or publish under. Likewise a manifest that parses as
+anything other than a mapping is refused rather than treated as absent —
+reading it as absent would let the next fetch replace the file with a single
+entry.
 
 ## Relational Registry Contract
 
@@ -254,7 +283,7 @@ what a naive fallback would do:
 | `CHRONICLE_SOURCE_ARTIFACT_FETCH` | `LEDGER_SOURCE_ARTIFACT_FETCH` | Fetch a missing manifest artifact from its `source_url` during a build |
 | `CHRONICLE_PE_US_DATA_ROOT` | `LEDGER_PE_US_DATA_ROOT` | Local checkout root for PE US source inventory |
 | `CHRONICLE_PE_UK_DATA_ROOT` | `LEDGER_PE_UK_DATA_ROOT` | Local checkout root for PE UK source inventory |
-| `CHRONICLE_SCHEMA` | `POLICYENGINE_LEDGER_SCHEMA` | Postgres schema the Supabase client reads and writes |
+| `CHRONICLE_SCHEMA` | `POLICYENGINE_LEDGER_SCHEMA`, `LEDGER_SCHEMA` | Postgres schema the Supabase client reads and `load-supabase-mirror` writes; defaults to `ledger` |
 | `CHRONICLE_R2_RAW_BUCKET` | `LEDGER_R2_RAW_BUCKET` | Raw R2 archive bucket; defaults to `ledger-raw` |
 | `CHRONICLE_R2_DERIVED_BUCKET` | `LEDGER_R2_DERIVED_BUCKET` | Derived R2 archive bucket; defaults to `ledger-derived` |
 
@@ -271,6 +300,12 @@ The hosted schema *value* is a separate migration. `CHRONICLE_SCHEMA` renames
 the variable that overrides the schema; the schema still defaults to `ledger`,
 and the mirror table names are unchanged. Those move in a later slice
 coordinated with the CI writers.
+
+Every reader of the setting resolves it the same way, at call time. That
+includes the writer: `load-supabase-mirror` takes its `--schema` default from
+`CHRONICLE_SCHEMA`, so setting the variable to rehearse a cutover moves the
+mirror load with the client rather than leaving it pointed at `ledger`. An
+explicit `--schema` still wins.
 
 ## Bucket Cutover
 

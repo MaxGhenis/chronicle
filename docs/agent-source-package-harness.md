@@ -16,15 +16,18 @@ register raw source files with `uv run chronicle fetch-artifact` before authorin
 selectors. This writes the local artifact, captures checksum and retrieval
 metadata in `manifest.yaml`, and can upload the exact bytes to the private raw
 R2 bucket (`ledger-raw` today; overridable with `CHRONICLE_R2_RAW_BUCKET`) when
-Wrangler is authenticated. Agents can audit the local
+Wrangler is authenticated. A publisher directory that feeds several source
+packages keeps one manifest each, so pass `--manifest <filename>` to address
+the right one. Agents can audit the local
 artifact registry with `uv run chronicle inventory-artifacts --root db/data`.
 For already-downloaded manifest artifacts, agents should run
 `uv run chronicle publish-raw --root db/data` to upload checksum-verified bytes to
 R2 and write `storage.r2` metadata back into each manifest entry.
 
-Both commands treat a recorded `storage.r2` block as a claim about specific
-bytes, because raw keys are content-addressed. Re-fetching or publishing bytes
-the recorded object does not hold is refused; when a publisher has re-published
+Both commands treat a manifest entry as a claim about specific bytes: by its
+declared `sha256` from the moment it is registered, and by the content-addressed
+key of its recorded `storage.r2` block once it is published. Re-fetching or
+publishing bytes the entry does not identify is refused; when a publisher has re-published
 under the same URL and vintage, register the revision with
 `uv run chronicle fetch-artifact ... --record-revision`, which stores the new
 bytes under their own key and keeps the superseded object in

@@ -356,7 +356,9 @@ bunx wrangler login
 uv run chronicle bootstrap-r2
 
 # Fetch/register a source artifact, write db/data/.../manifest.yaml, and upload
-# the exact bytes to R2 when Wrangler is authenticated:
+# the exact bytes to R2 when Wrangler is authenticated. Pass --manifest when the
+# package directory keeps more than one manifest (ira_contributions keeps a
+# traditional and a Roth one):
 uv run chronicle fetch-artifact \
   --url https://www.irs.gov/pub/irs-soi/23in12ms.xls \
   --source-id irs_soi \
@@ -368,7 +370,9 @@ uv run chronicle fetch-artifact \
   --upload-r2
 
 # Re-fetching is safe: identical bytes keep the recorded storage.r2 block, and
-# bytes that disagree with it are refused. When a publisher has re-published
+# bytes that disagree with what the entry identifies -- its declared sha256, or
+# its recorded content-addressed key once published -- are refused. When a
+# publisher has re-published
 # under the same URL and vintage, register the revision explicitly — the new
 # bytes get their own content-addressed key and the superseded object is kept
 # in storage.previous_r2:
