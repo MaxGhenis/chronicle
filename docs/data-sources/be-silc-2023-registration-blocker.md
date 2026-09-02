@@ -2,8 +2,8 @@
 
 The Belgian SILC scientific-use files are a `restricted_microdata` root of
 Microcosm's Belgian build, so they belong in Chronicle's microdata registry
-under `docs/adr-chronicle-raw-microdata-identity.md`. They are **not registered
-yet**, and this document records why.
+under `docs/adr-chronicle-raw-microdata-identity.md`. They are **not
+registered yet**, and this document records why.
 
 ## Blocker
 
@@ -22,16 +22,16 @@ entry in `packages/microcosm-build/src/microcosm/build/be/source_stages.json`
 }
 ```
 
-There is no `sha256`, no `size_bytes`, and no per-file `filename` — the locator
-names four file *roles*, not four files. Every other pinned microdata artifact
-in Microcosm carries a reviewed checksum; this one does not.
+There is no `sha256`, no `size_bytes`, and no per-file `filename` — the
+locator names four file *roles*, not four files. Every other pinned microdata
+artifact in Microcosm carries a reviewed checksum; this one does not.
 
 `chronicle register-artifact` refuses the release rather than accepting a
 placeholder, and `scripts/register_microdata_releases.py` reports it as a
 blocker instead of emitting a manifest. No checksum is invented for a file
 Chronicle has never seen and may never hold.
 
-## What the registration will record once unblocked
+## What The Registration Will Record Once Unblocked
 
 Everything except the identity is already known and is held in the script's
 catalogue entry `statbel-be-silc-2023`:
@@ -47,11 +47,11 @@ catalogue entry `statbel-be-silc-2023`:
 | `source_page` | <https://statbel.fgov.be/en/themes/households/poverty-and-living-conditions> |
 | `access_route` | Statbel BE-SILC scientific-use files: D, R, H, P |
 
-The access class is `restricted`, so the registration is hash-only whatever the
-checksums turn out to be: no BE-SILC bytes enter any Chronicle store, and no
-`ledger-raw` key exists for them.
+The access class is `restricted`, so the registration is hash-only whatever
+the checksums turn out to be: no BE-SILC bytes enter any Chronicle store, and
+no `ledger-raw` key exists for them.
 
-## To unblock
+## To Unblock
 
 1. Microcosm publishes a reviewed SHA-256, size, and exact filename for each of
    the four scientific-use files, in `be/source_stages.json` (tracked on the

@@ -88,9 +88,10 @@ derived/nz/ird/ird-working-for-families-statistics-sept-2025/2024/{build_id}/chr
 
 Legacy US derived keys likewise remain `derived/{source_id}/...`.
 
-A registered microdata release uses the same content-addressed key as any other
-raw artifact, and it exists only when the release's `access` class is `public`.
-A Census public-use file is a US publisher, so it keeps the legacy shape:
+A registered microdata release uses the same content-addressed key as any
+other raw artifact, and it exists only when the release's `access` class is
+`public`. A Census public-use file is a US publisher, so it keeps the legacy
+shape:
 
 ```text
 raw/census_cps/census-cps-asec-2023/2023/{sha256}/asecpub23csv.zip

@@ -48,12 +48,12 @@ instead; see "Environment Variable Rename Window" in
 
 ## Hash-Only Registrations
 
-Not every raw artifact a build starts from may be redistributed. Every manifest
-file entry carries an `access` class from a closed set — `public`, `licensed`,
-or `restricted` — and a `licence` naming the publisher's terms as an identifier
-or URL. `public` is inferred when an entry omits `access`, and `fetch-artifact`
-now writes the class explicitly onto every entry it touches. Both fields are
-required on a `kind: microdata_release` manifest.
+Not every raw artifact a build starts from may be redistributed. Every
+manifest file entry carries an `access` class from a closed set — `public`,
+`licensed`, or `restricted` — and a `licence` naming the publisher's terms as
+an identifier or URL. `public` is inferred when an entry omits `access`, and
+`fetch-artifact` now writes the class explicitly onto every entry it touches.
+Both fields are required on a `kind: microdata_release` manifest.
 
 Only `public` bytes enter a Chronicle store. A `licensed` or `restricted`
 artifact is registered *hash-only*: the manifest records the checksum, size,
@@ -76,24 +76,25 @@ uv run chronicle register-artifact \
   --verified-at 2026-09-02
 ```
 
-Agents should never invent a checksum to satisfy the command: `--sha256` must be
-a lowercase 64-character digest taken from a reviewed pin, and a release whose
-checksum nobody has published is a blocker to record, not a value to guess. The
-command refuses `--access public`, refuses bytes sitting beside the manifest,
-and refuses to write into a `publisher_table` manifest.
+Agents should never invent a checksum to satisfy the command: `--sha256` must
+be a lowercase 64-character digest taken from a reviewed pin, and a release
+whose checksum nobody has published is a blocker to record, not a value to
+guess. The command refuses `--access public`, refuses bytes sitting beside the
+manifest, and refuses to write into a `publisher_table` manifest.
 
 The other commands enforce the same boundary from their side. `fetch-artifact`
 refuses a `licensed` or `restricted` access class before reading anything, and
-refuses to pull bytes over an entry already registered hash-only. `publish-raw`
-refuses such an entry without reading or uploading its bytes; pass
-`--skip-hash-only` to publish a tree that deliberately mixes both kinds.
-`inventory-artifacts` treats a hash-only entry with no local file as valid — the
-absent bytes are the correct state — and reports an error if the bytes appear.
+refuses to pull bytes over an entry already registered hash-only.
+`publish-raw` refuses such an entry without reading or uploading its bytes;
+pass `--skip-hash-only` to publish a tree that deliberately mixes both kinds.
+`inventory-artifacts` treats a hash-only entry with no local file as valid —
+the absent bytes are the correct state — and reports an error if the bytes
+appear.
 
-A `public` microdata release is different: its bytes are redistributable, so it
-is acquired with `fetch-artifact` like any other public artifact, and it does
-get an R2 key. Pass `--kind microdata_release` so the manifest still declares
-what it is:
+A `public` microdata release is different: its bytes are redistributable, so
+it is acquired with `fetch-artifact` like any other public artifact, and it
+does get an R2 key. Pass `--kind microdata_release` so the manifest still
+declares what it is:
 
 ```bash
 uv run chronicle fetch-artifact \
