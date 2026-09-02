@@ -1,0 +1,29 @@
+source_id: hmrc
+package_id: hmrc-spi-public-use-tape-2022-23
+kind: microdata_release
+dataset: hmrc_hmrc-spi-public-use-tape-2022-23
+publisher: HM Revenue and Customs
+table: Survey of Personal Incomes Public Use Tape 2022-23
+files:
+  2022:
+  - filename: put2223uk.tab
+    access: restricted
+    licence: UK Data Service End User Licence (study SN 9422)
+    vintage: 2022-23
+    sha256: 5ef829461060c91a2a47be59ad541d9b519fc3976d66ca80d4920f711bb96f66
+    size_bytes: 141323762
+    access_route: UK Data Service study SN 9422. Microcosm reaches the bytes through
+      PolicyEngine's licensed copy in the private policyengine/policyengine-uk-data-private
+      Hugging Face repository (spi_2022_23.zip); no Chronicle credential grants access
+      to them.
+    doi: 10.5255/UKDA-SN-9422-1
+    study: UK Data Service SN 9422
+    verified_at: '2026-09-02'
+    hash_source: PolicyEngine/microcosm packages/microcosm-build/src/microcosm/build/uk/hmrc_income_source_stages.json
+      (hmrc_spi_income)
+    notes: 'Microcosm classes this artifact kind: private_microdata with access: private_local_input.
+      Chronicle registers it restricted because the bytes are held only in a private
+      mirror; if the UKDS terms for SN 9422 are confirmed as End User Licence it can
+      be reclassified licensed, which changes nothing about storage — both classes
+      are hash-only. SHA-256 transcribed verbatim from the consumer''s reviewed pin;
+      Chronicle holds no bytes for this release and did not recompute the checksum.'

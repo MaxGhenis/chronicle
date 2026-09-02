@@ -1,0 +1,288 @@
+source_id: dwp
+package_id: dwp-frs-2023-24
+kind: microdata_release
+dataset: dwp_dwp-frs-2023-24
+publisher: Department for Work and Pensions
+table: Family Resources Survey 2023-24
+files:
+  2023:
+  - filename: accounts.tab
+    access: licensed
+    licence: UK Data Service End User Licence
+    vintage: '2023_24'
+    sha256: c5e31932bfd06087f835d2c83c0984c85a93409bf5ef85b699cb0958abcba1ea
+    size_bytes: 1807921
+    access_route: UK Data Service study SN 9367 under its End User Licence. Bytes
+      stay in the licensed environment the consumer already operates; no Chronicle
+      credential grants access to them.
+    doi: 10.5255/UKDA-SN-9367-2
+    study: UK Data Service SN 9367
+    verified_at: '2026-09-02'
+    hash_source: PolicyEngine/microcosm packages/microcosm-build/src/microcosm/build/uk/source_stages.json
+      (frs_spine)
+    notes: Microcosm's frs_spine stage cites 'UK Data Service SN 9367, DOI 10.5255/UKDA-SN-9367-2';
+      its frs_employment, frs_council_tax, frs_education, and frs_legacy_proxies stages
+      cite 'SN 9252' for the same 2023_24 tabs. The tabs are the same bytes across
+      all five stages (identical SHA-256), so the registration carries the study reference
+      that also carries a DOI. SHA-256 transcribed verbatim from the consumer's reviewed
+      pin; Chronicle holds no bytes for this release and did not recompute the checksum.
+  - filename: adult.tab
+    access: licensed
+    licence: UK Data Service End User Licence
+    vintage: '2023_24'
+    sha256: e09f9647d03585c81a528636028b2ed495f8f1fbcf64c5e7b4fe521b67367e06
+    size_bytes: 35323384
+    access_route: UK Data Service study SN 9367 under its End User Licence. Bytes
+      stay in the licensed environment the consumer already operates; no Chronicle
+      credential grants access to them.
+    doi: 10.5255/UKDA-SN-9367-2
+    study: UK Data Service SN 9367
+    verified_at: '2026-09-02'
+    hash_source: PolicyEngine/microcosm packages/microcosm-build/src/microcosm/build/uk/source_stages.json
+      (frs_spine)
+    notes: Microcosm's frs_spine stage cites 'UK Data Service SN 9367, DOI 10.5255/UKDA-SN-9367-2';
+      its frs_employment, frs_council_tax, frs_education, and frs_legacy_proxies stages
+      cite 'SN 9252' for the same 2023_24 tabs. The tabs are the same bytes across
+      all five stages (identical SHA-256), so the registration carries the study reference
+      that also carries a DOI. SHA-256 transcribed verbatim from the consumer's reviewed
+      pin; Chronicle holds no bytes for this release and did not recompute the checksum.
+  - filename: benefits.tab
+    access: licensed
+    licence: UK Data Service End User Licence
+    vintage: '2023_24'
+    sha256: ff30d054cc659bcf23b44c492d98cfd701c0bfdb63e8e9aa9769b490ba9d636b
+    size_bytes: 4460292
+    access_route: UK Data Service study SN 9367 under its End User Licence. Bytes
+      stay in the licensed environment the consumer already operates; no Chronicle
+      credential grants access to them.
+    doi: 10.5255/UKDA-SN-9367-2
+    study: UK Data Service SN 9367
+    verified_at: '2026-09-02'
+    hash_source: PolicyEngine/microcosm packages/microcosm-build/src/microcosm/build/uk/source_stages.json
+      (frs_spine)
+    notes: Microcosm's frs_spine stage cites 'UK Data Service SN 9367, DOI 10.5255/UKDA-SN-9367-2';
+      its frs_employment, frs_council_tax, frs_education, and frs_legacy_proxies stages
+      cite 'SN 9252' for the same 2023_24 tabs. The tabs are the same bytes across
+      all five stages (identical SHA-256), so the registration carries the study reference
+      that also carries a DOI. SHA-256 transcribed verbatim from the consumer's reviewed
+      pin; Chronicle holds no bytes for this release and did not recompute the checksum.
+  - filename: benunit.tab
+    access: licensed
+    licence: UK Data Service End User Licence
+    vintage: '2023_24'
+    sha256: 88946815eace8561516d5cbb442c27e319c1e90abc381fb2338f0126e3b9e05b
+    size_bytes: 21213867
+    access_route: UK Data Service study SN 9367 under its End User Licence. Bytes
+      stay in the licensed environment the consumer already operates; no Chronicle
+      credential grants access to them.
+    doi: 10.5255/UKDA-SN-9367-2
+    study: UK Data Service SN 9367
+    verified_at: '2026-09-02'
+    hash_source: PolicyEngine/microcosm packages/microcosm-build/src/microcosm/build/uk/source_stages.json
+      (frs_spine)
+    notes: Microcosm's frs_spine stage cites 'UK Data Service SN 9367, DOI 10.5255/UKDA-SN-9367-2';
+      its frs_employment, frs_council_tax, frs_education, and frs_legacy_proxies stages
+      cite 'SN 9252' for the same 2023_24 tabs. The tabs are the same bytes across
+      all five stages (identical SHA-256), so the registration carries the study reference
+      that also carries a DOI. SHA-256 transcribed verbatim from the consumer's reviewed
+      pin; Chronicle holds no bytes for this release and did not recompute the checksum.
+  - filename: child.tab
+    access: licensed
+    licence: UK Data Service End User Licence
+    vintage: '2023_24'
+    sha256: b5dc84fe8b002ee925e61fae23fed27b11537af9fb174f1d07d9cc1748b9702e
+    size_bytes: 2913156
+    access_route: UK Data Service study SN 9367 under its End User Licence. Bytes
+      stay in the licensed environment the consumer already operates; no Chronicle
+      credential grants access to them.
+    doi: 10.5255/UKDA-SN-9367-2
+    study: UK Data Service SN 9367
+    verified_at: '2026-09-02'
+    hash_source: PolicyEngine/microcosm packages/microcosm-build/src/microcosm/build/uk/source_stages.json
+      (frs_spine)
+    notes: Microcosm's frs_spine stage cites 'UK Data Service SN 9367, DOI 10.5255/UKDA-SN-9367-2';
+      its frs_employment, frs_council_tax, frs_education, and frs_legacy_proxies stages
+      cite 'SN 9252' for the same 2023_24 tabs. The tabs are the same bytes across
+      all five stages (identical SHA-256), so the registration carries the study reference
+      that also carries a DOI. SHA-256 transcribed verbatim from the consumer's reviewed
+      pin; Chronicle holds no bytes for this release and did not recompute the checksum.
+  - filename: chldcare.tab
+    access: licensed
+    licence: UK Data Service End User Licence
+    vintage: '2023_24'
+    sha256: 566e0ebca1d5e2f3e424e556c91f4cb583d17dadfdfa59feb3841eda7e5976a3
+    size_bytes: 273837
+    access_route: UK Data Service study SN 9367 under its End User Licence. Bytes
+      stay in the licensed environment the consumer already operates; no Chronicle
+      credential grants access to them.
+    doi: 10.5255/UKDA-SN-9367-2
+    study: UK Data Service SN 9367
+    verified_at: '2026-09-02'
+    hash_source: PolicyEngine/microcosm packages/microcosm-build/src/microcosm/build/uk/source_stages.json
+      (frs_spine)
+    notes: Microcosm's frs_spine stage cites 'UK Data Service SN 9367, DOI 10.5255/UKDA-SN-9367-2';
+      its frs_employment, frs_council_tax, frs_education, and frs_legacy_proxies stages
+      cite 'SN 9252' for the same 2023_24 tabs. The tabs are the same bytes across
+      all five stages (identical SHA-256), so the registration carries the study reference
+      that also carries a DOI. SHA-256 transcribed verbatim from the consumer's reviewed
+      pin; Chronicle holds no bytes for this release and did not recompute the checksum.
+  - filename: extchild.tab
+    access: licensed
+    licence: UK Data Service End User Licence
+    vintage: '2023_24'
+    sha256: 8d358d7ee66ee4a7ceab87b4f24fbbf21ac86dc038dc7831e51fb271f96a57ec
+    size_bytes: 18677
+    access_route: UK Data Service study SN 9367 under its End User Licence. Bytes
+      stay in the licensed environment the consumer already operates; no Chronicle
+      credential grants access to them.
+    doi: 10.5255/UKDA-SN-9367-2
+    study: UK Data Service SN 9367
+    verified_at: '2026-09-02'
+    hash_source: PolicyEngine/microcosm packages/microcosm-build/src/microcosm/build/uk/source_stages.json
+      (frs_spine)
+    notes: Microcosm's frs_spine stage cites 'UK Data Service SN 9367, DOI 10.5255/UKDA-SN-9367-2';
+      its frs_employment, frs_council_tax, frs_education, and frs_legacy_proxies stages
+      cite 'SN 9252' for the same 2023_24 tabs. The tabs are the same bytes across
+      all five stages (identical SHA-256), so the registration carries the study reference
+      that also carries a DOI. SHA-256 transcribed verbatim from the consumer's reviewed
+      pin; Chronicle holds no bytes for this release and did not recompute the checksum.
+  - filename: househol.tab
+    access: licensed
+    licence: UK Data Service End User Licence
+    vintage: '2023_24'
+    sha256: 5fd26b8b675f33b3b30c9ac789a18da17de734790f77e00ded287d1c3a187b30
+    size_bytes: 12387117
+    access_route: UK Data Service study SN 9367 under its End User Licence. Bytes
+      stay in the licensed environment the consumer already operates; no Chronicle
+      credential grants access to them.
+    doi: 10.5255/UKDA-SN-9367-2
+    study: UK Data Service SN 9367
+    verified_at: '2026-09-02'
+    hash_source: PolicyEngine/microcosm packages/microcosm-build/src/microcosm/build/uk/source_stages.json
+      (frs_spine)
+    notes: Microcosm's frs_spine stage cites 'UK Data Service SN 9367, DOI 10.5255/UKDA-SN-9367-2';
+      its frs_employment, frs_council_tax, frs_education, and frs_legacy_proxies stages
+      cite 'SN 9252' for the same 2023_24 tabs. The tabs are the same bytes across
+      all five stages (identical SHA-256), so the registration carries the study reference
+      that also carries a DOI. SHA-256 transcribed verbatim from the consumer's reviewed
+      pin; Chronicle holds no bytes for this release and did not recompute the checksum.
+  - filename: job.tab
+    access: licensed
+    licence: UK Data Service End User Licence
+    vintage: '2023_24'
+    sha256: 88b77ffe06865f029f713bb1d55ff12bdea8a1234de5bc293e72458fe64f3a74
+    size_bytes: 10934873
+    access_route: UK Data Service study SN 9367 under its End User Licence. Bytes
+      stay in the licensed environment the consumer already operates; no Chronicle
+      credential grants access to them.
+    doi: 10.5255/UKDA-SN-9367-2
+    study: UK Data Service SN 9367
+    verified_at: '2026-09-02'
+    hash_source: PolicyEngine/microcosm packages/microcosm-build/src/microcosm/build/uk/source_stages.json
+      (frs_spine)
+    notes: Microcosm's frs_spine stage cites 'UK Data Service SN 9367, DOI 10.5255/UKDA-SN-9367-2';
+      its frs_employment, frs_council_tax, frs_education, and frs_legacy_proxies stages
+      cite 'SN 9252' for the same 2023_24 tabs. The tabs are the same bytes across
+      all five stages (identical SHA-256), so the registration carries the study reference
+      that also carries a DOI. SHA-256 transcribed verbatim from the consumer's reviewed
+      pin; Chronicle holds no bytes for this release and did not recompute the checksum.
+  - filename: maint.tab
+    access: licensed
+    licence: UK Data Service End User Licence
+    vintage: '2023_24'
+    sha256: f2dc924eb5a51b0c357791693d15b431327dc39c6421011efb313d88bf839695
+    size_bytes: 15440
+    access_route: UK Data Service study SN 9367 under its End User Licence. Bytes
+      stay in the licensed environment the consumer already operates; no Chronicle
+      credential grants access to them.
+    doi: 10.5255/UKDA-SN-9367-2
+    study: UK Data Service SN 9367
+    verified_at: '2026-09-02'
+    hash_source: PolicyEngine/microcosm packages/microcosm-build/src/microcosm/build/uk/source_stages.json
+      (frs_spine)
+    notes: Microcosm's frs_spine stage cites 'UK Data Service SN 9367, DOI 10.5255/UKDA-SN-9367-2';
+      its frs_employment, frs_council_tax, frs_education, and frs_legacy_proxies stages
+      cite 'SN 9252' for the same 2023_24 tabs. The tabs are the same bytes across
+      all five stages (identical SHA-256), so the registration carries the study reference
+      that also carries a DOI. SHA-256 transcribed verbatim from the consumer's reviewed
+      pin; Chronicle holds no bytes for this release and did not recompute the checksum.
+  - filename: mortgage.tab
+    access: licensed
+    licence: UK Data Service End User Licence
+    vintage: '2023_24'
+    sha256: ce36b477d67837c469608a0d68f7ef269ac04758974235f1157d2f6b92cdbfdc
+    size_bytes: 631783
+    access_route: UK Data Service study SN 9367 under its End User Licence. Bytes
+      stay in the licensed environment the consumer already operates; no Chronicle
+      credential grants access to them.
+    doi: 10.5255/UKDA-SN-9367-2
+    study: UK Data Service SN 9367
+    verified_at: '2026-09-02'
+    hash_source: PolicyEngine/microcosm packages/microcosm-build/src/microcosm/build/uk/source_stages.json
+      (frs_spine)
+    notes: Microcosm's frs_spine stage cites 'UK Data Service SN 9367, DOI 10.5255/UKDA-SN-9367-2';
+      its frs_employment, frs_council_tax, frs_education, and frs_legacy_proxies stages
+      cite 'SN 9252' for the same 2023_24 tabs. The tabs are the same bytes across
+      all five stages (identical SHA-256), so the registration carries the study reference
+      that also carries a DOI. SHA-256 transcribed verbatim from the consumer's reviewed
+      pin; Chronicle holds no bytes for this release and did not recompute the checksum.
+  - filename: oddjob.tab
+    access: licensed
+    licence: UK Data Service End User Licence
+    vintage: '2023_24'
+    sha256: b4ba3dd3151f73a01422983c60514a3e38458ddfa4fb33ae4ed0326873406305
+    size_bytes: 5165
+    access_route: UK Data Service study SN 9367 under its End User Licence. Bytes
+      stay in the licensed environment the consumer already operates; no Chronicle
+      credential grants access to them.
+    doi: 10.5255/UKDA-SN-9367-2
+    study: UK Data Service SN 9367
+    verified_at: '2026-09-02'
+    hash_source: PolicyEngine/microcosm packages/microcosm-build/src/microcosm/build/uk/source_stages.json
+      (frs_spine)
+    notes: Microcosm's frs_spine stage cites 'UK Data Service SN 9367, DOI 10.5255/UKDA-SN-9367-2';
+      its frs_employment, frs_council_tax, frs_education, and frs_legacy_proxies stages
+      cite 'SN 9252' for the same 2023_24 tabs. The tabs are the same bytes across
+      all five stages (identical SHA-256), so the registration carries the study reference
+      that also carries a DOI. SHA-256 transcribed verbatim from the consumer's reviewed
+      pin; Chronicle holds no bytes for this release and did not recompute the checksum.
+  - filename: penprov.tab
+    access: licensed
+    licence: UK Data Service End User Licence
+    vintage: '2023_24'
+    sha256: ee001461c40306ec24b38b2881e1774121114266a2ee449d606cd0a811c37731
+    size_bytes: 522313
+    access_route: UK Data Service study SN 9367 under its End User Licence. Bytes
+      stay in the licensed environment the consumer already operates; no Chronicle
+      credential grants access to them.
+    doi: 10.5255/UKDA-SN-9367-2
+    study: UK Data Service SN 9367
+    verified_at: '2026-09-02'
+    hash_source: PolicyEngine/microcosm packages/microcosm-build/src/microcosm/build/uk/source_stages.json
+      (frs_spine)
+    notes: Microcosm's frs_spine stage cites 'UK Data Service SN 9367, DOI 10.5255/UKDA-SN-9367-2';
+      its frs_employment, frs_council_tax, frs_education, and frs_legacy_proxies stages
+      cite 'SN 9252' for the same 2023_24 tabs. The tabs are the same bytes across
+      all five stages (identical SHA-256), so the registration carries the study reference
+      that also carries a DOI. SHA-256 transcribed verbatim from the consumer's reviewed
+      pin; Chronicle holds no bytes for this release and did not recompute the checksum.
+  - filename: pension.tab
+    access: licensed
+    licence: UK Data Service End User Licence
+    vintage: '2023_24'
+    sha256: 150d6fad1fce81254fb7aea1526fbb00b63d4027d6e2ac4c26bb90aea3127eb7
+    size_bytes: 1225838
+    access_route: UK Data Service study SN 9367 under its End User Licence. Bytes
+      stay in the licensed environment the consumer already operates; no Chronicle
+      credential grants access to them.
+    doi: 10.5255/UKDA-SN-9367-2
+    study: UK Data Service SN 9367
+    verified_at: '2026-09-02'
+    hash_source: PolicyEngine/microcosm packages/microcosm-build/src/microcosm/build/uk/source_stages.json
+      (frs_spine)
+    notes: Microcosm's frs_spine stage cites 'UK Data Service SN 9367, DOI 10.5255/UKDA-SN-9367-2';
+      its frs_employment, frs_council_tax, frs_education, and frs_legacy_proxies stages
+      cite 'SN 9252' for the same 2023_24 tabs. The tabs are the same bytes across
+      all five stages (identical SHA-256), so the registration carries the study reference
+      that also carries a DOI. SHA-256 transcribed verbatim from the consumer's reviewed
+      pin; Chronicle holds no bytes for this release and did not recompute the checksum.
