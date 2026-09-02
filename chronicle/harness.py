@@ -923,8 +923,9 @@ def main(argv: list[str] | None = None) -> int:
             "Register a publisher revision: the fetched bytes get their own "
             "content-addressed key under the configured bucket and the "
             "superseded object moves to storage.previous_r2. Without this "
-            "flag, bytes that disagree with the recorded R2 object are "
-            "refused."
+            "flag, bytes that disagree with what the entry identifies -- its "
+            "declared sha256, or its recorded content-addressed key once "
+            "published -- are refused."
         ),
     )
     artifact_parser.add_argument(
