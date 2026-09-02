@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import sqlite3
 
 import pytest
 import yaml
@@ -587,3 +588,171 @@ def test_top_level_cli_dispatches_publish_derived(tmp_path, capsys, monkeypatch)
 
     assert exc.value.code == 0
     assert payload["valid"]
+
+
+def _sqlite_build(path, build_id):
+    """Write a minimal build database carrying one ledger_builds row."""
+    with sqlite3.connect(path) as connection:
+        connection.execute("CREATE TABLE ledger_builds (build_id TEXT PRIMARY KEY)")
+        connection.execute("INSERT INTO ledger_builds VALUES (?)", (build_id,))
+
+
+@pytest.mark.parametrize("db_name", ["chronicle.db", "ledger.db"])
+def test_infer_build_id_reads_new_and_legacy_database_names(tmp_path, db_name):
+    suite = tmp_path / "suite"
+    suite.mkdir()
+    _sqlite_build(suite / db_name, "ledger.build.v1:from-db")
+
+    assert infer_build_id(suite) == "ledger.build.v1:from-db"
+
+
+def test_infer_build_id_prefers_the_chronicle_database(tmp_path):
+    suite = tmp_path / "suite"
+    suite.mkdir()
+    _sqlite_build(suite / "chronicle.db", "ledger.build.v1:chronicle")
+    _sqlite_build(suite / "ledger.db", "ledger.build.v1:legacy")
+
+    assert infer_build_id(suite) == "ledger.build.v1:chronicle"
+
+
+@pytest.mark.parametrize("db_name", ["chronicle.db", "ledger.db"])
+def test_publish_derived_classifies_both_database_names(tmp_path, db_name):
+    suite = tmp_path / "suite"
+    reports = suite / "reports"
+    reports.mkdir(parents=True)
+    build_id = "ledger.build.v1:kind"
+    (reports / "database.json").write_text(json.dumps({"build_id": build_id}))
+    (suite / db_name).write_bytes(b"db")
+    wrangler = tmp_path / "wrangler"
+    wrangler.write_text("#!/bin/sh\necho ok\n")
+    wrangler.chmod(0o755)
+
+    report = publish_derived_artifacts(
+        suite,
+        source_id="irs_soi",
+        package_id="soi-table-1-1",
+        year=2023,
+        wrangler_command=str(wrangler),
+    )
+    rows = {row["artifact_name"]: row for row in build_artifact_rows(report)}
+
+    assert rows[db_name]["artifact_kind"] == "sqlite_database"
+
+
+def test_publish_derived_uses_the_configured_bucket(tmp_path, monkeypatch):
+    monkeypatch.setenv("CHRONICLE_R2_DERIVED_BUCKET", "chronicle-derived")
+    suite = tmp_path / "suite"
+    reports = suite / "reports"
+    reports.mkdir(parents=True)
+    (reports / "database.json").write_text(
+        json.dumps({"build_id": "ledger.build.v1:bucket"})
+    )
+    (suite / "facts.jsonl").write_text("{}\n")
+    log = tmp_path / "wrangler.log"
+    wrangler = tmp_path / "wrangler"
+    wrangler.write_text(f"#!/bin/sh\nprintf '%s\\n' \"$*\" >> {log}\necho ok\n")
+    wrangler.chmod(0o755)
+
+    report = publish_derived_artifacts(
+        suite,
+        source_id="irs_soi",
+        package_id="soi-table-1-1",
+        year=2023,
+        wrangler_command=str(wrangler),
+    )
+
+    assert report.valid
+    assert report.entries[0].r2_location.bucket == "chronicle-derived"
+    assert "chronicle-derived/derived/irs_soi/" in log.read_text()
+
+
+def test_publish_raw_refuses_to_restate_a_recorded_bucket(tmp_path, monkeypatch):
+    """A recorded storage.r2 bucket is preserved history, not a publish target.
+
+    Archived witness records pin raw R2 URLs by hash, so backfilling the same
+    bytes into a renamed bucket must not rewrite the manifest.
+    """
+    monkeypatch.setenv("CHRONICLE_R2_RAW_BUCKET", "chronicle-raw")
+    output_dir = tmp_path / "db" / "data" / "irs_soi" / "soi-table-1-1"
+    source = tmp_path / "soi.xlsx"
+    source.write_bytes(b"official SOI workbook")
+    fetch_source_artifact(
+        str(source),
+        source_id="irs_soi",
+        package_id="soi-table-1-1",
+        year=2023,
+        output_dir=output_dir,
+    )
+    manifest_path = output_dir / "manifest.yaml"
+    manifest = yaml.safe_load(manifest_path.read_text())
+    artifact = manifest["files"][2023]
+    recorded_key = (
+        f"raw/irs_soi/soi-table-1-1/2023/{artifact['sha256']}/{artifact['filename']}"
+    )
+    artifact["storage"] = {
+        "r2": {
+            "provider": "r2",
+            "bucket": "ledger-raw",
+            "key": recorded_key,
+            "uri": f"r2://ledger-raw/{recorded_key}",
+        }
+    }
+    manifest_path.write_text(yaml.safe_dump(manifest, sort_keys=False))
+    log = tmp_path / "wrangler.log"
+    wrangler = tmp_path / "wrangler"
+    wrangler.write_text(f"#!/bin/sh\nprintf '%s\\n' \"$*\" >> {log}\necho ok\n")
+    wrangler.chmod(0o755)
+
+    report = publish_source_artifacts(output_dir, wrangler_command=str(wrangler))
+    unchanged = yaml.safe_load(manifest_path.read_text())
+
+    assert not report.valid
+    assert (
+        report.entries[0]
+        .errors[0]
+        .startswith("recorded_r2_bucket_is_preserved_history:")
+    )
+    assert not log.exists()
+    assert unchanged["files"][2023]["storage"]["r2"]["bucket"] == "ledger-raw"
+
+
+def test_fetch_artifact_keeps_an_already_recorded_bucket(tmp_path, monkeypatch):
+    output_dir = tmp_path / "db" / "data" / "irs_soi" / "soi-table-1-1"
+    source = tmp_path / "soi.xlsx"
+    source.write_bytes(b"official SOI workbook")
+    log = tmp_path / "wrangler.log"
+    wrangler = tmp_path / "wrangler"
+    wrangler.write_text(f"#!/bin/sh\nprintf '%s\\n' \"$*\" >> {log}\necho ok\n")
+    wrangler.chmod(0o755)
+    fetch_source_artifact(
+        str(source),
+        source_id="irs_soi",
+        package_id="soi-table-1-1",
+        year=2023,
+        output_dir=output_dir,
+        upload_r2=True,
+        wrangler_command=str(wrangler),
+    )
+    manifest_path = output_dir / "manifest.yaml"
+    first = yaml.safe_load(manifest_path.read_text())
+    assert first["files"][2023]["storage"]["r2"]["bucket"] == "ledger-raw"
+
+    monkeypatch.setenv("CHRONICLE_R2_RAW_BUCKET", "chronicle-raw")
+    report = fetch_source_artifact(
+        str(source),
+        source_id="irs_soi",
+        package_id="soi-table-1-1",
+        year=2023,
+        output_dir=output_dir,
+        upload_r2=True,
+        wrangler_command=str(wrangler),
+    )
+    second = yaml.safe_load(manifest_path.read_text())
+
+    # The backfill copy really is uploaded to the new bucket, but the manifest
+    # keeps recording where the bytes were first published.
+    assert report.r2_location.bucket == "chronicle-raw"
+    assert "chronicle-raw" in log.read_text()
+    assert (
+        second["files"][2023]["storage"]["r2"] == first["files"][2023]["storage"]["r2"]
+    )
