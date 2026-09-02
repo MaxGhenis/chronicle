@@ -86,6 +86,39 @@ entries that carry a `storage.r2` block are content-addressed and agree with
 their declared `sha256` and `filename`, so the identity check never fires on
 tracked data.
 
+## Review fixes (gate round 2)
+
+The second Fable+Sol gate requested changes again. Seven findings, each fixed
+with a regression test on this branch. Plan, in dependency order:
+
+1. **[high] `CHRONICLE_SCHEMA` does not reach the Supabase mirror writer.**
+   `chronicle/harness.py` and `chronicle/mirror.py` default the schema to the
+   literal `"ledger"`; only `db.supabase_client` reads the renamed variable.
+   Resolve through the shared helper whenever no explicit `--schema` is given.
+2. **[high] The derived-fact boundary check is not rename-safe.**
+   `chronicle/consumer_contract.py` matches the `.ledger_derived` suffix only.
+3. **[high] `fetch-artifact` cannot address a package's non-default manifest.**
+   Seven tracked packages keep a `manifest_*_source_package.yaml`; three
+   directories keep two. A fetch into one of them writes a third manifest and
+   never sees the recorded block.
+4. **[high] Revision protection vanishes when the entry has no `storage.r2`.**
+5. **[medium] Recorded-R2 locator fields must be cross-checked**, not read as
+   key-or-URI, before a block is preserved or published.
+6. **[medium] `_read_manifest` must reject a malformed document**, not treat a
+   non-mapping YAML payload as an absent manifest.
+7. **[low] Schema resolution must be lazy** so no legacy variable is read at
+   collection, before the autouse isolation fixture runs.
+
+## State (round 2)
+
+- Read both gate rounds on PolicyEngine/chronicle#226 and the code each finding
+  names.
+- Scanned all 154 tracked manifest files (187 `files` entries, every one
+  carrying `storage.r2`): every recorded block supplies provider, bucket, key
+  and uri; every key is content-addressed; every declared `sha256`/`filename`
+  agrees with its key tail; no `uri` contradicts its `key`. Strict locator
+  validation therefore refuses nothing that is tracked today.
+
 ## Verification
 
 - `uv run pytest -q`: green.
