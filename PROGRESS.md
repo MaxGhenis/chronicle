@@ -55,9 +55,11 @@ The Fable+Sol gate requested changes; both findings are applied on this branch.
 - **[high] `fetch-artifact` could attach a recorded R2 URI to new bytes.** The
   preserve rule keyed on the bucket, so a repeated fetch that did not re-upload
   into the same bucket kept the recorded `storage.r2` block while rewriting the
-  entry's `sha256`/`size_bytes`. Reproduced against this branch's parent: the
-  entry ends up declaring `109dcf49…` with a key addressed by `c63744a4…`, both
-  when the fetch only registers the bytes and when the bucket default has moved.
+  entry's `sha256`/`size_bytes`. Reproduced against this branch's parent by
+  serving two different bodies from one URL: the entry ends up declaring the
+  fetched bytes' `sha256` under a key addressed by the superseded bytes' one,
+  both when the fetch only registers the bytes and when the bucket default has
+  moved.
   The rule now keys on identity — the recorded key's `{sha256}/{filename}` tail
   against the fetched bytes. Identical preserves the block exactly; different
   raises `SourceArtifactRevisionError` before the cached artifact or its
