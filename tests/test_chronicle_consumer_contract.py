@@ -727,6 +727,29 @@ def test_export_consumer_facts_cli_rejects_contract_invalid_facts(tmp_path, caps
             },
             "irs_soi.ty2024.table.us.taxable_interest_amount.ledger_derived",
         ),
+        # The guard used to match two hardcoded URI prefixes, so a URI naming
+        # any derived bucket other than `ledger-derived` did not match. Once the
+        # buckets are renamed (PolicyEngine/chronicle#143, mechanism 3) that is
+        # every derived URI, so the guard has to match on shape.
+        (
+            {
+                "source_name": "irs_soi",
+                "source_file": "publisher.xlsx",
+                "raw_r2_bucket": None,
+                "raw_r2_key": None,
+                "raw_r2_uri": "r2://chronicle-derived/derived/source/fact.json",
+            },
+            "publisher.raw.fact",
+        ),
+        (
+            {
+                "source_name": "irs_soi",
+                "source_file": "chronicle-derived:taxable_interest.json",
+                "raw_r2_bucket": "ledger-raw",
+                "raw_r2_uri": "r2://ledger-raw/raw/source/publisher.xlsx",
+            },
+            "publisher.raw.fact",
+        ),
     ],
 )
 def test_consumer_contract_rejects_downstream_derived_target_facts(
