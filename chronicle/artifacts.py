@@ -76,8 +76,10 @@ def default_r2_derived_bucket() -> str:
 class SourceArtifactManifestError(RuntimeError):
     """A manifest refuses the write a fetch is about to make.
 
-    Every subclass is raised before anything is downloaded, cached, uploaded or
-    rewritten, so a refusal leaves the package exactly as it was.
+    The checks that raise these run before the publisher is read, so an
+    ordinary refusal costs nothing and leaves the package exactly as it was.
+    They are repeated immediately before the manifest is rewritten, so no
+    caller can reach a false-provenance write by another route.
     """
 
 
