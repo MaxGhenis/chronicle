@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
+from chronicle.env import ChronicleEnvDeprecationWarning
 from chronicle.harness import main as harness_main
 from chronicle.mirror import (
     LEDGER_MIRROR_TABLES,
@@ -187,6 +190,127 @@ def test_load_supabase_mirror_cli_dry_run(tmp_path, capsys):
     assert payload["valid"]
     assert payload["dry_run"]
     assert payload["table_count"] == len(LEDGER_MIRROR_TABLES)
+
+
+# ---------------------------------------------------------------------------
+# Schema configuration
+#
+# The mirror loader is the primary writer into the hosted schema, so it is the
+# call site CHRONICLE_SCHEMA has to reach (PolicyEngine/chronicle#143,
+# mechanism 3). It defaulted to the literal "ledger" while only the read-side
+# client honored the renamed variable, which would have sent a rehearsal load
+# into production the moment an operator set it.
+# ---------------------------------------------------------------------------
+
+
+def _empty_mirror(tmp_path):
+    mirror_dir = tmp_path / "mirror"
+    mirror_dir.mkdir()
+    for table in LEDGER_MIRROR_TABLES:
+        (mirror_dir / f"{table}.jsonl").write_text("")
+    return mirror_dir
+
+
+def _one_build_artifact(tmp_path):
+    path = tmp_path / "build_artifacts.jsonl"
+    path.write_text(
+        json.dumps(
+            {
+                "build_artifact_key": "ledger.build_artifact.v1:test",
+                "build_id": "ledger.build.v1:test",
+                "artifact_kind": "json",
+                "artifact_name": "reports/build_summary.json",
+                "sha256": "abc",
+                "size_bytes": 3,
+                "r2_bucket": "ledger-derived",
+                "r2_key": "derived/test",
+                "r2_uri": "r2://ledger-derived/derived/test",
+            },
+            sort_keys=True,
+        )
+        + "\n"
+    )
+    return path
+
+
+def _load_into_fake_client(tmp_path, **kwargs):
+    client = _FakeSupabaseClient()
+    report = load_supabase_mirror(
+        _empty_mirror(tmp_path),
+        table_paths={"build_artifacts": _one_build_artifact(tmp_path)},
+        client=client,
+        **kwargs,
+    )
+    return report, client
+
+
+def test_load_supabase_mirror_defaults_to_the_ledger_schema(tmp_path):
+    report, client = _load_into_fake_client(tmp_path)
+
+    assert report.schema == "ledger"
+    assert [upsert[0] for upsert in client.upserts] == ["ledger"]
+
+
+def test_load_supabase_mirror_writes_to_the_chronicle_schema(tmp_path, monkeypatch):
+    """The renamed variable configures the writer, not just the reader."""
+    monkeypatch.setenv("CHRONICLE_SCHEMA", "chronicle_probe")
+
+    report, client = _load_into_fake_client(tmp_path)
+
+    assert report.schema == "chronicle_probe"
+    assert [upsert[0] for upsert in client.upserts] == ["chronicle_probe"]
+
+
+@pytest.mark.parametrize("name", ["POLICYENGINE_LEDGER_SCHEMA", "LEDGER_SCHEMA"])
+def test_load_supabase_mirror_honors_a_ledger_era_schema_name(
+    tmp_path, monkeypatch, name
+):
+    monkeypatch.setenv(name, "legacy_probe")
+
+    with pytest.warns(ChronicleEnvDeprecationWarning):
+        report, client = _load_into_fake_client(tmp_path)
+
+    assert report.schema == "legacy_probe"
+    assert [upsert[0] for upsert in client.upserts] == ["legacy_probe"]
+
+
+def test_an_explicit_schema_still_wins_over_the_environment(tmp_path, monkeypatch):
+    monkeypatch.setenv("CHRONICLE_SCHEMA", "chronicle_probe")
+
+    report, client = _load_into_fake_client(tmp_path, schema="explicit_probe")
+
+    assert report.schema == "explicit_probe"
+    assert [upsert[0] for upsert in client.upserts] == ["explicit_probe"]
+
+
+def test_load_supabase_mirror_cli_writes_to_the_configured_schema(
+    tmp_path, monkeypatch, capsys
+):
+    """The CLI resolves the same way when no --schema is supplied."""
+    client = _FakeSupabaseClient()
+    monkeypatch.setattr("chronicle.mirror._get_supabase_client", lambda: client)
+    monkeypatch.setenv("CHRONICLE_SCHEMA", "chronicle_probe")
+    argv = [
+        "load-supabase-mirror",
+        "--dir",
+        str(_empty_mirror(tmp_path)),
+        "--build-artifacts",
+        str(_one_build_artifact(tmp_path)),
+    ]
+
+    exit_code = harness_main(argv)
+    payload = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 0
+    assert payload["schema"] == "chronicle_probe"
+    assert [upsert[0] for upsert in client.upserts] == ["chronicle_probe"]
+
+    assert harness_main([*argv, "--schema", "explicit_probe"]) == 0
+    assert json.loads(capsys.readouterr().out)["schema"] == "explicit_probe"
+    assert [upsert[0] for upsert in client.upserts] == [
+        "chronicle_probe",
+        "explicit_probe",
+    ]
 
 
 class _FakeSupabaseClient:

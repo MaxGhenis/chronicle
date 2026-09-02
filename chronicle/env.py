@@ -19,8 +19,11 @@ import warnings
 
 __all__ = [
     "CHRONICLE_ENV_PREFIX",
+    "CHRONICLE_SCHEMA_ENV",
     "ChronicleEnvDeprecationWarning",
+    "DEFAULT_CHRONICLE_SCHEMA",
     "LEGACY_ENV_PREFIXES",
+    "default_chronicle_schema",
     "env_flag",
     "env_names",
     "env_value",
@@ -33,6 +36,14 @@ CHRONICLE_ENV_PREFIX = "CHRONICLE_"
 LEGACY_ENV_PREFIXES = ("POLICYENGINE_LEDGER_", "LEDGER_")
 
 TRUTHY_ENV_VALUES = frozenset({"1", "true", "yes", "on"})
+
+CHRONICLE_SCHEMA_ENV = "CHRONICLE_SCHEMA"
+
+# The hosted Postgres schema is still named "ledger". Renaming the schema value
+# is a later slice of PolicyEngine/chronicle#143, coordinated with the CI
+# writers that already target it; only the variable that overrides the name has
+# moved to the chronicle prefix.
+DEFAULT_CHRONICLE_SCHEMA = "ledger"
 
 
 class ChronicleEnvDeprecationWarning(FutureWarning):
@@ -124,6 +135,18 @@ def env_value(*names: str, default: _Default = None) -> str | _Default:
     """
     value = _first_set(names)
     return default if value is None else value
+
+
+def default_chronicle_schema() -> str:
+    """Resolve the Chronicle schema: ``$CHRONICLE_SCHEMA``, else the default.
+
+    Every reader of the setting goes through this function so the lookup ladder
+    and the default have one home. It resolves at call time rather than at
+    import: a module-level constant binds whatever the shell held when the
+    module was first imported, which for a library means an arbitrary moment
+    the caller cannot control, and for the test suite means collection.
+    """
+    return env_value(CHRONICLE_SCHEMA_ENV, default=DEFAULT_CHRONICLE_SCHEMA)
 
 
 def env_flag(*names: str) -> bool:

@@ -24,7 +24,9 @@ from chronicle.artifacts import (
 from chronicle.env import (
     CHRONICLE_ENV_PREFIX,
     ChronicleEnvDeprecationWarning,
+    DEFAULT_CHRONICLE_SCHEMA,
     LEGACY_ENV_PREFIXES,
+    default_chronicle_schema,
     env_flag,
     env_names,
     env_value,
@@ -252,17 +254,18 @@ def test_db_cli_parser_builds_with_the_env_backed_defaults(monkeypatch, capsys):
     assert "Manage Chronicle target input data" in capsys.readouterr().out
 
 
-@pytest.mark.parametrize("name", ["CHRONICLE_SCHEMA", "POLICYENGINE_LEDGER_SCHEMA"])
-def test_supabase_schema_honors_both_names(monkeypatch, name):
+@pytest.mark.parametrize(
+    "name",
+    ["CHRONICLE_SCHEMA", "POLICYENGINE_LEDGER_SCHEMA", "LEDGER_SCHEMA"],
+)
+def test_supabase_schema_honors_every_name_in_the_window(monkeypatch, name):
+    """Set after import and still honored: the schema is read at call time."""
     import db.supabase_client
 
     monkeypatch.setenv(name, "chronicle_probe")
-    try:
-        reloaded = importlib.reload(db.supabase_client)
-        assert reloaded.LEDGER_SCHEMA == "chronicle_probe"
-    finally:
-        monkeypatch.delenv(name, raising=False)
-        importlib.reload(db.supabase_client)
+
+    assert db.supabase_client.chronicle_schema() == "chronicle_probe"
+    assert default_chronicle_schema() == "chronicle_probe"
 
 
 def test_supabase_schema_default_is_unchanged():
@@ -270,7 +273,31 @@ def test_supabase_schema_default_is_unchanged():
 
     # The hosted schema name itself is out of this slice; only the variable
     # that overrides it moved.
-    assert db.supabase_client.LEDGER_SCHEMA == "ledger"
+    assert DEFAULT_CHRONICLE_SCHEMA == "ledger"
+    assert default_chronicle_schema() == "ledger"
+    assert db.supabase_client.chronicle_schema() == "ledger"
+    assert db.supabase_client.targets_schema() == "targets"
+
+
+def test_supabase_schema_is_not_bound_at_import(monkeypatch):
+    """No module-level constant may freeze the schema at import time.
+
+    A reload under a set variable is the pre-fix behavior this guards against:
+    it proves nothing about a module that resolved the value once, at
+    collection, and answers with the stale constant forever after.
+    """
+    import db.supabase_client
+
+    assert not [
+        name
+        for name, value in vars(db.supabase_client).items()
+        if name.isupper() and value == "ledger"
+    ]
+
+    monkeypatch.setenv("CHRONICLE_SCHEMA", "chronicle_probe")
+    unreloaded = importlib.import_module("db.supabase_client")
+
+    assert unreloaded.chronicle_schema() == "chronicle_probe"
 
 
 # ---------------------------------------------------------------------------

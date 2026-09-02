@@ -37,6 +37,7 @@ from chronicle.consumer_contract import (
 )
 from chronicle.core import AggregateFact, ValidationReport, validate_facts
 from chronicle.database import ChronicleDbBuildReport, build_chronicle_db
+from chronicle.env import DEFAULT_CHRONICLE_SCHEMA
 from chronicle.mirror import (
     ChronicleMirrorExportReport,
     SupabaseMirrorLoadReport,
@@ -452,12 +453,16 @@ def export_chronicle_db_table_files(
 def load_supabase_mirror_files(
     input_dir: str | Path,
     *,
-    schema: str = "ledger",
+    schema: str | None = None,
     batch_size: int = 500,
     dry_run: bool = False,
     build_artifacts_path: str | Path | None = None,
 ) -> SupabaseMirrorLoadReport:
-    """Load exported Chronicle JSONL mirror files into Supabase/Postgres."""
+    """Load exported Chronicle JSONL mirror files into Supabase/Postgres.
+
+    ``schema`` of None resolves to ``$CHRONICLE_SCHEMA``, else the default
+    schema, so the hosted mirror writer answers to the renamed variable.
+    """
     table_paths = (
         {"build_artifacts": Path(build_artifacts_path)}
         if build_artifacts_path is not None
@@ -1111,8 +1116,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     mirror_load_parser.add_argument(
         "--schema",
-        default="ledger",
-        help="Supabase/Postgres schema to load into.",
+        default=None,
+        help=(
+            "Supabase/Postgres schema to load into. Defaults to "
+            f"$CHRONICLE_SCHEMA, else {DEFAULT_CHRONICLE_SCHEMA}."
+        ),
     )
     mirror_load_parser.add_argument(
         "--batch-size",

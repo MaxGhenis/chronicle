@@ -11,6 +11,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from chronicle.env import default_chronicle_schema
+
 LEDGER_MIRROR_TABLES = (
     "ledger_builds",
     "build_artifacts",
@@ -200,15 +202,22 @@ def export_chronicle_db_tables(
 def load_supabase_mirror(
     input_dir: str | Path,
     *,
-    schema: str = "ledger",
+    schema: str | None = None,
     batch_size: int = 500,
     dry_run: bool = False,
     table_paths: dict[str, str | Path] | None = None,
     client: Any | None = None,
 ) -> SupabaseMirrorLoadReport:
-    """Load exported Chronicle JSONL mirror files into Supabase/Postgres."""
+    """Load exported Chronicle JSONL mirror files into Supabase/Postgres.
+
+    ``schema`` defaults to :func:`chronicle.env.default_chronicle_schema`, so
+    the writer that owns the hosted mirror answers to ``CHRONICLE_SCHEMA`` (and
+    the ledger-era names behind it) exactly like every other reader of the
+    setting. The resolved name is reported back in the load report.
+    """
     if batch_size < 1:
         raise ValueError("batch_size must be at least 1.")
+    schema = schema or default_chronicle_schema()
     input_path = Path(input_dir)
     tables: list[SupabaseTableLoad] = []
     errors: list[str] = []
