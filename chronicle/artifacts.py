@@ -613,6 +613,10 @@ def fetch_source_artifact(
     # different objects, is a refusal that need not touch the publisher.
     existing_manifest = _read_manifest(manifest_path)
     licence_text = licence.strip() if isinstance(licence, str) else None
+    # The byte boundary is checked first: overwriting a hash-only registration
+    # with bytes is the more serious refusal, and its message is the one the
+    # caller needs, not a prompt to supply a licence.
+    _assert_no_hash_only_entry(existing_manifest, manifest_path, year, filename)
     if (
         safe_manifest_kind(existing_manifest)[0] == MICRODATA_RELEASE_KIND
         and not licence_text
@@ -621,7 +625,6 @@ def fetch_source_artifact(
             f"{manifest_path} registers a microdata release, so every entry "
             "must record its publisher licence; pass --licence."
         )
-    _assert_no_hash_only_entry(existing_manifest, manifest_path, year, filename)
     recorded_identity = _recorded_identity(
         _manifest_file_spec(existing_manifest, year),
         manifest_path=manifest_path,

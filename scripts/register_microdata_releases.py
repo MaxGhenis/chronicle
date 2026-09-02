@@ -573,15 +573,15 @@ def resolve(
     resolved: list[ResolvedRelease] = []
     for release in releases:
         if release.manifest not in payloads:
-            payloads[release.manifest] = load_manifest(
-                microcosm_root, release.manifest
-            )
+            payloads[release.manifest] = load_manifest(microcosm_root, release.manifest)
         stage, artifact = select_artifact(
             payloads[release.manifest],
             release.selector,
             release_id=release.release_id,
         )
-        resolved.append(ResolvedRelease(release=release, stage=stage, artifact=artifact))
+        resolved.append(
+            ResolvedRelease(release=release, stage=stage, artifact=artifact)
+        )
     return resolved
 
 
