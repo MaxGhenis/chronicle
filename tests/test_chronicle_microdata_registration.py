@@ -606,6 +606,15 @@ def test_source_artifact_spec_refuses_to_parse_a_registered_release():
         spec._artifact_content(2023)
 
 
+def test_year_mapping_refuses_a_multi_file_vintage():
+    from chronicle.source_package import _year_mapping
+
+    with pytest.raises(ValueError, match="list of 2 entries"):
+        _year_mapping(
+            {2023: [{"filename": "adult.tab"}, {"filename": "child.tab"}]}, 2023
+        )
+
+
 def test_validate_package_reports_a_microdata_release_carve_out(tmp_path):
     package_dir = tmp_path / "frs_2023_24"
     package_dir.mkdir()

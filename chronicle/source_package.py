@@ -2249,10 +2249,26 @@ def _required(payload: dict[str, Any], key: str, context: str) -> Any:
 
 def _year_mapping(files_by_year: dict[Any, Any], year: int) -> dict[str, str]:
     if year in files_by_year:
-        return files_by_year[year]
+        return _single_year_spec(files_by_year[year], year)
     if str(year) in files_by_year:
-        return files_by_year[str(year)]
+        return _single_year_spec(files_by_year[str(year)], year)
     raise ValueError(f"No source artifact for year {year}")
+
+
+def _single_year_spec(spec: Any, year: int) -> dict[str, str]:
+    """Return one file spec, refusing the multi-file microdata-release shape.
+
+    Only a ``kind: microdata_release`` manifest may list several files under one
+    vintage, and no source package parses one of those, so a list here is a
+    malformed publisher-table manifest rather than something to index into.
+    """
+    if isinstance(spec, list):
+        raise ValueError(
+            f"Source artifact for year {year} is a list of {len(spec)} entries. "
+            "Only a kind: microdata_release manifest may list several files "
+            "under one vintage, and no source package parses one."
+        )
+    return spec
 
 
 def _read_source_artifact_content(
