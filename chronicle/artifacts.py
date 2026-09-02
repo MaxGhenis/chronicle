@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 import posixpath
+import re
 import shlex
 import sqlite3
 import subprocess
@@ -40,6 +41,27 @@ DEFAULT_R2_DERIVED_BUCKET = "ledger-derived"
 DEFAULT_R2_PREFIX = "raw"
 DEFAULT_R2_DERIVED_PREFIX = "derived"
 
+# Most packages keep one manifest.yaml. Publisher directories that feed several
+# source packages keep one manifest each -- db/data/irs_soi/ira_contributions
+# holds manifest_traditional_source_package.yaml beside the Roth one -- so the
+# name is an input, not a constant, wherever a caller addresses a package.
+DEFAULT_MANIFEST_FILENAME = "manifest.yaml"
+
+
+def _manifest_path(output: Path, manifest_filename: str) -> Path:
+    """Return the named manifest inside ``output``.
+
+    The name is a filename, not a path: it selects among the manifests a
+    package directory keeps, and must not reach outside it.
+    """
+    name = manifest_filename.strip()
+    if not name or name in (".", "..") or name != Path(name).name:
+        raise ValueError(
+            "Manifest must name a file inside the package directory, not "
+            f"{manifest_filename!r}."
+        )
+    return output / name
+
 
 def default_r2_raw_bucket() -> str:
     """Resolve the raw bucket: ``$CHRONICLE_R2_RAW_BUCKET`` or the default."""
@@ -51,15 +73,44 @@ def default_r2_derived_bucket() -> str:
     return env_value(R2_DERIVED_BUCKET_ENV, default=DEFAULT_R2_DERIVED_BUCKET)
 
 
-class SourceArtifactRevisionError(RuntimeError):
-    """Fetched bytes are not the bytes the recorded R2 object holds.
+class SourceArtifactManifestError(RuntimeError):
+    """A manifest refuses the write a fetch is about to make.
 
-    Raw R2 keys are content-addressed, so a recorded ``storage.r2`` block is a
-    claim about specific bytes. When a publisher re-publishes under the same
-    URL and vintage, keeping that block would attach its provenance to bytes it
-    never described. Chronicle refuses instead: same vintage plus new bytes is a
-    new release revision (docs/adr-chronicle-fact-identity-v2.md), registered
-    with ``fetch-artifact --record-revision``.
+    Every subclass is raised before anything is downloaded, cached, uploaded or
+    rewritten, so a refusal leaves the package exactly as it was.
+    """
+
+
+class SourceArtifactRevisionError(SourceArtifactManifestError):
+    """Fetched bytes are not the bytes the manifest entry identifies.
+
+    A manifest entry identifies specific bytes: by its declared ``sha256``, and
+    -- once published -- by a content-addressed R2 key that repeats them. When
+    a publisher re-publishes under the same URL and vintage, rewriting that
+    entry would attach its provenance, and any recorded URI, to bytes it never
+    described. Chronicle refuses instead: same vintage plus new bytes is a new
+    release revision (docs/adr-chronicle-fact-identity-v2.md), registered with
+    ``fetch-artifact --record-revision``.
+    """
+
+
+class MalformedManifestError(SourceArtifactManifestError):
+    """A manifest document, or a block inside one, is not a mapping.
+
+    Reading such a file as an absent manifest would let a fetch replace it with
+    a single entry, dropping whatever the unreadable document recorded.
+    """
+
+
+class RecordedR2LocatorError(SourceArtifactManifestError):
+    """A recorded ``storage.r2`` block does not locate exactly one object.
+
+    ``provider``, ``bucket``, ``key`` and ``uri`` all describe the same object,
+    so any that are supplied have to agree, and the key has to carry the
+    ``{sha256}/{filename}`` tail that says which bytes it holds. A block whose
+    fields contradict each other has no single answer to "which bytes does this
+    entry claim R2 holds", and preserving or publishing under it would ship
+    whichever field the reader happened to consult.
     """
 
 
@@ -110,6 +161,60 @@ class ArtifactStorageLocation:
             "key": self.key,
             "uri": self.uri,
         }
+
+
+# A raw key ends in {sha256}/{filename} (see build_r2_key), so the segment
+# before the filename is what says which bytes the object holds.
+_SHA256_KEY_SEGMENT = re.compile(r"[0-9a-f]{64}")
+
+
+@dataclass(frozen=True)
+class RecordedR2Object:
+    """The R2 object a manifest entry's ``storage.r2`` block claims exists.
+
+    Built only by :func:`_validated_recorded_r2`, so every instance names one
+    object whose locator fields agree with each other.
+    """
+
+    provider: str
+    bucket: str
+    key: str
+    sha256: str
+    filename: str
+
+    @property
+    def uri(self) -> str:
+        """Return the storage URI the recorded fields spell out."""
+        return f"{self.provider}://{self.bucket}/{self.key}"
+
+
+@dataclass(frozen=True)
+class RecordedIdentity:
+    """The bytes a manifest entry says its vintage currently holds.
+
+    From the recorded object's content-addressed key once the entry has been
+    published, and from the entry's own declared ``sha256``/``filename`` before
+    that. ``r2`` is None in the second case: protection does not wait for an
+    upload to have happened.
+    """
+
+    sha256: str
+    filename: str
+    size_bytes: int | None
+    declared_sha256: str | None
+    r2: RecordedR2Object | None
+
+    def holds(self, *, sha256: str, filename: str) -> bool:
+        """Whether this identity is exactly the given bytes under that name.
+
+        The filename participates only when the entry records one: a published
+        key always carries it, an entry that declares bytes and no name does
+        not, and inventing a mismatch there would refuse a re-fetch of the very
+        bytes the entry describes.
+        """
+        if self.sha256 != sha256:
+            return False
+        return not self.filename or self.filename == Path(filename).name
 
 
 @dataclass(frozen=True)
@@ -428,6 +533,7 @@ def fetch_source_artifact(
     source_page: str | None = None,
     table: str | None = None,
     filename: str | None = None,
+    manifest_filename: str = DEFAULT_MANIFEST_FILENAME,
     upload_r2: bool = False,
     record_revision: bool = False,
     r2_bucket: str | None = None,
@@ -436,20 +542,36 @@ def fetch_source_artifact(
 ) -> ArtifactFetchReport:
     """Fetch/register a source artifact and optionally upload it to R2.
 
+    ``manifest_filename`` names the manifest inside ``output_dir`` the entry
+    belongs to. Packages that split one publisher directory across several
+    source packages keep one manifest each, so a fetch that always wrote
+    ``manifest.yaml`` would write a fresh manifest beside the real ones and
+    never see the entry it is revising.
+
     ``record_revision`` opts into registering a publisher revision: the fetched
     bytes get their own content-addressed key under the configured bucket and
     the superseded object moves to ``storage.previous_r2``. Without it, bytes
-    that disagree with the recorded object raise
+    that disagree with the entry's recorded identity raise
     :class:`SourceArtifactRevisionError` before anything is overwritten.
     """
     r2_bucket = r2_bucket or default_r2_raw_bucket()
     output = Path(output_dir)
+    manifest_path = _manifest_path(output, manifest_filename)
     resolved_r2_prefix = resolve_r2_prefix(
         prefix=r2_prefix,
         default_prefix=DEFAULT_R2_PREFIX,
         source_id=source_id,
         package_path=output,
     )
+    # Read and validate the entry being written before anything is fetched: a
+    # manifest Chronicle cannot read, or a recorded block that names two
+    # different objects, is a refusal that need not touch the publisher.
+    recorded_identity = _recorded_identity(
+        _manifest_file_spec(_read_manifest(manifest_path), year),
+        manifest_path=manifest_path,
+        year=year,
+    )
+
     fetched_at = datetime.now(UTC).replace(microsecond=0).isoformat()
     content, inferred_filename = _read_artifact(source_url)
     artifact_filename = filename or inferred_filename
@@ -458,12 +580,12 @@ def fetch_source_artifact(
 
     sha256 = hashlib.sha256(content).hexdigest()
     size_bytes = len(content)
-    manifest_path = output / "manifest.yaml"
 
     # Guard before the cached artifact is touched. A rejected fetch must leave
     # the recorded bytes and their manifest entry exactly as they were.
-    _assert_recorded_object_holds_these_bytes(
-        manifest_path,
+    _assert_recorded_identity_holds_these_bytes(
+        recorded_identity,
+        manifest_path=manifest_path,
         year=year,
         filename=artifact_filename,
         sha256=sha256,
@@ -655,7 +777,7 @@ def publish_derived_artifacts(
 def publish_source_artifacts(
     root: str | Path,
     *,
-    manifest_filename: str = "manifest.yaml",
+    manifest_filename: str = DEFAULT_MANIFEST_FILENAME,
     source_id: str | None = None,
     package_id: str | None = None,
     r2_bucket: str | None = None,
@@ -676,8 +798,8 @@ def publish_source_artifacts(
     errors: list[str] = []
     for manifest_path in sorted(root_path.rglob(manifest_filename)):
         try:
-            manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8")) or {}
-        except (OSError, yaml.YAMLError) as exc:
+            manifest = _read_manifest(manifest_path)
+        except (OSError, MalformedManifestError) as exc:
             errors.append(f"Could not read {manifest_path}: {exc}")
             continue
 
@@ -780,7 +902,7 @@ def write_build_artifacts_jsonl(
 def inventory_source_artifacts(
     root: str | Path,
     *,
-    manifest_filename: str = "manifest.yaml",
+    manifest_filename: str = DEFAULT_MANIFEST_FILENAME,
 ) -> ArtifactInventoryReport:
     """Inventory manifest-declared source artifacts under a root directory."""
     root_path = Path(root)
@@ -803,9 +925,8 @@ def inventory_source_artifacts(
     manifests = sorted(root_path.rglob(manifest_filename))
     for manifest_path in manifests:
         try:
-            manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8")) or {}
-            files = manifest.get("files") or {}
-        except (OSError, yaml.YAMLError) as exc:
+            files = _read_manifest(manifest_path).get("files") or {}
+        except (OSError, MalformedManifestError) as exc:
             errors.append(f"Could not read {manifest_path}: {exc}")
             continue
         if not isinstance(files, dict):
@@ -1087,11 +1208,31 @@ def _filename_from_url(source_url: str) -> str:
 
 
 def _read_manifest(manifest_path: Path) -> dict[str, Any]:
-    """Return a manifest's parsed payload, or an empty mapping."""
+    """Return a manifest's parsed payload, refusing a document it cannot read.
+
+    An absent or empty manifest reads as an empty mapping: ``fetch-artifact``
+    writes the first entry into a package that has none. A document that parses
+    as anything else -- a list, a scalar, a truncated or half-merged file -- is
+    not an absent manifest, and treating it as one would let the fetch replace
+    it with a single entry and drop everything it recorded.
+    """
     if not manifest_path.exists():
         return {}
-    payload = yaml.safe_load(manifest_path.read_text(encoding="utf-8")) or {}
-    return payload if isinstance(payload, dict) else {}
+    try:
+        payload = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
+    except yaml.YAMLError as exc:
+        raise MalformedManifestError(f"{manifest_path} is not valid YAML: {exc}") from (
+            exc
+        )
+    if payload is None:
+        return {}
+    if not isinstance(payload, dict):
+        raise MalformedManifestError(
+            f"{manifest_path} must be a YAML mapping; it parses as a "
+            f"{type(payload).__name__}. Chronicle will not overwrite a manifest "
+            "it cannot read."
+        )
+    return payload
 
 
 def _manifest_file_spec(payload: dict[str, Any], year: Any) -> dict[str, Any]:
@@ -1112,40 +1253,182 @@ def _recorded_storage(spec: Any) -> dict[str, Any]:
 
 
 def _recorded_r2(spec: Any) -> dict[str, Any]:
-    """Return a manifest file spec's recorded ``storage.r2`` block, if any."""
+    """Return the recorded ``storage.r2`` block verbatim, if any.
+
+    Raw access, for callers that carry the block forward as history. Callers
+    that reason about which object it names go through
+    :func:`_validated_recorded_r2` instead.
+    """
     recorded = _recorded_storage(spec).get("r2")
     return recorded if isinstance(recorded, dict) else {}
 
 
-def _r2_key_identity(recorded_r2: dict[str, Any]) -> tuple[str, str]:
-    """Return the ``(sha256, filename)`` a recorded R2 object is addressed by.
-
-    Raw keys are ``{prefix}/{source_id}/{package_id}/{year}/{sha256}/{filename}``
-    (see :func:`build_r2_key`), so the last two segments say which bytes the
-    object holds; the URI ends in the same two segments and stands in for a
-    block that records only that. A locator in any other shape yields empty
-    strings and therefore never matches fetched bytes.
-    """
-    locator = recorded_r2.get("key") or recorded_r2.get("uri")
-    if not isinstance(locator, str):
-        return ("", "")
-    parts = [part for part in locator.split("/") if part]
-    if len(parts) < 2:
-        return ("", "")
-    return (parts[-2], parts[-1])
+def _split_r2_uri(uri: str) -> tuple[str, str, str] | None:
+    """Split ``provider://bucket/key`` into its three parts, or None."""
+    provider, separator, remainder = uri.partition("://")
+    if not separator or not provider:
+        return None
+    bucket, separator, key = remainder.partition("/")
+    if not separator or not bucket or not key:
+        return None
+    return (provider, bucket, key)
 
 
-def _r2_holds_these_bytes(
-    recorded_r2: dict[str, Any],
+def _validated_recorded_r2(
+    spec: Any,
     *,
-    sha256: str,
-    filename: str,
-) -> bool:
-    """Whether a recorded ``storage.r2`` block addresses exactly these bytes."""
-    recorded_sha256, recorded_filename = _r2_key_identity(recorded_r2)
-    return bool(recorded_sha256) and (recorded_sha256, recorded_filename) == (
-        sha256,
-        Path(filename).name,
+    manifest_path: Path,
+    year: Any,
+) -> RecordedR2Object | None:
+    """Return the object a recorded ``storage.r2`` block names, or None.
+
+    Every locator field the block supplies is cross-checked against every
+    other: ``key`` against the URI's path, ``bucket`` against its authority,
+    ``provider`` against its scheme, and the resulting key against the
+    canonical content-addressed shape :func:`build_r2_key` writes. Reading one
+    field and trusting the rest is what lets a block that says two different
+    things survive a preserve or a publish.
+    """
+    storage = _recorded_storage_block(spec, manifest_path=manifest_path, year=year)
+    if "r2" not in storage:
+        return None
+    block = storage["r2"]
+    where = f"{manifest_path} entry {year!r} storage.r2"
+    if not isinstance(block, dict):
+        raise MalformedManifestError(
+            f"{where} must be a mapping; it is a {type(block).__name__}."
+        )
+
+    supplied: dict[str, str] = {}
+    for field in ("provider", "bucket", "key", "uri"):
+        value = block.get(field)
+        if value is None:
+            continue
+        if not isinstance(value, str) or not value.strip():
+            raise RecordedR2LocatorError(
+                f"{where}: {field} must be a non-empty string, not {value!r}."
+            )
+        supplied[field] = value
+
+    provider = supplied.get("provider")
+    bucket = supplied.get("bucket")
+    key = supplied.get("key")
+    uri = supplied.get("uri")
+    if uri is not None:
+        parts = _split_r2_uri(uri)
+        if parts is None:
+            raise RecordedR2LocatorError(
+                f"{where}: uri {uri!r} is not provider://bucket/key."
+            )
+        for field, value, from_uri in zip(
+            ("provider", "bucket", "key"), (provider, bucket, key), parts
+        ):
+            if value is not None and value != from_uri:
+                raise RecordedR2LocatorError(
+                    f"{where}: {field}={value!r} contradicts uri {uri!r}, which "
+                    f"names {from_uri!r}. The block records two different "
+                    "objects, so Chronicle cannot say which bytes it claims."
+                )
+        provider, bucket, key = (
+            provider or parts[0],
+            bucket or parts[1],
+            key or parts[2],
+        )
+
+    missing = [
+        field
+        for field, value in (
+            ("provider", provider),
+            ("bucket", bucket),
+            ("key", key),
+        )
+        if not value
+    ]
+    if missing:
+        raise RecordedR2LocatorError(
+            f"{where}: records no {', '.join(missing)}. A recorded block has to "
+            "locate its object, by key and bucket or by uri."
+        )
+
+    segments = key.split("/")
+    if (
+        len(segments) < 2
+        or not all(segments)
+        or not _SHA256_KEY_SEGMENT.fullmatch(segments[-2])
+    ):
+        raise RecordedR2LocatorError(
+            f"{where}: key {key!r} is not content-addressed. A raw key ends in "
+            "{sha256}/{filename}, which is what says the object holds the "
+            "entry's bytes; Chronicle will not guess for a key that does not."
+        )
+    return RecordedR2Object(
+        provider=provider,
+        bucket=bucket,
+        key=key,
+        sha256=segments[-2],
+        filename=segments[-1],
+    )
+
+
+def _recorded_storage_block(
+    spec: Any,
+    *,
+    manifest_path: Path,
+    year: Any,
+) -> dict[str, Any]:
+    """Return the entry's ``storage`` mapping, refusing a malformed one."""
+    if not isinstance(spec, dict) or "storage" not in spec:
+        return {}
+    storage = spec["storage"]
+    if not isinstance(storage, dict):
+        raise MalformedManifestError(
+            f"{manifest_path} entry {year!r} storage must be a mapping; it is a "
+            f"{type(storage).__name__}."
+        )
+    return storage
+
+
+def _recorded_identity(
+    spec: Any,
+    *,
+    manifest_path: Path,
+    year: Any,
+) -> RecordedIdentity | None:
+    """Return what a manifest entry says its vintage holds, if anything.
+
+    A published entry is identified by its recorded object's content-addressed
+    key. An entry that has not been published yet -- registered without an
+    upload, or left behind by a failed one -- is identified by its own declared
+    ``sha256`` and ``filename``. Both are recorded identities, and a fetch of
+    different bytes over either one is a publisher revision.
+    """
+    recorded_r2 = _validated_recorded_r2(spec, manifest_path=manifest_path, year=year)
+    declared_sha256 = spec.get("sha256") if isinstance(spec, dict) else None
+    declared_sha256 = declared_sha256 if isinstance(declared_sha256, str) else None
+    declared_filename = spec.get("filename") if isinstance(spec, dict) else None
+    declared_filename = (
+        declared_filename if isinstance(declared_filename, str) else None
+    )
+    size_bytes = spec.get("size_bytes") if isinstance(spec, dict) else None
+    size_bytes = size_bytes if isinstance(size_bytes, int) else None
+    if recorded_r2 is not None:
+        return RecordedIdentity(
+            sha256=recorded_r2.sha256,
+            filename=recorded_r2.filename,
+            # Only report a size the recorded key agrees with: an entry can
+            # arrive here already describing the new bytes.
+            size_bytes=size_bytes if declared_sha256 == recorded_r2.sha256 else None,
+            declared_sha256=declared_sha256,
+            r2=recorded_r2,
+        )
+    if not declared_sha256:
+        return None
+    return RecordedIdentity(
+        sha256=declared_sha256,
+        filename=Path(declared_filename).name if declared_filename else "",
+        size_bytes=size_bytes,
+        declared_sha256=declared_sha256,
+        r2=None,
     )
 
 
@@ -1154,33 +1437,35 @@ def _revision_error_message(
     manifest_path: Path,
     year: Any,
     filename: str,
-    recorded_spec: dict[str, Any],
-    recorded_r2: dict[str, Any],
+    identity: RecordedIdentity,
     sha256: str,
     size_bytes: int,
     r2_bucket: str,
 ) -> str:
     """Explain a refused fetch: recorded identity, fetched identity, next step."""
-    recorded_sha256, recorded_filename = _r2_key_identity(recorded_r2)
-    declared_sha256 = recorded_spec.get("sha256")
-    recorded_size = (
-        recorded_spec.get("size_bytes") if declared_sha256 == recorded_sha256 else None
+    records = (
+        f"already records the R2 object {identity.r2.uri}, which holds"
+        if identity.r2 is not None
+        else "already records"
     )
     message = (
-        f"{manifest_path} entry {year!r} already records the R2 object "
-        f"{recorded_r2.get('uri') or recorded_r2.get('key')}, which holds "
-        f"sha256={recorded_sha256 or 'unknown'} "
-        f"filename={recorded_filename or 'unknown'} "
-        f"size_bytes={recorded_size if recorded_size is not None else 'unknown'}. "
+        f"{manifest_path} entry {year!r} {records} "
+        f"sha256={identity.sha256} "
+        f"filename={identity.filename or 'unknown'} "
+        f"size_bytes="
+        f"{identity.size_bytes if identity.size_bytes is not None else 'unknown'}. "
         f"The fetched bytes are sha256={sha256} filename={Path(filename).name} "
-        f"size_bytes={size_bytes}. Chronicle will not attach a recorded, "
-        "content-addressed R2 URI to bytes it does not describe."
+        f"size_bytes={size_bytes}. Chronicle will not rewrite a vintage that "
+        "identifies specific bytes to describe bytes it never identified."
     )
-    if declared_sha256 and declared_sha256 != recorded_sha256:
+    if identity.r2 is not None and identity.declared_sha256 not in (
+        None,
+        identity.sha256,
+    ):
         message += (
-            f" (The entry also declares sha256={declared_sha256}, which its own "
-            "R2 key contradicts: an earlier fetch rewrote the hash without "
-            "moving the object.)"
+            f" (The entry also declares sha256={identity.declared_sha256}, which "
+            "its own R2 key contradicts: an earlier fetch rewrote the hash "
+            "without moving the object.)"
         )
     return message + (
         " The same vintage with new bytes is a new release revision "
@@ -1191,9 +1476,10 @@ def _revision_error_message(
     )
 
 
-def _assert_recorded_object_holds_these_bytes(
-    manifest_path: Path,
+def _assert_recorded_identity_holds_these_bytes(
+    identity: RecordedIdentity | None,
     *,
+    manifest_path: Path,
     year: Any,
     filename: str,
     sha256: str,
@@ -1202,21 +1488,16 @@ def _assert_recorded_object_holds_these_bytes(
     record_revision: bool,
 ) -> None:
     """Refuse a publisher revision that has not been opted into."""
-    if record_revision:
+    if record_revision or identity is None:
         return
-    recorded_spec = _manifest_file_spec(_read_manifest(manifest_path), year)
-    recorded_r2 = _recorded_r2(recorded_spec)
-    if not recorded_r2:
-        return
-    if _r2_holds_these_bytes(recorded_r2, sha256=sha256, filename=filename):
+    if identity.holds(sha256=sha256, filename=filename):
         return
     raise SourceArtifactRevisionError(
         _revision_error_message(
             manifest_path=manifest_path,
             year=year,
             filename=filename,
-            recorded_spec=recorded_spec,
-            recorded_r2=recorded_r2,
+            identity=identity,
             sha256=sha256,
             size_bytes=size_bytes,
             r2_bucket=r2_bucket,
@@ -1227,6 +1508,7 @@ def _assert_recorded_object_holds_these_bytes(
 def _superseding_storage(
     recorded_spec: dict[str, Any],
     *,
+    recorded_r2: RecordedR2Object | None,
     new_r2: dict[str, Any] | None,
     superseded_at: str,
 ) -> dict[str, Any]:
@@ -1235,18 +1517,16 @@ def _superseding_storage(
     ``storage.r2`` only ever names the object that holds the entry's current
     bytes. The superseded block is appended, oldest first, to
     ``storage.previous_r2`` so the earlier bytes stay addressable by the URI
-    archived witness records already pin.
+    archived witness records already pin. An entry that was never published has
+    no object to supersede, and gets no ``previous_r2`` key.
     """
     storage = dict(_recorded_storage(recorded_spec))
     previous = storage.get("previous_r2")
     entries = list(previous) if isinstance(previous, list) else []
-    recorded_r2 = _recorded_r2(recorded_spec)
-    if recorded_r2:
-        entry = dict(recorded_r2)
-        recorded_sha256, _recorded_filename = _r2_key_identity(recorded_r2)
-        if recorded_sha256:
-            entry["sha256"] = recorded_sha256
-        if recorded_spec.get("sha256") == recorded_sha256:
+    if recorded_r2 is not None:
+        entry = dict(_recorded_r2(recorded_spec))
+        entry["sha256"] = recorded_r2.sha256
+        if recorded_spec.get("sha256") == recorded_r2.sha256:
             # Only carry metadata the superseded key agrees with: a manifest
             # can arrive here already describing the new bytes.
             for field in ("size_bytes", "fetched_at", "source_url"):
@@ -1255,7 +1535,8 @@ def _superseding_storage(
                     entry[field] = value
         entry["superseded_at"] = superseded_at
         entries.append(entry)
-    storage["previous_r2"] = entries
+    if entries:
+        storage["previous_r2"] = entries
     if new_r2 is None:
         storage.pop("r2", None)
     else:
@@ -1296,42 +1577,45 @@ def _upsert_manifest(
     }
     recorded_spec = _manifest_file_spec(payload, year)
     recorded_storage = _recorded_storage(recorded_spec)
-    recorded_r2 = _recorded_r2(recorded_spec)
+    identity = _recorded_identity(recorded_spec, manifest_path=manifest_path, year=year)
     new_r2 = r2_location.to_dict() if r2_location is not None else None
-    if recorded_r2 and _r2_holds_these_bytes(
-        recorded_r2, sha256=sha256, filename=filename
-    ):
+    holds = identity is not None and identity.holds(sha256=sha256, filename=filename)
+    if identity is not None and not holds and not record_revision:
+        # Different bytes under the same vintage. The guard in
+        # fetch_source_artifact refuses this without --record-revision; repeat
+        # the check here so no caller can reach a false-provenance write.
+        raise SourceArtifactRevisionError(
+            _revision_error_message(
+                manifest_path=manifest_path,
+                year=year,
+                filename=filename,
+                identity=identity,
+                sha256=sha256,
+                size_bytes=size_bytes,
+                r2_bucket=(new_r2 or {}).get("bucket") or default_r2_raw_bucket(),
+            )
+        )
+    if holds and identity.r2 is not None:
         # A recorded storage.r2 block for these exact bytes is historical
         # truth: archived witness records pin raw R2 URLs by hash. Re-fetching
         # under a renamed bucket copies bytes; it does not restate where the
         # bytes were first published (PolicyEngine/chronicle#143, mechanism 3).
-        file_entry["storage"] = {**recorded_storage, "r2": recorded_r2}
-    elif recorded_r2:
-        # Different bytes under the same vintage. The guard in
-        # fetch_source_artifact refuses this without --record-revision; repeat
-        # the check here so no caller can reach a false-provenance write.
-        if not record_revision:
-            raise SourceArtifactRevisionError(
-                _revision_error_message(
-                    manifest_path=manifest_path,
-                    year=year,
-                    filename=filename,
-                    recorded_spec=recorded_spec,
-                    recorded_r2=recorded_r2,
-                    sha256=sha256,
-                    size_bytes=size_bytes,
-                    r2_bucket=(new_r2 or {}).get("bucket") or default_r2_raw_bucket(),
-                )
-            )
-        file_entry["storage"] = _superseding_storage(
+        storage = {**recorded_storage, "r2": _recorded_r2(recorded_spec)}
+    elif identity is not None and not holds:
+        storage = _superseding_storage(
             recorded_spec,
+            recorded_r2=identity.r2,
             new_r2=new_r2,
             superseded_at=fetched_at,
         )
     elif new_r2 is not None:
-        file_entry["storage"] = {**recorded_storage, "r2": new_r2}
-    elif recorded_storage:
-        file_entry["storage"] = dict(recorded_storage)
+        storage = {**recorded_storage, "r2": new_r2}
+    else:
+        storage = dict(recorded_storage)
+    # An entry that has no storage to record carries no empty block: a
+    # revision over a never-published entry supersedes nothing.
+    if storage:
+        file_entry["storage"] = storage
     payload["files"][year] = file_entry
     manifest_path.write_text(
         yaml.safe_dump(payload, sort_keys=False),
@@ -1416,20 +1700,27 @@ def _publish_raw_manifest_entry(
     if errors:
         return refuse()
 
-    recorded_r2 = _recorded_r2(spec)
-    if recorded_r2 and not _r2_holds_these_bytes(
-        recorded_r2, sha256=sha256_actual or "", filename=filename
+    try:
+        recorded_r2 = _validated_recorded_r2(
+            spec, manifest_path=manifest_path, year=year
+        )
+    except SourceArtifactManifestError as error:
+        # A block that does not name one object cannot be treated as history,
+        # and publishing under it would ship whichever field was read.
+        return refuse(f"recorded_r2_locator_invalid:{error}")
+    if recorded_r2 is not None and (recorded_r2.sha256, recorded_r2.filename) != (
+        sha256_actual or "",
+        Path(filename).name,
     ):
         # The recorded object is addressed by different bytes, so it is not
         # this file's history. Uploading anyway would either publish under a
         # key that misdescribes its content or restate a URI that belongs to
         # the superseded bytes. Registering a publisher revision is
         # `fetch-artifact --record-revision`, not a publish-time rewrite.
-        recorded_sha256, recorded_filename = _r2_key_identity(recorded_r2)
         return refuse(
             "recorded_r2_identity_mismatch:"
-            f"recorded_sha256={recorded_sha256 or 'unknown'}:"
-            f"recorded_filename={recorded_filename or 'unknown'}:"
+            f"recorded_sha256={recorded_r2.sha256}:"
+            f"recorded_filename={recorded_r2.filename}:"
             f"local_sha256={sha256_actual}:"
             f"local_filename={Path(filename).name}"
         )
@@ -1447,7 +1738,7 @@ def _publish_raw_manifest_entry(
             package_path=manifest_path,
         ),
     )
-    recorded_bucket = recorded_r2.get("bucket")
+    recorded_bucket = recorded_r2.bucket if recorded_r2 is not None else None
     if recorded_bucket and recorded_bucket != location.bucket:
         # The recorded bucket is preserved history. Publishing the same bytes
         # into a renamed bucket is a backfill copy, not a restatement, so the
@@ -1456,7 +1747,7 @@ def _publish_raw_manifest_entry(
             "recorded_r2_bucket_is_preserved_history:"
             f"recorded={recorded_bucket}:requested={location.bucket}"
         )
-    recorded_key = recorded_r2.get("key")
+    recorded_key = recorded_r2.key if recorded_r2 is not None else None
     if recorded_key and recorded_key != location.key:
         return refuse(
             "recorded_r2_key_disagrees_with_country_prefix:"

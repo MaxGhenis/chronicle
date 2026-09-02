@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 
 from chronicle.artifacts import (
+    DEFAULT_MANIFEST_FILENAME,
     DEFAULT_R2_DERIVED_BUCKET,
     DEFAULT_R2_RAW_BUCKET,
     ArtifactFetchReport,
@@ -16,7 +17,7 @@ from chronicle.artifacts import (
     DerivedArtifactPublishReport,
     R2BootstrapReport,
     RawArtifactPublishReport,
-    SourceArtifactRevisionError,
+    SourceArtifactManifestError,
     bootstrap_r2_buckets,
     fetch_source_artifact,
     inventory_source_artifacts,
@@ -339,6 +340,7 @@ def fetch_artifact_file(
     source_page: str | None = None,
     table: str | None = None,
     filename: str | None = None,
+    manifest_filename: str = DEFAULT_MANIFEST_FILENAME,
     upload_r2: bool = False,
     record_revision: bool = False,
     r2_bucket: str | None = None,
@@ -347,8 +349,9 @@ def fetch_artifact_file(
 ) -> ArtifactFetchReport:
     """Fetch/register a raw source artifact and optionally upload it to R2.
 
-    Raises :class:`SourceArtifactRevisionError` when the fetched bytes are not
-    the bytes the manifest's recorded R2 object holds, unless
+    ``manifest_filename`` selects which of the package directory's manifests
+    the entry belongs to. Raises :class:`SourceArtifactRevisionError` when the
+    fetched bytes are not the bytes that manifest's entry identifies, unless
     ``record_revision`` opts into registering the publisher revision.
     """
     return fetch_source_artifact(
@@ -361,6 +364,7 @@ def fetch_artifact_file(
         source_page=source_page,
         table=table,
         filename=filename,
+        manifest_filename=manifest_filename,
         upload_r2=upload_r2,
         record_revision=record_revision,
         r2_bucket=r2_bucket,
@@ -852,7 +856,7 @@ def main(argv: list[str] | None = None) -> int:
 
     artifact_parser = subparsers.add_parser(
         "fetch-artifact",
-        help="Fetch/register a raw source artifact and update manifest.yaml",
+        help="Fetch/register a raw source artifact and update its manifest",
     )
     artifact_parser.add_argument(
         "--url",
@@ -873,13 +877,23 @@ def main(argv: list[str] | None = None) -> int:
         "--year",
         type=int,
         required=True,
-        help="Artifact vintage year to record in manifest.yaml",
+        help="Artifact vintage year to record in the manifest",
     )
     artifact_parser.add_argument(
         "--out-dir",
         type=Path,
         required=True,
-        help="Directory where the raw artifact and manifest.yaml should live",
+        help="Directory where the raw artifact and its manifest should live",
+    )
+    artifact_parser.add_argument(
+        "--manifest",
+        default=DEFAULT_MANIFEST_FILENAME,
+        help=(
+            "Manifest filename inside --out-dir. A publisher directory that "
+            "feeds several source packages keeps one manifest each, and the "
+            "entry being revised lives in exactly one of them. Defaults to "
+            f"{DEFAULT_MANIFEST_FILENAME}."
+        ),
     )
     artifact_parser.add_argument(
         "--dataset",
@@ -1360,13 +1374,14 @@ def main(argv: list[str] | None = None) -> int:
                 source_page=args.source_page,
                 table=args.table,
                 filename=args.filename,
+                manifest_filename=args.manifest,
                 upload_r2=args.upload_r2,
                 record_revision=args.record_revision,
                 r2_bucket=args.r2_bucket,
                 r2_prefix=args.r2_prefix,
                 wrangler_command=args.wrangler_command,
             )
-        except SourceArtifactRevisionError as error:
+        except SourceArtifactManifestError as error:
             print(f"error: {error}", file=sys.stderr)
             return 1
         print(json.dumps(report.to_dict(), indent=2, sort_keys=True))

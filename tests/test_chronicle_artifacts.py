@@ -11,6 +11,8 @@ import yaml
 
 from chronicle.cli import main as cli_main
 from chronicle.artifacts import (
+    MalformedManifestError,
+    RecordedR2LocatorError,
     SourceArtifactRevisionError,
     build_artifact_rows,
     build_derived_r2_key,
@@ -1114,3 +1116,417 @@ def test_a_recorded_block_that_only_carries_a_uri_is_still_recognized(
     _serve(monkeypatch, SECOND_PUBLICATION)
     with pytest.raises(SourceArtifactRevisionError):
         _fetch_republished(output_dir, wrangler)
+
+
+# ---------------------------------------------------------------------------
+# Manifest addressing, entry identity, and recorded locators
+#
+# Everything below concerns the state a fetch reads before it writes: which
+# manifest it reads, what that manifest's entry says its vintage holds, and
+# whether the recorded R2 block names one object or two.
+# ---------------------------------------------------------------------------
+
+TRADITIONAL_MANIFEST = "manifest_traditional_source_package.yaml"
+ROTH_MANIFEST = "manifest_roth_source_package.yaml"
+
+
+def _publish(tmp_path, name, content):
+    """Write bytes a fetch can read as a local publisher path."""
+    path = tmp_path / "publisher" / name
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(content)
+    return path
+
+
+def _fetch_local(output_dir, source_path, *, package_id="soi-table-5", **kwargs):
+    return fetch_source_artifact(
+        str(source_path),
+        source_id="irs_soi",
+        package_id=package_id,
+        year=2022,
+        output_dir=output_dir,
+        **kwargs,
+    )
+
+
+def _entry(manifest_path):
+    return yaml.safe_load(manifest_path.read_text())["files"][2022]
+
+
+def test_fetch_artifact_writes_the_manifest_it_was_given(tmp_path):
+    """One publisher directory, two source packages, two manifests.
+
+    db/data/irs_soi/ira_contributions keeps the traditional and Roth IRA
+    packages side by side. A fetch that always wrote manifest.yaml would write
+    a third manifest neither package reads.
+    """
+    package = tmp_path / "db" / "data" / "irs_soi" / "ira_contributions"
+    traditional = _publish(tmp_path, "22in05ira.xlsx", b"traditional IRA table")
+    roth = _publish(tmp_path, "22in06ira.xlsx", b"roth IRA table")
+
+    _fetch_local(
+        package,
+        traditional,
+        package_id="soi-ira-traditional-contributions-2022",
+        manifest_filename=TRADITIONAL_MANIFEST,
+    )
+    _fetch_local(
+        package,
+        roth,
+        package_id="soi-ira-roth-contributions-2022",
+        manifest_filename=ROTH_MANIFEST,
+    )
+
+    assert sorted(path.name for path in package.glob("manifest*.yaml")) == [
+        ROTH_MANIFEST,
+        TRADITIONAL_MANIFEST,
+    ]
+    assert not (package / "manifest.yaml").exists()
+    assert _entry(package / TRADITIONAL_MANIFEST)["filename"] == "22in05ira.xlsx"
+    assert _entry(package / ROTH_MANIFEST)["filename"] == "22in06ira.xlsx"
+    assert _entry(package / TRADITIONAL_MANIFEST)["sha256"] == (
+        hashlib.sha256(b"traditional IRA table").hexdigest()
+    )
+
+
+def test_a_revision_is_refused_in_the_manifest_that_records_it(tmp_path):
+    """The IRA revision workflow the docs cite, on a two-manifest package."""
+    package = tmp_path / "db" / "data" / "irs_soi" / "ira_contributions"
+    traditional = _publish(tmp_path, "22in05ira.xlsx", b"traditional IRA table")
+    _fetch_local(
+        package,
+        traditional,
+        package_id="soi-ira-traditional-contributions-2022",
+        manifest_filename=TRADITIONAL_MANIFEST,
+    )
+    recorded = (package / TRADITIONAL_MANIFEST).read_bytes()
+
+    # The IRS re-publishes under the same URL and vintage.
+    traditional.write_bytes(b"traditional IRA table, revised rows")
+
+    with pytest.raises(SourceArtifactRevisionError) as raised:
+        _fetch_local(
+            package,
+            traditional,
+            package_id="soi-ira-traditional-contributions-2022",
+            manifest_filename=TRADITIONAL_MANIFEST,
+        )
+
+    assert TRADITIONAL_MANIFEST in str(raised.value)
+    assert (package / TRADITIONAL_MANIFEST).read_bytes() == recorded
+    assert (package / "22in05ira.xlsx").read_bytes() == b"traditional IRA table"
+
+    # Without the flag the same fetch addresses a manifest that has no entry to
+    # protect -- which is exactly why the flag exists.
+    report = _fetch_local(
+        package,
+        traditional,
+        package_id="soi-ira-traditional-contributions-2022",
+    )
+
+    assert report.valid
+    assert report.manifest_path.endswith("manifest.yaml")
+    assert (package / TRADITIONAL_MANIFEST).read_bytes() == recorded
+
+
+@pytest.mark.parametrize(
+    "manifest_filename",
+    ["../manifest.yaml", "nested/manifest.yaml", "", "   ", ".", ".."],
+)
+def test_a_manifest_name_must_stay_inside_the_package(tmp_path, manifest_filename):
+    package = tmp_path / "db" / "data" / "irs_soi" / "soi-table-5"
+    source = _publish(tmp_path, "table.xlsx", b"table")
+
+    with pytest.raises(ValueError, match="inside the package directory"):
+        _fetch_local(package, source, manifest_filename=manifest_filename)
+
+    assert not package.exists()
+
+
+def test_fetch_artifact_cli_targets_the_named_manifest(tmp_path, capsys):
+    package = tmp_path / "db" / "data" / "irs_soi" / "ira_contributions"
+    traditional = _publish(tmp_path, "22in05ira.xlsx", b"traditional IRA table")
+    argv = [
+        "fetch-artifact",
+        "--url",
+        str(traditional),
+        "--source-id",
+        "irs_soi",
+        "--package-id",
+        "soi-ira-traditional-contributions-2022",
+        "--year",
+        "2022",
+        "--out-dir",
+        str(package),
+        "--manifest",
+        TRADITIONAL_MANIFEST,
+    ]
+
+    assert harness_main(argv) == 0
+    payload = json.loads(capsys.readouterr().out)
+
+    assert payload["manifest_path"].endswith(TRADITIONAL_MANIFEST)
+    assert not (package / "manifest.yaml").exists()
+
+    traditional.write_bytes(b"traditional IRA table, revised rows")
+
+    assert harness_main(argv) == 1
+    assert TRADITIONAL_MANIFEST in capsys.readouterr().err
+
+
+# ---------------------------------------------------------------------------
+# Identity without a recorded R2 object
+# ---------------------------------------------------------------------------
+
+
+def _failing_wrangler(tmp_path, log):
+    wrangler = tmp_path / "failing-wrangler"
+    wrangler.write_text(f"#!/bin/sh\nprintf '%s\\n' \"$*\" >> {log}\nexit 1\n")
+    wrangler.chmod(0o755)
+    return wrangler
+
+
+def test_a_registered_entry_is_protected_before_it_is_ever_published(tmp_path):
+    """No storage.r2 yet is not no identity: the entry declares its bytes."""
+    package = tmp_path / "db" / "data" / "irs_soi" / "soi-table-5"
+    source = _publish(tmp_path, "22in05ira.xlsx", b"IRA table 5, first publication")
+    first = _fetch_local(package, source, upload_r2=False)
+    recorded = (package / "manifest.yaml").read_bytes()
+
+    assert "storage" not in _entry(package / "manifest.yaml")
+
+    # Same bytes: an ordinary repeated fetch, not a revision.
+    assert _fetch_local(package, source, upload_r2=False).sha256 == first.sha256
+
+    source.write_bytes(b"IRA table 5, silently re-published")
+    with pytest.raises(SourceArtifactRevisionError) as raised:
+        _fetch_local(package, source, upload_r2=False)
+
+    message = str(raised.value)
+    assert first.sha256 in message
+    assert hashlib.sha256(b"IRA table 5, silently re-published").hexdigest() in message
+    assert "size_bytes=30" in message
+    assert "--record-revision" in message
+    assert (package / "manifest.yaml").read_bytes() == recorded
+    assert (package / "22in05ira.xlsx").read_bytes() == (
+        b"IRA table 5, first publication"
+    )
+
+
+def test_a_failed_upload_does_not_disable_revision_protection(tmp_path):
+    """The state #225 hit: bytes registered, upload failed, no storage.r2."""
+    package = tmp_path / "db" / "data" / "irs_soi" / "soi-table-5"
+    log = tmp_path / "wrangler.log"
+    wrangler = _failing_wrangler(tmp_path, log)
+    source = _publish(tmp_path, "22in05ira.xlsx", b"IRA table 5, first publication")
+
+    report = _fetch_local(
+        package, source, upload_r2=True, wrangler_command=str(wrangler)
+    )
+    recorded = (package / "manifest.yaml").read_bytes()
+
+    assert report.errors == ("r2_upload_failed",)
+    assert "storage" not in _entry(package / "manifest.yaml")
+
+    source.write_bytes(b"IRA table 5, silently re-published")
+    with pytest.raises(SourceArtifactRevisionError):
+        _fetch_local(package, source, upload_r2=True, wrangler_command=str(wrangler))
+
+    assert (package / "manifest.yaml").read_bytes() == recorded
+
+
+def test_record_revision_over_an_unpublished_entry_supersedes_nothing(tmp_path):
+    """There is no object to keep, so the entry gets no previous_r2 key."""
+    package = tmp_path / "db" / "data" / "irs_soi" / "soi-table-5"
+    source = _publish(tmp_path, "22in05ira.xlsx", b"IRA table 5, first publication")
+    _fetch_local(package, source, upload_r2=False)
+
+    source.write_bytes(b"IRA table 5, silently re-published")
+    report = _fetch_local(package, source, upload_r2=False, record_revision=True)
+    revised = _entry(package / "manifest.yaml")
+
+    assert report.valid
+    assert revised["sha256"] == (
+        hashlib.sha256(b"IRA table 5, silently re-published").hexdigest()
+    )
+    assert "storage" not in revised
+
+
+# ---------------------------------------------------------------------------
+# Recorded locator cross-checks
+# ---------------------------------------------------------------------------
+
+
+def _recorded_package(tmp_path, content=b"IRA table 5, first publication"):
+    """A package whose entry records a published, content-addressed object."""
+    package = tmp_path / "db" / "data" / "irs_soi" / "soi-table-5"
+    wrangler = _wrangler_stub(tmp_path, tmp_path / "wrangler.log")
+    source = _publish(tmp_path, "22in05ira.xlsx", content)
+    report = _fetch_local(
+        package, source, upload_r2=True, wrangler_command=str(wrangler)
+    )
+    return package, source, report
+
+
+def _rewrite_recorded_r2(package, mutate, manifest="manifest.yaml"):
+    manifest_path = package / manifest
+    payload = yaml.safe_load(manifest_path.read_text())
+    mutate(payload["files"][2022]["storage"])
+    manifest_path.write_text(yaml.safe_dump(payload, sort_keys=False))
+    return manifest_path
+
+
+def _other_sha256():
+    return hashlib.sha256(b"some other object entirely").hexdigest()
+
+
+def _contradict_key(storage):
+    key = storage["r2"]["key"]
+    storage["r2"]["key"] = key.replace(key.split("/")[-2], _other_sha256())
+
+
+def _contradict_bucket(storage):
+    storage["r2"]["bucket"] = "some-other-bucket"
+
+
+def _contradict_provider(storage):
+    storage["r2"]["provider"] = "s3"
+
+
+def _mangle_uri(storage):
+    storage["r2"]["uri"] = "r2:/ledger-raw-missing-a-slash"
+
+
+def _drop_the_locator(storage):
+    storage["r2"] = {"provider": "r2", "bucket": "ledger-raw"}
+
+
+def _flatten_the_key(storage):
+    storage["r2"]["key"] = "raw/irs_soi/22in05ira.xlsx"
+    storage["r2"]["uri"] = f"r2://ledger-raw/{storage['r2']['key']}"
+
+
+@pytest.mark.parametrize(
+    ("mutate", "expected"),
+    [
+        pytest.param(_contradict_key, "contradicts uri", id="key-vs-uri"),
+        pytest.param(_contradict_bucket, "contradicts uri", id="bucket-vs-uri"),
+        pytest.param(_contradict_provider, "contradicts uri", id="provider-vs-uri"),
+        pytest.param(_mangle_uri, "is not provider://bucket/key", id="uri-shape"),
+        pytest.param(_drop_the_locator, "records no key", id="no-locator"),
+        pytest.param(
+            _flatten_the_key, "is not content-addressed", id="not-content-addressed"
+        ),
+    ],
+)
+def test_a_recorded_block_that_names_two_objects_is_refused(tmp_path, mutate, expected):
+    """A contradictory locator is an error, never a silently preserved block.
+
+    The key-vs-uri case is the one that used to pass: identity was read from
+    the key alone, so a block whose uri named different bytes was carried
+    forward verbatim, and the manifest kept publishing a URI for an object it
+    no longer described.
+    """
+    package, source, _ = _recorded_package(tmp_path)
+    manifest_path = _rewrite_recorded_r2(package, mutate)
+    recorded = manifest_path.read_bytes()
+
+    # Identical bytes: the fetch would otherwise preserve the recorded block.
+    with pytest.raises(RecordedR2LocatorError) as raised:
+        _fetch_local(package, source, upload_r2=False)
+
+    assert expected in str(raised.value)
+    assert manifest_path.read_bytes() == recorded
+
+
+def test_a_malformed_storage_block_is_not_treated_as_absent(tmp_path):
+    package, source, _ = _recorded_package(tmp_path)
+    manifest_path = _rewrite_recorded_r2(
+        package, lambda storage: storage.update({"r2": ["r2://ledger-raw/raw/key"]})
+    )
+    recorded = manifest_path.read_bytes()
+
+    with pytest.raises(MalformedManifestError, match="must be a mapping"):
+        _fetch_local(package, source, upload_r2=False)
+
+    assert manifest_path.read_bytes() == recorded
+
+
+def test_publish_raw_refuses_a_contradictory_recorded_block(tmp_path):
+    """Nothing is uploaded under a block that does not name one object."""
+    package, _, _ = _recorded_package(tmp_path)
+    log = tmp_path / "publish.log"
+    wrangler = _wrangler_stub(tmp_path, log)
+    manifest_path = _rewrite_recorded_r2(package, _contradict_key)
+    recorded = manifest_path.read_bytes()
+
+    report = publish_source_artifacts(package, wrangler_command=str(wrangler))
+
+    assert not report.valid
+    assert report.entries[0].upload is None
+    assert report.entries[0].errors[0].startswith("recorded_r2_locator_invalid:")
+    assert "contradicts uri" in report.entries[0].errors[0]
+    assert not log.exists()
+    assert manifest_path.read_bytes() == recorded
+
+
+# ---------------------------------------------------------------------------
+# Malformed manifests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "document",
+    [
+        pytest.param("- one entry\n- another\n", id="list"),
+        pytest.param("a bare scalar\n", id="scalar"),
+        pytest.param("files: [\n", id="unparseable"),
+    ],
+)
+def test_a_malformed_manifest_is_refused_before_anything_is_fetched(tmp_path, document):
+    """Not an absent manifest: refusing it protects what it still records.
+
+    The publisher path does not exist, so reaching the fetch at all would raise
+    FileNotFoundError instead. Getting MalformedManifestError is what says the
+    manifest was read and refused first.
+    """
+    package = tmp_path / "db" / "data" / "irs_soi" / "soi-table-5"
+    package.mkdir(parents=True)
+    manifest_path = package / "manifest.yaml"
+    manifest_path.write_text(document)
+
+    with pytest.raises(MalformedManifestError):
+        _fetch_local(package, tmp_path / "publisher" / "never-read.xlsx")
+
+    assert manifest_path.read_text() == document
+    assert list(package.iterdir()) == [manifest_path]
+
+
+@pytest.mark.parametrize("document", ["", "\n", "{}\n", "# only a comment\n"])
+def test_an_empty_manifest_still_reads_as_absent(tmp_path, document):
+    package = tmp_path / "db" / "data" / "irs_soi" / "soi-table-5"
+    package.mkdir(parents=True)
+    (package / "manifest.yaml").write_text(document)
+    source = _publish(tmp_path, "22in05ira.xlsx", b"IRA table 5")
+
+    report = _fetch_local(package, source, upload_r2=False)
+
+    assert report.valid
+    assert _entry(package / "manifest.yaml")["filename"] == "22in05ira.xlsx"
+
+
+def test_a_malformed_manifest_is_reported_by_inventory_and_publish(tmp_path):
+    """Neither sweep may crash on, or silently skip, a document it cannot read."""
+    package = tmp_path / "db" / "data" / "irs_soi" / "soi-table-5"
+    package.mkdir(parents=True)
+    (package / "manifest.yaml").write_text("- not a mapping\n")
+
+    inventory = inventory_source_artifacts(package)
+    published = publish_source_artifacts(package)
+
+    assert not inventory.valid
+    assert inventory.entries == ()
+    assert "must be a YAML mapping" in inventory.errors[0]
+    assert not published.valid
+    assert published.entries == ()
+    assert "must be a YAML mapping" in published.errors[0]
