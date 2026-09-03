@@ -759,6 +759,61 @@ def test_source_package_refuses_mapping_shaped_licensed_manifest(monkeypatch):
         spec._artifact_content(2023)
 
 
+def test_source_package_refuses_gated_sibling_claim_before_reading_bytes(
+    tmp_path, monkeypatch
+):
+    package = tmp_path / "fixture_package"
+    package.mkdir()
+    public_entry = {
+        "filename": "shared.csv",
+        "source_url": "https://example.test/public/shared.csv",
+        "access": "public",
+        "sha256": "a" * 64,
+    }
+    gated_entry = {
+        "filename": "shared.csv",
+        "source_url": "https://example.test/licensed/shared.csv",
+        "access": "licensed",
+        "sha256": "b" * 64,
+    }
+    for name, entry in (
+        ("manifest.yaml", public_entry),
+        ("manifest-licensed.yaml", gated_entry),
+    ):
+        (package / name).write_text(
+            yaml.safe_dump(
+                {
+                    "source_id": "publisher",
+                    "package_id": "release",
+                    "kind": "publisher_table",
+                    "files": {2024: entry},
+                }
+            )
+        )
+    monkeypatch.setattr("chronicle.source_package.files", lambda _package: tmp_path)
+    monkeypatch.setattr(
+        "chronicle.source_package._read_source_artifact_content",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("a conflicted basename must never reach the byte reader")
+        ),
+    )
+    spec = SourceArtifactSpec(
+        source_name="publisher",
+        source_table="Public table",
+        resource_package="fixture_resources",
+        resource_directory="fixture_package",
+        manifest="manifest.yaml",
+        vintage="2024",
+        extracted_at="2026-09-03",
+        extraction_method="fixture",
+        parser="delimited_text_full_rows",
+        artifact_year=2024,
+    )
+
+    with pytest.raises(ManifestAccessError, match="conflicting package basename"):
+        spec._artifact_content(2024)
+
+
 def test_source_package_path_builds_valid_soi_table_1_4_facts():
     package_path = REPO_ROOT / "packages" / "irs_soi" / "table_1_4"
     package = load_source_package(package_path)

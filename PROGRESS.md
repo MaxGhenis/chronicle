@@ -63,8 +63,26 @@
   appear beside its manifest.
 - Expanded the synthetic golden to assert the exact five committed packages
   and 19 entries. The focused registration/generator suite is 123 passed.
+- Completed a second package-boundary audit. Kindless publisher manifests are
+  now accepted only by an explicit frozen path-and-content list; reserved
+  `manifest*.yaml` names, symlink refusal, sibling-manifest identity checks,
+  source-cache custody checks, and package-wide manifest-only enforcement keep
+  bytes from crossing a renamed or alternate-manifest path.
+- Bound redistribution evidence to publisher, licence version, exact artifact
+  scope, durable HTTPS authority, and checksum; hardened public R2 locator,
+  bucket, provider, country-prefix, and revision-history validation; and made
+  known expected hashes reject conflicting package identities before I/O.
+- Added regressions for stale attestation fields, malformed stored publisher
+  identities, source-package sibling claims, frozen-manifest symlinks, and
+  noncanonical public R2 locators. The focused artifact/registration/reader
+  boundary run is 235 passed.
+- Aligned both aggregate source-plan fetch command forms with the strict new
+  manifest contract by emitting `--kind publisher_table`; all nine planner
+  tests pass.
 
 ## Next
 
-- Run the full requested verification, write `out.md`, update the PR body, and
-  push with `--force-with-lease`. Do not merge.
+- Align remaining CLI help and executable documentation with the strict kind
+  and reserved-manifest convention, then run the full requested verification.
+- Write `out.md`, update the PR body, and push with `--force-with-lease`. Do not
+  merge.

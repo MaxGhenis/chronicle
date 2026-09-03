@@ -33,11 +33,18 @@ from chronicle.core import (
 )
 from chronicle.env import env_flag, env_value
 from chronicle.registration import (
+    ACCESS_PUBLIC,
     ManifestAccessError,
     MicrodataReleaseNotParseableError,
+    PUBLISHER_TABLE_KIND,
+    canonical_artifact_filename,
+    canonical_manifest_filename,
     is_hash_only,
     is_microdata_release,
+    iter_file_specs,
+    manifest_filename_errors,
     normalize_access,
+    strict_manifest_kind,
 )
 from chronicle.sources.cells import (
     SourceArtifactMetadata,
@@ -843,12 +850,136 @@ class SourceArtifactSpec:
 
     def manifest_payload(self) -> dict[str, Any]:
         """Load the artifact manifest this package spec points at."""
+        manifest_name = canonical_manifest_filename(self.manifest)
         manifest_path = files(self.resource_package).joinpath(
             self.resource_directory,
-            self.manifest,
+            manifest_name,
         )
-        with manifest_path.open("r", encoding="utf-8") as file:
-            return yaml.safe_load(file) or {}
+        if getattr(manifest_path, "is_symlink", lambda: False)():
+            raise ManifestAccessError(
+                f"Artifact manifest {self.resource_directory}/{manifest_name} "
+                "is a symlink; package reads require its lexical regular file."
+            )
+        manifest_bytes = manifest_path.read_bytes()
+        payload = yaml.safe_load(manifest_bytes) or {}
+        if not isinstance(payload, dict):
+            raise ValueError(
+                f"Artifact manifest {self.resource_directory}/{self.manifest} "
+                f"must be a mapping, not {type(payload).__name__}."
+            )
+        locator = (
+            Path(self.resource_package.replace(".", "/"))
+            / self.resource_directory
+            / manifest_name
+        )
+        strict_manifest_kind(
+            payload,
+            manifest_locator=locator,
+            manifest_bytes=manifest_bytes,
+        )
+        filename_errors = manifest_filename_errors(payload)
+        if filename_errors:
+            raise ManifestAccessError(
+                f"Artifact manifest {self.resource_directory}/{manifest_name} "
+                f"has unsafe filenames: {', '.join(filename_errors)}."
+            )
+        return payload
+
+    def _package_manifest_payloads(
+        self,
+    ) -> tuple[tuple[str, dict[str, Any], str], ...]:
+        """Return every reserved manifest in the selected package directory."""
+        directory = files(self.resource_package).joinpath(self.resource_directory)
+        payloads: list[tuple[str, dict[str, Any], str]] = []
+        for candidate in sorted(directory.iterdir(), key=lambda item: item.name):
+            candidate_name = candidate.name
+            if not candidate_name.startswith("manifest") or Path(
+                candidate_name
+            ).suffix not in {".yaml", ".yml"}:
+                continue
+            if getattr(candidate, "is_symlink", lambda: False)():
+                raise ManifestAccessError(
+                    f"Artifact manifest {self.resource_directory}/{candidate_name} "
+                    "is a symlink; package reads require its lexical regular file."
+                )
+            manifest_bytes = candidate.read_bytes()
+            payload = yaml.safe_load(manifest_bytes) or {}
+            if not isinstance(payload, dict):
+                raise ManifestAccessError(
+                    f"Artifact manifest {self.resource_directory}/{candidate_name} "
+                    f"must be a mapping, not {type(payload).__name__}."
+                )
+            locator = (
+                Path(self.resource_package.replace(".", "/"))
+                / self.resource_directory
+                / candidate_name
+            )
+            kind = strict_manifest_kind(
+                payload,
+                manifest_locator=locator,
+                manifest_bytes=manifest_bytes,
+            )
+            filename_errors = manifest_filename_errors(payload)
+            if filename_errors:
+                raise ManifestAccessError(
+                    f"Artifact manifest {self.resource_directory}/{candidate_name} "
+                    f"has unsafe filenames: {', '.join(filename_errors)}."
+                )
+            payloads.append((candidate_name, payload, kind))
+        return tuple(payloads)
+
+    def _assert_package_filename_identities(
+        self,
+        manifests: tuple[tuple[str, dict[str, Any], str], ...],
+    ) -> None:
+        """Refuse conflicting custody claims for one package basename."""
+        seen: dict[str, tuple[str, Any, str | None, str, str]] = {}
+        for manifest_name, payload, kind in manifests:
+            files_by_year = payload.get("files")
+            if not isinstance(files_by_year, dict):
+                continue
+            for year, year_spec in files_by_year.items():
+                for spec in iter_file_specs(year_spec, kind=kind):
+                    if not isinstance(spec, dict) or "filename" not in spec:
+                        continue
+                    filename = canonical_artifact_filename(spec.get("filename"))
+                    sha256 = spec.get("sha256")
+                    sha256 = str(sha256).strip() if sha256 is not None else None
+                    access = normalize_access(spec.get("access"))
+                    previous = seen.get(filename)
+                    if previous is None:
+                        seen[filename] = (
+                            manifest_name,
+                            year,
+                            sha256,
+                            access,
+                            kind,
+                        )
+                        continue
+                    (
+                        previous_manifest,
+                        previous_year,
+                        previous_sha256,
+                        previous_access,
+                        previous_kind,
+                    ) = previous
+                    exact_public_publisher_alias = (
+                        kind == PUBLISHER_TABLE_KIND
+                        and previous_kind == PUBLISHER_TABLE_KIND
+                        and access == ACCESS_PUBLIC
+                        and previous_access == ACCESS_PUBLIC
+                        and sha256 is not None
+                        and sha256 == previous_sha256
+                    )
+                    if exact_public_publisher_alias:
+                        continue
+                    raise ManifestAccessError(
+                        "Source-package byte reads refuse conflicting package "
+                        f"basename {filename!r}: {previous_manifest} year "
+                        f"{previous_year!r} records sha256={previous_sha256!r}, "
+                        f"access={previous_access!r}, while {manifest_name} year "
+                        f"{year!r} records sha256={sha256!r}, access={access!r}."
+                    )
 
     def assert_parseable_manifest(self) -> None:
         """Refuse to parse a manifest that registers a microdata release.
@@ -858,26 +989,31 @@ class SourceArtifactSpec:
         or cells enter Chronicle
         (``docs/adr-chronicle-raw-microdata-identity.md``).
         """
-        manifest = self.manifest_payload()
-        if is_microdata_release(manifest):
+        manifests = self._package_manifest_payloads()
+        microdata_manifests = [
+            name for name, payload, _kind in manifests if is_microdata_release(payload)
+        ]
+        if microdata_manifests:
             raise MicrodataReleaseNotParseableError(
-                f"{self.resource_directory}/{self.manifest} registers a "
+                f"{self.resource_directory}/{', '.join(microdata_manifests)} "
+                "registers a "
                 "microdata release. Registration is identity only: no source "
                 "package parses a microdata release and no microdata records, "
                 "rows, columns, row values, or cells enter Chronicle."
             )
+        self._assert_package_filename_identities(manifests)
 
     def _artifact_content(
         self,
         year: int,
     ) -> tuple[bytes, str, str, dict[str, str]]:
+        self.assert_parseable_manifest()
         manifest = self.manifest_payload()
-        if is_microdata_release(manifest):
-            self.assert_parseable_manifest()
         spec = _year_mapping(manifest["files"], self.artifact_year or year)
+        artifact_filename = canonical_artifact_filename(spec["filename"])
         artifact_path = files(self.resource_package).joinpath(
             self.resource_directory,
-            spec["filename"],
+            artifact_filename,
         )
         content = _read_source_artifact_content(artifact_path, spec)
         expected_sha = spec.get("sha256")
@@ -889,7 +1025,7 @@ class SourceArtifactSpec:
             )
         storage = spec.get("storage") if isinstance(spec, dict) else None
         raw_r2 = storage.get("r2") if isinstance(storage, dict) else {}
-        return content, spec["filename"], spec["source_url"], raw_r2 or {}
+        return content, artifact_filename, spec["source_url"], raw_r2 or {}
 
     def _sheet_name(self, filename: str, *, year: int) -> str:
         if self.sheet_name:
@@ -2282,6 +2418,7 @@ def _read_source_artifact_content(
     spec: dict[str, Any],
 ) -> bytes:
     """Read a source artifact from package data, cache, or explicit fetch."""
+    canonical_artifact_filename(spec.get("filename"))
     access = normalize_access(spec.get("access"))
     if is_hash_only(access):
         raise ManifestAccessError(

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import json
+import shlex
 
 from chronicle.harness import main as harness_main
 from chronicle.pe_source_plan import build_pe_source_plan
@@ -125,6 +126,12 @@ def test_build_pe_source_plan_classifies_agent_work(tmp_path):
     assert stages["blocked.xlsx"] == "blocked_or_deferred"
     assert stages["deferred.zip"] == "blocked_or_deferred"
     assert stages["source_page.html"] == "existing_source_package"
+    assert shlex.split(command_hints["irs_soi_ty2023_table_1_2.xls"])[-3:] == [
+        "--kind",
+        "publisher_table",
+        "--upload-r2",
+    ]
+    assert "--kind publisher_table --upload-r2" in command_hints["source.csv"]
     assert (
         "Manifest marks this row as source_package" in command_hints["source_page.html"]
     )
@@ -606,7 +613,9 @@ def test_build_pe_source_plan_routes_fred_to_publisher_lookup(tmp_path):
     assert item.priority == 75
     assert item.blockers == ("publisher_source_required",)
     assert "Find and register the bea publisher artifact" in item.command_hint
-    assert "Do not use this FRED URL as a Chronicle source artifact" in item.command_hint
+    assert (
+        "Do not use this FRED URL as a Chronicle source artifact" in item.command_hint
+    )
 
 
 def _row(**overrides):

@@ -27,11 +27,18 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+import hashlib
 from pathlib import Path
 import re
 from typing import Any
+from urllib.parse import urlparse
 
 import yaml
+
+from chronicle.env import env_value
+from chronicle.grandfathered_publisher_manifests import (
+    FROZEN_PUBLISHER_MANIFEST_SHA256,
+)
 
 
 ACCESS_PUBLIC = "public"
@@ -61,6 +68,11 @@ HASH_SOURCES: tuple[str, ...] = (
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
 
+SOURCE_ARTIFACT_CACHE_ENV = "CHRONICLE_SOURCE_ARTIFACT_CACHE_DIR"
+DEFAULT_SOURCE_ARTIFACT_CACHE_DIR = (
+    Path.home() / ".cache" / "policyengine-chronicle" / "source-artifacts"
+)
+
 LICENCE_EVIDENCE_FIELDS: tuple[str, ...] = (
     "issuer",
     "licence_id",
@@ -78,6 +90,7 @@ class RedistributableLicence:
     name: str
     basis: str
     evidence_url: str
+    versions: tuple[str, ...]
 
 
 # Exact identifiers keep the custody decision reviewable. A descriptive string
@@ -87,11 +100,13 @@ REDISTRIBUTABLE_MICRODATA_LICENCES: Mapping[str, RedistributableLicence] = {
         name="U.S. Government work",
         basis="17 U.S.C. §105",
         evidence_url="https://www.copyright.gov/title17/92chap1.html#105",
+        versions=("17 U.S.C. section 105", "17 U.S.C. §105", "17 U.S.C. 105"),
     ),
     "U.S. Government work / 17 U.S.C. §105": RedistributableLicence(
         name="U.S. Government work",
         basis="17 U.S.C. §105",
         evidence_url="https://www.copyright.gov/title17/92chap1.html#105",
+        versions=("17 U.S.C. section 105", "17 U.S.C. §105", "17 U.S.C. 105"),
     ),
     "OGL-3.0": RedistributableLicence(
         name="Open Government Licence v3.0",
@@ -99,6 +114,7 @@ REDISTRIBUTABLE_MICRODATA_LICENCES: Mapping[str, RedistributableLicence] = {
         evidence_url=(
             "https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/"
         ),
+        versions=("3.0", "3", "v3", "version 3.0"),
     ),
     "UK Open Government Licence v3": RedistributableLicence(
         name="Open Government Licence v3.0",
@@ -106,26 +122,31 @@ REDISTRIBUTABLE_MICRODATA_LICENCES: Mapping[str, RedistributableLicence] = {
         evidence_url=(
             "https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/"
         ),
+        versions=("3.0", "3", "v3", "version 3.0"),
     ),
     "CC0-1.0": RedistributableLicence(
         name="CC0 1.0 Universal",
         basis="Creative Commons CC0 1.0 legal code",
         evidence_url="https://creativecommons.org/publicdomain/zero/1.0/legalcode",
+        versions=("1.0",),
     ),
     "CC0 1.0": RedistributableLicence(
         name="CC0 1.0 Universal",
         basis="Creative Commons CC0 1.0 legal code",
         evidence_url="https://creativecommons.org/publicdomain/zero/1.0/legalcode",
+        versions=("1.0",),
     ),
     "CC-BY-4.0": RedistributableLicence(
         name="Creative Commons Attribution 4.0 International",
         basis="Creative Commons CC BY 4.0 legal code",
         evidence_url="https://creativecommons.org/licenses/by/4.0/legalcode",
+        versions=("4.0",),
     ),
     "CC BY 4.0": RedistributableLicence(
         name="Creative Commons Attribution 4.0 International",
         basis="Creative Commons CC BY 4.0 legal code",
         evidence_url="https://creativecommons.org/licenses/by/4.0/legalcode",
+        versions=("4.0",),
     ),
 }
 
@@ -192,6 +213,51 @@ def manifest_kind(manifest: Mapping[str, Any] | None) -> str:
     return kind
 
 
+def strict_manifest_kind(
+    manifest: Mapping[str, Any] | None,
+    *,
+    manifest_locator: str | Path,
+    manifest_bytes: bytes,
+) -> str:
+    """Resolve an explicit kind or one exact grandfathered publisher manifest.
+
+    Kindless compatibility is bound to both repository-relative path and file
+    bytes. Copying a legacy manifest elsewhere, or modifying it without adding
+    ``kind``, cannot silently classify microdata as a publisher table.
+    """
+    locator_path = Path(manifest_locator)
+    if locator_path.is_symlink():
+        raise ManifestAccessError(
+            f"Manifest {str(manifest_locator)!r} is a symlink; frozen identity "
+            "and manifest writes require a regular file at the lexical path."
+        )
+    if isinstance(manifest, Mapping) and manifest.get("kind") is not None:
+        return manifest_kind(manifest)
+
+    locator = _repository_manifest_locator(manifest_locator)
+    checksum = hashlib.sha256(manifest_bytes).hexdigest()
+    expected = FROZEN_PUBLISHER_MANIFEST_SHA256.get(locator)
+    if expected == checksum:
+        return PUBLISHER_TABLE_KIND
+    raise ManifestAccessError(
+        f"Manifest {locator!r} must declare kind explicitly. Only an exact "
+        "path-and-content identity in the frozen publisher-manifest list may "
+        "remain kindless."
+    )
+
+
+def _repository_manifest_locator(manifest_locator: str | Path) -> str:
+    """Return a stable repository-relative spelling for a manifest locator."""
+    locator = Path(manifest_locator)
+    repository = Path(__file__).resolve().parents[1]
+    if locator.is_absolute():
+        try:
+            locator = locator.absolute().relative_to(repository)
+        except ValueError:
+            return locator.absolute().as_posix()
+    return locator.as_posix().removeprefix("./")
+
+
 def safe_manifest_kind(manifest: Mapping[str, Any] | None) -> tuple[str, str | None]:
     """Return ``(kind, error_code)`` without raising on an unknown kind."""
     try:
@@ -235,11 +301,33 @@ def canonical_artifact_filename(filename: Any) -> str:
     POSIX would accept a Windows separator, while silently taking the basename
     would let ``./adult.tab`` evade an existing ``adult.tab`` registration.
     """
+    value = _bare_filename(filename, label="Artifact filename")
+    if value.startswith("manifest") and Path(value).suffix in {".yaml", ".yml"}:
+        raise ManifestAccessError(
+            f"Artifact filename {value!r} uses Chronicle's reserved manifest "
+            "namespace; manifest*.yaml and manifest*.yml name metadata only."
+        )
+    return value
+
+
+def canonical_manifest_filename(filename: Any) -> str:
+    """Return a manifest basename from the reserved, unambiguous namespace."""
+    value = _bare_filename(filename, label="Manifest filename")
+    if not value.startswith("manifest") or Path(value).suffix not in {".yaml", ".yml"}:
+        raise ManifestAccessError(
+            "Manifest filenames must match manifest*.yaml or manifest*.yml; "
+            f"got {filename!r}."
+        )
+    return value
+
+
+def _bare_filename(filename: Any, *, label: str) -> str:
+    """Return a basename with neither slash spelling nor dot segments."""
     value = _text(filename)
     if not value or value in {".", ".."} or "/" in value or "\\" in value:
         raise ManifestAccessError(
-            "Artifact filename must be a bare basename with no path separators "
-            f"or dot segments; got {filename!r}."
+            f"{label} must be a bare basename with no path separators or dot "
+            f"segments; got {filename!r}."
         )
     return value
 
@@ -303,15 +391,27 @@ def manifest_filename_errors(manifest: Mapping[str, Any] | None) -> tuple[str, .
                     "filename_alias_collision:"
                     f"{canonical}:{previous[1]}:{previous[0]}:{year}:{raw_text}"
                 )
-            elif previous is not None and kind == MICRODATA_RELEASE_KIND:
+            elif previous is not None:
                 previous_spec = previous[2]
                 previous_sha = _text(previous_spec.get("sha256"))
                 current_sha = _text(spec.get("sha256"))
-                public_path_collision = ACCESS_PUBLIC in {
-                    safe_entry_access(previous_spec),
-                    safe_entry_access(spec),
-                }
-                if previous_sha == current_sha or public_path_collision:
+                previous_access = safe_entry_access(previous_spec)
+                current_access = safe_entry_access(spec)
+                legacy_public_alias = (
+                    kind == PUBLISHER_TABLE_KIND
+                    and previous_access == ACCESS_PUBLIC
+                    and current_access == ACCESS_PUBLIC
+                    and previous_sha is not None
+                    and previous_sha == current_sha
+                )
+                microdata_path_collision = kind == MICRODATA_RELEASE_KIND and (
+                    previous_sha == current_sha
+                    or ACCESS_PUBLIC in {previous_access, current_access}
+                )
+                publisher_path_collision = (
+                    kind == PUBLISHER_TABLE_KIND and not legacy_public_alias
+                )
+                if microdata_path_collision or publisher_path_collision:
                     errors.append(
                         "filename_identity_collision:"
                         f"{canonical}:{previous[1]}:{previous_sha}:"
@@ -327,7 +427,11 @@ def is_redistributable_microdata_licence(licence: Any) -> bool:
     return _text(licence) in REDISTRIBUTABLE_MICRODATA_LICENCES
 
 
-def microdata_licence_evidence_errors(spec: Any) -> tuple[str, ...]:
+def microdata_licence_evidence_errors(
+    spec: Any,
+    *,
+    manifest: Mapping[str, Any] | None = None,
+) -> tuple[str, ...]:
     """Return errors in an artifact-bound redistribution evidence block."""
     if not isinstance(spec, Mapping):
         return ("missing_licence_evidence",)
@@ -343,6 +447,26 @@ def microdata_licence_evidence_errors(spec: Any) -> tuple[str, ...]:
     licence_id = _text(evidence.get("licence_id"))
     if licence_id and licence_id != _text(spec.get("licence")):
         errors.append("licence_evidence_licence_mismatch")
+    allowlisted = REDISTRIBUTABLE_MICRODATA_LICENCES.get(_text(spec.get("licence")))
+    licence_version = _text(evidence.get("licence_version"))
+    if (
+        allowlisted is not None
+        and licence_version is not None
+        and licence_version not in allowlisted.versions
+    ):
+        errors.append("licence_evidence_version_mismatch")
+
+    publisher = (
+        _text(manifest.get("publisher")) if isinstance(manifest, Mapping) else None
+    )
+    issuer = _text(evidence.get("issuer"))
+    if publisher is not None and issuer is not None and issuer != publisher:
+        errors.append("licence_evidence_issuer_mismatch")
+
+    filename = _text(spec.get("filename"))
+    scope = _text(evidence.get("scope_statement"))
+    if filename is not None and scope is not None and filename not in scope:
+        errors.append("licence_evidence_scope_mismatch")
 
     covered_sha256 = _text(evidence.get("covered_sha256"))
     if covered_sha256 and not _SHA256_RE.fullmatch(covered_sha256):
@@ -352,8 +476,15 @@ def microdata_licence_evidence_errors(spec: Any) -> tuple[str, ...]:
         errors.append("licence_evidence_sha256_mismatch")
 
     evidence_url = _text(evidence.get("evidence_url"))
-    if evidence_url and not evidence_url.startswith(("https://", "http://")):
-        errors.append("licence_evidence_url_not_durable")
+    if evidence_url:
+        parsed_evidence_url = urlparse(evidence_url)
+        if (
+            parsed_evidence_url.scheme != "https"
+            or not parsed_evidence_url.hostname
+            or parsed_evidence_url.username is not None
+            or parsed_evidence_url.password is not None
+        ):
+            errors.append("licence_evidence_url_not_durable")
     return tuple(_dedupe(errors))
 
 
@@ -501,13 +632,19 @@ def validate_file_entry(
     ):
         errors.append("public_microdata_licence_not_allowlisted")
     if kind == MICRODATA_RELEASE_KIND and access == ACCESS_PUBLIC:
-        errors.extend(microdata_licence_evidence_errors(spec))
+        errors.extend(microdata_licence_evidence_errors(spec, manifest=manifest))
         if local_file_exists:
             errors.append("bytes_present_beside_microdata_manifest")
     if kind == MICRODATA_RELEASE_KIND:
         errors.extend(_microdata_attestation_errors(spec))
 
     effective_access = effective_entry_access(spec, kind=kind)
+    if (
+        kind == MICRODATA_RELEASE_KIND
+        and is_hash_only(effective_access)
+        and _text(spec.get("hash_source")) == HASH_SOURCE_CHRONICLE_FETCH
+    ):
+        errors.append("chronicle_fetch_requires_public_byte_custody")
     if is_hash_only(effective_access):
         errors.extend(
             _hash_only_entry_errors(
@@ -597,7 +734,7 @@ def _hash_only_entry_errors(
         errors.append("missing_verified_at")
     if local_file_exists:
         errors.append("bytes_present_for_hash_only_entry")
-    if recorded_r2(spec):
+    if has_recorded_r2(spec):
         errors.append("r2_location_for_hash_only_entry")
     return errors
 
@@ -628,6 +765,14 @@ def recorded_r2(spec: Any) -> Mapping[str, Any] | None:
         return None
     r2 = storage.get("r2")
     return r2 if isinstance(r2, Mapping) else None
+
+
+def has_recorded_r2(spec: Any) -> bool:
+    """Whether an entry declares ``storage.r2``, even if it is malformed."""
+    if not isinstance(spec, Mapping):
+        return False
+    storage = spec.get("storage")
+    return isinstance(storage, Mapping) and "r2" in storage
 
 
 @dataclass(frozen=True)
@@ -732,6 +877,15 @@ def register_hash_only_artifact(
         raise HashOnlyRegistrationError(
             f"A {access_class} registration must record the artifact vintage."
         )
+    if (
+        not isinstance(size_bytes, int)
+        or isinstance(size_bytes, bool)
+        or size_bytes < 0
+    ):
+        raise HashOnlyRegistrationError(
+            "A microdata registration requires a non-negative integer "
+            f"size_bytes; got {size_bytes!r}."
+        )
     try:
         artifact_name = canonical_artifact_filename(filename)
     except ManifestAccessError as exc:
@@ -787,7 +941,7 @@ def register_hash_only_artifact(
 
     output = Path(output_dir)
     try:
-        manifest_name = canonical_artifact_filename(manifest_filename)
+        manifest_name = canonical_manifest_filename(manifest_filename)
     except ManifestAccessError as exc:
         raise HashOnlyRegistrationError(
             "--manifest must name one file inside --out-dir; got "
@@ -795,18 +949,46 @@ def register_hash_only_artifact(
         ) from exc
     manifest_path = output / manifest_name
     payload = _load_manifest(manifest_path)
-    existing_kind = manifest_kind(payload)
-    if payload and existing_kind != MICRODATA_RELEASE_KIND:
-        raise HashOnlyRegistrationError(
-            f"{manifest_path} is a {existing_kind} manifest; hash-only "
-            "registrations belong in a kind: microdata_release manifest."
-        )
+    if payload:
+        try:
+            existing_kind = strict_manifest_kind(
+                payload,
+                manifest_locator=manifest_path,
+                manifest_bytes=manifest_path.read_bytes(),
+            )
+        except ManifestAccessError as exc:
+            raise HashOnlyRegistrationError(str(exc)) from exc
+        if existing_kind != MICRODATA_RELEASE_KIND:
+            raise HashOnlyRegistrationError(
+                f"{manifest_path} is a {existing_kind} manifest; hash-only "
+                "registrations belong in a kind: microdata_release manifest."
+            )
     filename_errors = manifest_filename_errors(payload)
     if filename_errors:
         raise HashOnlyRegistrationError(
             f"{manifest_path} has unsafe artifact filenames: "
             f"{', '.join(filename_errors)}."
         )
+    local_path = output / artifact_name
+    if local_path.exists():
+        raise HashOnlyRegistrationError(
+            f"Refusing to register {artifact_name!r} hash-only while its bytes "
+            f"are present at {local_path}. A {access_class} artifact's bytes "
+            "must not live in a Chronicle store."
+        )
+    cache_path = _registered_cache_path(checksum, artifact_name)
+    if cache_path.exists():
+        raise HashOnlyRegistrationError(
+            f"Refusing to register {artifact_name!r} hash-only while its bytes "
+            f"are present in the Chronicle source cache at {cache_path}. Remove "
+            "the cached object before registering it as licensed or restricted."
+        )
+    sibling_manifests = _registration_sibling_manifests(manifest_path)
+    _assert_hash_only_package_boundary(
+        manifest_path=manifest_path,
+        sibling_manifests=sibling_manifests,
+        filename=artifact_name,
+    )
 
     entry = _registration_entry(
         filename=artifact_name,
@@ -838,12 +1020,19 @@ def register_hash_only_artifact(
 
     _assert_manifest_identity(payload, manifest_path, "source_id", source_id)
     _assert_manifest_identity(payload, manifest_path, "package_id", package_id)
+    publisher_value = _text(publisher) or _text(payload.get("publisher"))
+    if publisher_value is None:
+        raise HashOnlyRegistrationError(
+            "A microdata registration must identify its publisher; pass "
+            "--publisher when creating the manifest."
+        )
+    if publisher is not None:
+        _assert_manifest_identity(payload, manifest_path, "publisher", publisher_value)
     payload.setdefault("source_id", source_id)
     payload.setdefault("package_id", package_id)
     payload["kind"] = MICRODATA_RELEASE_KIND
     payload.setdefault("dataset", dataset or f"{source_id}_{package_id}")
-    if publisher:
-        payload.setdefault("publisher", publisher)
+    payload.setdefault("publisher", publisher_value)
     if source_page:
         payload.setdefault("source_page", source_page)
     if table:
@@ -859,13 +1048,6 @@ def register_hash_only_artifact(
         raise HashOnlyRegistrationError(str(exc)) from exc
 
     entries = _existing_entries(files, year_key)
-    local_path = output / artifact_name
-    if local_path.exists():
-        raise HashOnlyRegistrationError(
-            f"Refusing to register {artifact_name!r} hash-only while its bytes "
-            f"are present at {local_path}. A {access_class} artifact's bytes "
-            "must not live in a Chronicle store."
-        )
     # Two passes, so re-registering an existing pin stays idempotent even after
     # a reissue has added a second entry for the same filename. A single pass
     # would raise on the first filename match with a different checksum before
@@ -878,7 +1060,7 @@ def register_hash_only_artifact(
         and _text(existing.get("sha256")) == checksum
     ]
     for _index, existing in exact_matches:
-        if recorded_r2(existing):
+        if has_recorded_r2(existing):
             raise HashOnlyRegistrationError(
                 f"Refusing to reclassify {artifact_name!r} as "
                 f"{access_class}: its identity still records storage.r2. "
@@ -904,7 +1086,11 @@ def register_hash_only_artifact(
     replaced = bool(exact_matches)
     if exact_matches:
         target_index, existing = exact_matches[0]
-        entries[target_index] = {**dict(existing), **entry}
+        replacement = dict(existing)
+        replacement.pop("attestation_evidence", None)
+        replacement.pop("pinned_from", None)
+        replacement.update(entry)
+        entries[target_index] = replacement
     if not replaced:
         superseded = [
             existing
@@ -923,6 +1109,12 @@ def register_hash_only_artifact(
         entries.append(entry)
 
     files[year_key] = entries
+    final_filename_errors = manifest_filename_errors(payload)
+    if final_filename_errors:
+        raise HashOnlyRegistrationError(
+            f"{manifest_path} would contain unsafe artifact filenames: "
+            f"{', '.join(final_filename_errors)}."
+        )
     output.mkdir(parents=True, exist_ok=True)
     manifest_path.write_text(
         yaml.safe_dump(payload, sort_keys=False, allow_unicode=True),
@@ -1000,6 +1192,11 @@ def _existing_entries(files: Any, year: Any) -> list[Any]:
 
 def _load_manifest(manifest_path: Path) -> dict[str, Any]:
     """Load a manifest mapping, refusing malformed or non-mapping YAML."""
+    if manifest_path.is_symlink():
+        raise HashOnlyRegistrationError(
+            f"{manifest_path} is a symlink; registration requires a regular "
+            "manifest at its lexical package path."
+        )
     if not manifest_path.exists():
         return {}
     try:
@@ -1016,6 +1213,101 @@ def _load_manifest(manifest_path: Path) -> dict[str, Any]:
             f"{type(payload).__name__}. Chronicle will not overwrite it."
         )
     return payload
+
+
+def _registration_sibling_manifests(
+    manifest_path: Path,
+) -> tuple[tuple[Path, dict[str, Any]], ...]:
+    """Load sibling manifests addressed by any valid bare YAML filename."""
+    if not manifest_path.parent.exists():
+        return ()
+    siblings: list[tuple[Path, dict[str, Any]]] = []
+    for candidate in sorted(manifest_path.parent.iterdir()):
+        if (
+            candidate == manifest_path
+            or not candidate.is_file()
+            or not candidate.name.startswith("manifest")
+            or candidate.suffix not in {".yaml", ".yml"}
+        ):
+            continue
+        sibling = _load_manifest(candidate)
+        raw = candidate.read_bytes()
+        try:
+            strict_manifest_kind(
+                sibling,
+                manifest_locator=candidate,
+                manifest_bytes=raw,
+            )
+        except ManifestAccessError as exc:
+            raise HashOnlyRegistrationError(str(exc)) from exc
+        filename_errors = manifest_filename_errors(sibling)
+        if filename_errors:
+            raise HashOnlyRegistrationError(
+                f"{candidate} has unsafe artifact filenames: "
+                f"{', '.join(filename_errors)}."
+            )
+        siblings.append((candidate, sibling))
+    return tuple(siblings)
+
+
+def _assert_hash_only_package_boundary(
+    *,
+    manifest_path: Path,
+    sibling_manifests: tuple[tuple[Path, dict[str, Any]], ...],
+    filename: str,
+) -> None:
+    """Keep a microdata package manifest-only and honor sibling identities."""
+    allowed = {manifest_path.resolve()}
+    allowed.update(path.resolve() for path, _ in sibling_manifests)
+    payloads = (
+        sorted(
+            candidate
+            for candidate in manifest_path.parent.rglob("*")
+            if candidate.is_file() and candidate.resolve() not in allowed
+        )
+        if manifest_path.parent.exists()
+        else []
+    )
+    if payloads:
+        relative = ", ".join(
+            str(candidate.relative_to(manifest_path.parent)) for candidate in payloads
+        )
+        raise HashOnlyRegistrationError(
+            f"Refusing a microdata registration beside non-manifest payload "
+            f"files: {relative}. Git custody is manifest-only."
+        )
+
+    for sibling_path, sibling in sibling_manifests:
+        files = sibling.get("files")
+        assert isinstance(files, dict)
+        for sibling_year, year_spec in files.items():
+            for spec in year_spec if isinstance(year_spec, list) else (year_spec,):
+                if not isinstance(spec, Mapping):
+                    continue
+                try:
+                    sibling_filename = canonical_artifact_filename(spec.get("filename"))
+                except ManifestAccessError:
+                    continue
+                if sibling_filename == filename:
+                    storage_note = (
+                        " and records storage.r2" if has_recorded_r2(spec) else ""
+                    )
+                    raise HashOnlyRegistrationError(
+                        f"{sibling_path} entry {sibling_year!r} already reserves "
+                        f"basename {filename!r}{storage_note}; register or "
+                        "reclassify the identity in that manifest instead."
+                    )
+
+
+def _registered_cache_path(checksum: str, filename: str) -> Path:
+    """Return the source-cache path that would hold one registered identity."""
+    cache_root = Path(
+        env_value(
+            SOURCE_ARTIFACT_CACHE_ENV,
+            default=DEFAULT_SOURCE_ARTIFACT_CACHE_DIR,
+        )
+    )
+    return cache_root / checksum / filename
 
 
 def _text(value: Any) -> str | None:
@@ -1060,8 +1352,10 @@ __all__ = [
     "REDISTRIBUTABLE_MICRODATA_LICENCES",
     "RedistributableLicence",
     "canonical_artifact_filename",
+    "canonical_manifest_filename",
     "effective_entry_access",
     "entry_access",
+    "has_recorded_r2",
     "is_hash_only",
     "is_microdata_release",
     "iter_file_specs",
@@ -1077,5 +1371,6 @@ __all__ = [
     "safe_entry_access",
     "safe_manifest_kind",
     "stores_bytes",
+    "strict_manifest_kind",
     "validate_file_entry",
 ]

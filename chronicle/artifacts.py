@@ -37,15 +37,16 @@ from chronicle.registration import (
     ListSpecRejected,
     ManifestAccessError,
     canonical_artifact_filename,
+    canonical_manifest_filename,
     effective_entry_access,
     is_hash_only,
     iter_file_specs,
     manifest_filename_errors,
     microdata_licence_evidence_errors,
     normalize_access,
-    recorded_r2,
     resolve_year_key,
     safe_manifest_kind,
+    strict_manifest_kind,
     validate_file_entry,
 )
 
@@ -77,13 +78,24 @@ def _manifest_path(output: Path, manifest_filename: str) -> Path:
     The name is a filename, not a path: it selects among the manifests a
     package directory keeps, and must not reach outside it.
     """
-    name = manifest_filename.strip()
-    if not name or name in (".", "..") or name != Path(name).name:
+    try:
+        name = canonical_manifest_filename(manifest_filename)
+    except ManifestAccessError as exc:
         raise ValueError(
             "Manifest must name a file inside the package directory, not "
             f"{manifest_filename!r}."
-        )
+        ) from exc
     return output / name
+
+
+def _manifest_paths(root: Path, manifest_filename: str) -> list[Path]:
+    """Return exact named manifests below ``root`` without glob expansion."""
+    name = _manifest_path(Path(), manifest_filename).name
+    return sorted(
+        candidate
+        for candidate in root.rglob("*")
+        if candidate.is_file() and candidate.name == name
+    )
 
 
 def default_r2_raw_bucket() -> str:
@@ -452,7 +464,10 @@ class RawArtifactPublishReport:
             "uploaded_count": len(uploaded),
             "failed_count": sum(1 for entry in self.entries if not entry.valid),
             "hash_only_refused_count": sum(
-                1 for entry in self.entries if entry.skipped is not None
+                1
+                for entry in self.entries
+                if entry.skipped is not None
+                and entry.skipped.startswith("hash_only_access:")
             ),
             "r2_link_count": sum(
                 1 for entry in self.entries if entry.r2_location is not None
@@ -651,12 +666,20 @@ def fetch_source_artifact(
         year=year,
         filename=artifact_filename,
     )
-    _assert_no_hash_only_entry(
-        existing_manifest,
-        manifest_path,
-        year,
-        artifact_filename,
+    package_manifests = _package_manifests_before_fetch(
+        manifest_path=manifest_path,
+        selected_manifest=existing_manifest,
+        selected_kind=manifest_kind_value,
+        filename=artifact_filename,
     )
+    if any(
+        kind_value == MICRODATA_RELEASE_KIND for _, _, kind_value in package_manifests
+    ):
+        _assert_microdata_package_is_manifest_only(
+            manifest_path,
+            allowed_manifests={path for path, _, _ in package_manifests},
+        )
+        _assert_microdata_source_is_outside_db_data(source_url)
 
     if expected_sha256 is not None and not _SHA256_KEY_SEGMENT.fullmatch(
         expected_sha256
@@ -668,6 +691,14 @@ def fetch_source_artifact(
     if expected_size_bytes is not None and expected_size_bytes < 0:
         raise ArtifactIntegrityError(
             f"--expected-size-bytes must be non-negative; got {expected_size_bytes!r}."
+        )
+    if expected_sha256 is not None:
+        _assert_package_filename_accepts_identity(
+            package_manifests,
+            selected_manifest_path=manifest_path,
+            year=year,
+            filename=artifact_filename,
+            sha256=expected_sha256,
         )
 
     if manifest_kind_value == MICRODATA_RELEASE_KIND and access is None:
@@ -691,19 +722,37 @@ def fetch_source_artifact(
         evidence.get("covered_sha256") if isinstance(evidence, Mapping) else None
     )
     proposed_entry = {
+        "filename": artifact_filename,
         "access": access_class,
         "licence": licence_text,
         "sha256": expected_sha256 or evidence_sha,
         "licence_evidence": evidence,
     }
+    evidence_manifest = dict(existing_manifest)
+    if publisher:
+        evidence_manifest.setdefault("publisher", publisher)
+    evidence_errors = microdata_licence_evidence_errors(
+        proposed_entry,
+        manifest=evidence_manifest,
+    )
     effective_access = effective_entry_access(proposed_entry, kind=manifest_kind_value)
+    if (
+        manifest_kind_value == MICRODATA_RELEASE_KIND
+        and access_class == ACCESS_PUBLIC
+        and licence_text in REDISTRIBUTABLE_MICRODATA_LICENCES
+        and evidence_errors
+    ):
+        raise ManifestAccessError(
+            "fetch-artifact refuses invalid artifact-bound licence evidence "
+            f"({', '.join(evidence_errors)}). Register the artifact hash-only "
+            "with `chronicle register-artifact`."
+        )
     if is_hash_only(effective_access):
         if access_class != ACCESS_PUBLIC:
             reason = f"access={access_class!r}"
         elif not licence_text or licence_text not in REDISTRIBUTABLE_MICRODATA_LICENCES:
             reason = f"non-allowlisted public microdata licence {licence_text!r}"
         else:
-            evidence_errors = microdata_licence_evidence_errors(proposed_entry)
             reason = (
                 "invalid artifact-bound licence evidence ("
                 + ", ".join(evidence_errors)
@@ -722,6 +771,12 @@ def fetch_source_artifact(
         if not publisher or not publisher.strip():
             raise ManifestAccessError(
                 "A microdata fetch must record --publisher before bytes are read."
+            )
+        recorded_publisher = existing_manifest.get("publisher")
+        if recorded_publisher is not None and recorded_publisher != publisher:
+            raise SourceArtifactManifestError(
+                f"{manifest_path} declares publisher={recorded_publisher!r}; "
+                f"refusing to write publisher={publisher!r}."
             )
         if not vintage or not vintage.strip():
             raise ManifestAccessError(
@@ -771,6 +826,14 @@ def fetch_source_artifact(
             f"Fetched artifact size mismatch for {artifact_filename}: expected "
             f"{expected_size_bytes}, got {size_bytes}."
         )
+
+    _assert_package_filename_accepts_identity(
+        package_manifests,
+        selected_manifest_path=manifest_path,
+        year=year,
+        filename=artifact_filename,
+        sha256=sha256,
+    )
 
     # Guard before the cached artifact is touched. A rejected fetch must leave
     # the recorded bytes and their manifest entry exactly as they were.
@@ -1050,7 +1113,7 @@ def publish_source_artifacts(
 
     entries: list[RawArtifactPublishEntry] = []
     errors: list[str] = []
-    for manifest_path in sorted(root_path.rglob(manifest_filename)):
+    for manifest_path in _manifest_paths(root_path, manifest_filename):
         try:
             manifest = _read_manifest(manifest_path)
         except (OSError, MalformedManifestError) as exc:
@@ -1095,9 +1158,22 @@ def publish_source_artifacts(
             continue
 
         try:
-            kind = normalize_manifest_kind(manifest)
+            kind = strict_manifest_kind(
+                manifest,
+                manifest_locator=manifest_path,
+                manifest_bytes=manifest_path.read_bytes(),
+            )
         except ManifestAccessError as exc:
             errors.append(f"Invalid manifest kind in {manifest_path}: {exc}")
+            continue
+        try:
+            _assert_package_manifest_boundaries(
+                manifest_path=manifest_path,
+                selected_manifest=manifest,
+                selected_kind=kind,
+            )
+        except SourceArtifactManifestError as exc:
+            errors.append(f"Unsafe package boundary at {manifest_path}: {exc}")
             continue
         updated = False
         for year, spec in files.items():
@@ -1122,6 +1198,7 @@ def publish_source_artifacts(
         if updated:
             manifest.setdefault("source_id", manifest_source_id)
             manifest.setdefault("package_id", manifest_package_id)
+            manifest["kind"] = kind
             manifest_path.write_text(
                 yaml.safe_dump(manifest, sort_keys=False),
                 encoding="utf-8",
@@ -1199,7 +1276,7 @@ def inventory_source_artifacts(
             errors=(f"Root does not exist: {root_path}",),
         )
 
-    manifests = sorted(root_path.rglob(manifest_filename))
+    manifests = _manifest_paths(root_path, manifest_filename)
     for manifest_path in manifests:
         try:
             manifest = _read_manifest(manifest_path)
@@ -1220,9 +1297,22 @@ def inventory_source_artifacts(
         try:
             for year in files:
                 resolve_year_key(files, year)
-            kind = normalize_manifest_kind(manifest)
+            kind = strict_manifest_kind(
+                manifest,
+                manifest_locator=manifest_path,
+                manifest_bytes=manifest_path.read_bytes(),
+            )
         except ManifestAccessError as exc:
             errors.append(f"Invalid manifest {manifest_path}: {exc}")
+            continue
+        try:
+            _assert_package_manifest_boundaries(
+                manifest_path=manifest_path,
+                selected_manifest=manifest,
+                selected_kind=kind,
+            )
+        except SourceArtifactManifestError as exc:
+            errors.append(f"Unsafe package boundary at {manifest_path}: {exc}")
             continue
         for year, spec in files.items():
             for file_spec in iter_file_specs(spec, kind=kind):
@@ -1518,6 +1608,11 @@ def _read_manifest(manifest_path: Path) -> dict[str, Any]:
     not an absent manifest, and treating it as one would let the fetch replace
     it with a single entry and drop everything it recorded.
     """
+    if manifest_path.is_symlink():
+        raise MalformedManifestError(
+            f"{manifest_path} is a symlink; manifest reads and writes require "
+            "a regular file at its lexical package path."
+        )
     if not manifest_path.exists():
         return {}
     try:
@@ -1567,15 +1662,26 @@ def _manifest_kind_for_fetch(
 ) -> str:
     """Resolve fetch kind and refuse a reclassification before artifact I/O."""
     try:
-        existing_kind = normalize_manifest_kind(manifest)
-        requested = (
-            normalize_manifest_kind({"kind": requested_kind})
-            if requested_kind is not None
-            else existing_kind
-        )
+        if manifest:
+            existing_kind = strict_manifest_kind(
+                manifest,
+                manifest_locator=manifest_path,
+                manifest_bytes=manifest_path.read_bytes(),
+            )
+        else:
+            existing_kind = None
+        if requested_kind is None:
+            if existing_kind is None:
+                raise ManifestAccessError(
+                    "A new or empty manifest requires --kind "
+                    "('publisher_table' or 'microdata_release')."
+                )
+            requested = existing_kind
+        else:
+            requested = normalize_manifest_kind({"kind": requested_kind})
     except ManifestAccessError as exc:
         raise SourceArtifactManifestError(f"{manifest_path}: {exc}") from exc
-    if manifest and requested != existing_kind:
+    if existing_kind is not None and requested != existing_kind:
         raise SourceArtifactManifestError(
             f"{manifest_path} is kind={existing_kind!r}; --kind "
             f"{requested!r} would reclassify the existing manifest."
@@ -1621,6 +1727,16 @@ def _validate_existing_manifest_before_fetch(
                     f"{manifest_path} entry {year!r} must be a mapping; it is a "
                     f"{type(spec).__name__}."
                 )
+            if kind == PUBLISHER_TABLE_KIND:
+                checksum = spec.get("sha256")
+                if not isinstance(checksum, str) or not _SHA256_KEY_SEGMENT.fullmatch(
+                    checksum
+                ):
+                    raise SourceArtifactManifestError(
+                        f"{manifest_path} entry {year!r} must record a lowercase "
+                        "64-character sha256 before fetch-artifact may replace "
+                        "its path."
+                    )
             filename = spec.get("filename")
             local_exists = (
                 bool(filename)
@@ -1636,7 +1752,7 @@ def _validate_existing_manifest_before_fetch(
             )
             if entry_errors:
                 raise SourceArtifactManifestError(
-                    f"{manifest_path} entry {year!r} is invalid: "
+                    f"{manifest_path} entry {year!r} filename={filename!r} is invalid: "
                     f"{', '.join(entry_errors)}."
                 )
             _validated_recorded_r2(
@@ -1816,6 +1932,11 @@ def _validated_recorded_r2(
             "locate its object: provider, bucket and key, or a uri that "
             "supplies them."
         )
+    if provider != "r2":
+        raise RecordedR2LocatorError(
+            f"{where}: provider must be 'r2', not {provider!r}; storage.r2 "
+            "cannot name another storage service."
+        )
 
     segments = key.split("/")
     if (
@@ -1982,6 +2103,18 @@ def _superseding_storage(
                 value = recorded_spec.get(field)
                 if value is not None:
                     entry[field] = value
+            for field in (
+                "licence",
+                "licence_evidence",
+                "hash_source",
+                "attested_by",
+                "verified_at",
+                "attestation_evidence",
+                "pinned_from",
+            ):
+                value = recorded_spec.get(field)
+                if value is not None:
+                    entry[field] = value
         entry["superseded_at"] = superseded_at
         entries.append(entry)
     if entries:
@@ -2093,6 +2226,12 @@ def _upsert_manifest(
     # Access is written explicitly on every entry this command touches, so a
     # manifest never relies on the inferred ``public`` default once rewritten.
     file_entry: dict[str, Any] = dict(recorded_spec)
+    if resolved_kind == MICRODATA_RELEASE_KIND:
+        # A Chronicle fetch replaces a consumer attestation; carrying either
+        # mutually exclusive evidence field forward would create an invalid
+        # hybrid registration.
+        file_entry.pop("attestation_evidence", None)
+        file_entry.pop("pinned_from", None)
     file_entry.update(
         {
             "filename": filename,
@@ -2215,11 +2354,222 @@ def _iter_manifest_entries(manifest: dict[str, Any]) -> Iterator[tuple[Any, Any]
             yield year, entry
 
 
+def _sibling_manifest_paths(manifest_path: Path) -> list[Path]:
+    """Return reserved manifest filenames sharing one package directory."""
+    paths = (
+        {
+            candidate
+            for candidate in manifest_path.parent.iterdir()
+            if candidate.is_file()
+            and candidate.name.startswith("manifest")
+            and candidate.suffix in {".yaml", ".yml"}
+        }
+        if manifest_path.parent.exists()
+        else set()
+    )
+    if manifest_path.exists():
+        paths.add(manifest_path)
+    return sorted(paths)
+
+
+def _package_manifests_before_fetch(
+    *,
+    manifest_path: Path,
+    selected_manifest: dict[str, Any],
+    selected_kind: str,
+    filename: str,
+) -> list[tuple[Path, dict[str, Any], str]]:
+    """Strictly inspect every sibling manifest that can reserve ``filename``."""
+    manifests = _package_manifests(
+        manifest_path=manifest_path,
+        selected_manifest=selected_manifest,
+        selected_kind=selected_kind,
+    )
+    for candidate_path, candidate, candidate_kind in manifests:
+        _assert_no_hash_only_entry(
+            candidate,
+            candidate_path,
+            filename,
+            kind=candidate_kind,
+        )
+    return manifests
+
+
+def _package_manifests(
+    *,
+    manifest_path: Path,
+    selected_manifest: dict[str, Any],
+    selected_kind: str,
+) -> list[tuple[Path, dict[str, Any], str]]:
+    """Load and strictly validate every manifest sharing a package path."""
+    manifests = [(manifest_path, selected_manifest, selected_kind)]
+    for sibling_path in _sibling_manifest_paths(manifest_path):
+        if sibling_path == manifest_path:
+            continue
+        sibling = _read_manifest(sibling_path)
+        try:
+            sibling_kind = strict_manifest_kind(
+                sibling,
+                manifest_locator=sibling_path,
+                manifest_bytes=sibling_path.read_bytes(),
+            )
+        except ManifestAccessError as exc:
+            raise SourceArtifactManifestError(f"{sibling_path}: {exc}") from exc
+        _validate_existing_manifest_before_fetch(
+            sibling,
+            manifest_path=sibling_path,
+            kind=sibling_kind,
+        )
+        manifests.append((sibling_path, sibling, sibling_kind))
+    return manifests
+
+
+def _assert_package_manifest_boundaries(
+    *,
+    manifest_path: Path,
+    selected_manifest: dict[str, Any],
+    selected_kind: str,
+) -> None:
+    """Refuse sibling collisions and payloads before inventory or publish I/O."""
+    manifests = _package_manifests(
+        manifest_path=manifest_path,
+        selected_manifest=selected_manifest,
+        selected_kind=selected_kind,
+    )
+    if any(kind == MICRODATA_RELEASE_KIND for _, _, kind in manifests):
+        _assert_microdata_package_is_manifest_only(
+            manifest_path,
+            allowed_manifests={path for path, _, _ in manifests},
+        )
+
+    seen: dict[str, tuple[Path, Any, dict[str, Any], str]] = {}
+    for candidate_path, manifest, kind in manifests:
+        for entry_year, spec in _iter_manifest_entries(manifest):
+            if not isinstance(spec, dict):
+                continue
+            try:
+                filename = canonical_artifact_filename(spec.get("filename"))
+            except ManifestAccessError:
+                continue
+            previous = seen.get(filename)
+            if previous is None:
+                seen[filename] = (candidate_path, entry_year, spec, kind)
+                continue
+            previous_path, previous_year, previous_spec, previous_kind = previous
+            if previous_path == candidate_path:
+                continue
+            previous_access = effective_entry_access(
+                previous_spec,
+                kind=previous_kind,
+            )
+            access = effective_entry_access(spec, kind=kind)
+            shared_public_table = (
+                previous_kind == PUBLISHER_TABLE_KIND
+                and kind == PUBLISHER_TABLE_KIND
+                and previous_access == ACCESS_PUBLIC
+                and access == ACCESS_PUBLIC
+                and isinstance(previous_spec.get("sha256"), str)
+                and previous_spec.get("sha256") == spec.get("sha256")
+            )
+            if shared_public_table:
+                continue
+            raise SourceArtifactManifestError(
+                f"Sibling manifests {previous_path} entry {previous_year!r} and "
+                f"{candidate_path} entry {entry_year!r} both reserve basename "
+                f"{filename!r} with incompatible identities."
+            )
+
+
+def _assert_microdata_package_is_manifest_only(
+    manifest_path: Path,
+    *,
+    allowed_manifests: set[Path],
+) -> None:
+    """Refuse every payload file beside a package containing microdata."""
+    if not manifest_path.parent.exists():
+        return
+    allowed = {candidate.resolve() for candidate in allowed_manifests}
+    payloads = sorted(
+        candidate
+        for candidate in manifest_path.parent.rglob("*")
+        if candidate.is_file() and candidate.resolve() not in allowed
+    )
+    if payloads:
+        relative = ", ".join(
+            str(candidate.relative_to(manifest_path.parent)) for candidate in payloads
+        )
+        raise SourceArtifactManifestError(
+            f"{manifest_path.parent} contains microdata payload files outside "
+            f"its manifests: {relative}. Git custody is manifest-only."
+        )
+
+
+def _assert_microdata_source_is_outside_db_data(source_url: str) -> None:
+    """Refuse a local microdata source already held anywhere under db/data."""
+    parsed = urlparse(source_url)
+    if parsed.scheme not in {"", "file"}:
+        return
+    source_path = Path(unquote(parsed.path) if parsed.scheme == "file" else source_url)
+    parts = source_path.resolve().parts
+    if any(parts[index : index + 2] == ("db", "data") for index in range(len(parts))):
+        raise SourceArtifactManifestError(
+            f"Public microdata source {source_path} is inside db/data. Chronicle "
+            "may read it only from transient staging outside the data tree."
+        )
+
+
+def _assert_package_filename_accepts_identity(
+    manifests: list[tuple[Path, dict[str, Any], str]],
+    *,
+    selected_manifest_path: Path,
+    year: Any,
+    filename: str,
+    sha256: str,
+) -> None:
+    """Refuse a new basename identity that would collide anywhere on disk."""
+    for candidate_path, manifest, kind in manifests:
+        files = manifest.get("files")
+        selected_year_key = (
+            resolve_year_key(files, year) if isinstance(files, dict) else year
+        )
+        for entry_year, spec in _iter_manifest_entries(manifest):
+            if not isinstance(spec, dict):
+                continue
+            try:
+                registered_filename = canonical_artifact_filename(spec.get("filename"))
+            except ManifestAccessError:
+                continue
+            if registered_filename != filename:
+                continue
+            if (
+                candidate_path == selected_manifest_path
+                and entry_year == selected_year_key
+            ):
+                continue
+            registered_sha256 = spec.get("sha256")
+            access = effective_entry_access(spec, kind=kind)
+            if (
+                kind == PUBLISHER_TABLE_KIND
+                and access == ACCESS_PUBLIC
+                and registered_sha256 == sha256
+            ):
+                # A small number of frozen table manifests intentionally share
+                # one exact public file across years or named manifests.
+                continue
+            raise SourceArtifactRevisionError(
+                f"{candidate_path} entry {entry_year!r} already reserves "
+                f"basename {filename!r} with sha256={registered_sha256!r} and "
+                f"access={access!r}; refusing a second on-disk identity with "
+                f"sha256={sha256!r}. Use a separate package path."
+            )
+
+
 def _assert_no_hash_only_entry(
     manifest: dict[str, Any],
     manifest_path: Path,
-    year: Any,
     filename: str | None,
+    *,
+    kind: str,
 ) -> None:
     """Refuse to fetch bytes over an existing hash-only registration.
 
@@ -2230,7 +2580,6 @@ def _assert_no_hash_only_entry(
     if not filename:
         return
     requested = canonical_artifact_filename(filename)
-    kind = normalize_manifest_kind(manifest)
     for entry_year, spec in _iter_manifest_entries(manifest):
         if not isinstance(spec, dict):
             continue
@@ -2341,9 +2690,50 @@ def _publish_raw_manifest_entry(
                 local_file_exists=local_exists,
             )
         )
-        r2 = recorded_r2(spec)
-        if r2 is None:
+        try:
+            recorded_r2_object = _validated_recorded_r2(
+                spec,
+                manifest_path=manifest_path,
+                year=year,
+            )
+        except SourceArtifactManifestError as error:
+            recorded_r2_object = None
+            errors.append(f"recorded_r2_locator_invalid:{error}")
+        if recorded_r2_object is None and not any(
+            error.startswith("recorded_r2_locator_invalid:") for error in errors
+        ):
             errors.append("public_microdata_missing_r2_location")
+        elif recorded_r2_object is not None and (
+            recorded_r2_object.sha256 != spec.get("sha256")
+            or recorded_r2_object.filename != filename
+        ):
+            errors.append(
+                "recorded_r2_identity_mismatch:"
+                f"recorded_sha256={recorded_r2_object.sha256}:"
+                f"recorded_filename={recorded_r2_object.filename}:"
+                f"declared_sha256={spec.get('sha256')}:"
+                f"declared_filename={filename}"
+            )
+        if recorded_r2_object is not None:
+            expected_key = build_r2_key(
+                source_id=source_id,
+                package_id=package_id,
+                year=year,
+                sha256=str(spec.get("sha256") or ""),
+                filename=filename,
+                prefix=r2_prefix,
+                package_path=manifest_path,
+            )
+            if recorded_r2_object.key != expected_key:
+                errors.append(
+                    "recorded_r2_key_disagrees_with_country_prefix:"
+                    f"recorded={recorded_r2_object.key}:expected={expected_key}"
+                )
+            if recorded_r2_object.bucket != r2_bucket:
+                errors.append(
+                    "recorded_r2_bucket_is_preserved_history:"
+                    f"recorded={recorded_r2_object.bucket}:requested={r2_bucket}"
+                )
         return (
             RawArtifactPublishEntry(
                 manifest_path=str(manifest_path),
@@ -2354,7 +2744,15 @@ def _publish_raw_manifest_entry(
                 local_path=str(manifest_path.parent / filename),
                 sha256=spec.get("sha256"),
                 size_bytes=spec.get("size_bytes"),
-                r2_location=None,
+                r2_location=(
+                    ArtifactStorageLocation(
+                        provider=recorded_r2_object.provider,
+                        bucket=recorded_r2_object.bucket,
+                        key=recorded_r2_object.key,
+                    )
+                    if recorded_r2_object is not None and not errors
+                    else None
+                ),
                 upload=None,
                 errors=tuple(dict.fromkeys(errors)),
                 skipped="public_microdata_uploaded_via_transient_fetch",
@@ -2616,7 +3014,7 @@ def _inventory_entry(
         # never holds the bytes, so a missing local file is the correct state.
         pass
     elif not exists:
-        if kind_value == MICRODATA_RELEASE_KIND and recorded_r2(spec) is not None:
+        if kind_value == MICRODATA_RELEASE_KIND:
             size_bytes = spec.get("size_bytes")
         else:
             errors.append("missing_file")
@@ -2626,7 +3024,34 @@ def _inventory_entry(
         size_bytes = len(content)
         if sha256_expected and sha256_actual != sha256_expected:
             errors.append("checksum_mismatch")
-    r2 = recorded_r2(spec)
+    try:
+        recorded_r2_object = _validated_recorded_r2(
+            spec,
+            manifest_path=manifest_path,
+            year=year,
+        )
+    except SourceArtifactManifestError as error:
+        recorded_r2_object = None
+        errors.append(f"recorded_r2_locator_invalid:{error}")
+    r2 = _recorded_r2(spec) if recorded_r2_object is not None else None
+    if recorded_r2_object is not None and (
+        recorded_r2_object.sha256 != sha256_expected
+        or recorded_r2_object.filename != filename
+    ):
+        errors.append(
+            "recorded_r2_identity_mismatch:"
+            f"recorded_sha256={recorded_r2_object.sha256}:"
+            f"recorded_filename={recorded_r2_object.filename}:"
+            f"declared_sha256={sha256_expected}:"
+            f"declared_filename={filename}"
+        )
+    if (
+        kind_value == MICRODATA_RELEASE_KIND
+        and not hash_only
+        and not exists
+        and recorded_r2_object is None
+    ):
+        errors.append("public_microdata_missing_r2_location")
     return ArtifactInventoryEntry(
         manifest_path=str(manifest_path),
         year=str(year),

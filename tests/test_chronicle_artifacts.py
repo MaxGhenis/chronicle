@@ -124,6 +124,7 @@ def test_fetch_source_artifact_writes_manifest_and_inventory(tmp_path):
         package_id="soi-table-1-2",
         year=2023,
         output_dir=output_dir,
+        kind="publisher_table",
         source_page="https://example.test/source-page",
         table="Publication 1304 Table 1.2",
     )
@@ -162,6 +163,7 @@ def test_fetch_rejects_wrong_country_before_reading_or_overwriting_cache(
         package_id="ird-wff",
         year=2024,
         output_dir=output_dir,
+        kind="publisher_table",
     )
     artifact_path = output_dir / source.name
     manifest_path = output_dir / "manifest.yaml"
@@ -196,6 +198,7 @@ def test_publish_source_artifacts_uploads_manifest_entries(tmp_path):
         package_id="soi-table-1-2",
         year=2023,
         output_dir=output_dir,
+        kind="publisher_table",
     )
     log = tmp_path / "wrangler.log"
     wrangler = tmp_path / "wrangler"
@@ -230,6 +233,7 @@ def test_publish_source_artifacts_handles_label_year_entries(tmp_path):
         package_id="ssa-ssi-monthly-statistics-2024-12",
         year=2024,
         output_dir=output_dir,
+        kind="publisher_table",
     )
     capture = output_dir / "table01.html"
     capture_bytes = b"<html>capture</html>"
@@ -280,6 +284,7 @@ def test_publish_source_artifacts_uses_country_for_each_manifest(tmp_path):
             package_id=package_id,
             year=year,
             output_dir=output_dir,
+            kind="publisher_table",
         )
 
     report = publish_source_artifacts(data_root, wrangler_command=str(wrangler))
@@ -301,6 +306,7 @@ def test_publish_source_artifacts_refuses_stale_country_key(tmp_path):
         package_id="ird-wff",
         year=2024,
         output_dir=output_dir,
+        kind="publisher_table",
     )
     manifest_path = output_dir / "manifest.yaml"
     manifest = yaml.safe_load(manifest_path.read_text())
@@ -342,6 +348,7 @@ def test_publish_source_artifacts_accepts_package_named_packages(tmp_path):
         package_id="packages",
         year=2024,
         output_dir=output_dir,
+        kind="publisher_table",
     )
     wrangler = tmp_path / "wrangler"
     wrangler.write_text("#!/bin/sh\necho ok\n")
@@ -368,6 +375,7 @@ def test_inventory_source_artifacts_catches_checksum_mismatch(tmp_path):
         package_id="soi-table-1-2",
         year=2023,
         output_dir=output_dir,
+        kind="publisher_table",
     )
     (output_dir / "source.xls").write_bytes(b"changed")
 
@@ -396,6 +404,8 @@ def test_artifact_cli_commands_emit_json(tmp_path, capsys):
             "2023",
             "--out-dir",
             str(output_dir),
+            "--kind",
+            "publisher_table",
         ]
     )
     fetch_payload = json.loads(capsys.readouterr().out)
@@ -687,6 +697,7 @@ def test_publish_raw_refuses_to_restate_a_recorded_bucket(tmp_path, monkeypatch)
         package_id="soi-table-1-1",
         year=2023,
         output_dir=output_dir,
+        kind="publisher_table",
     )
     manifest_path = output_dir / "manifest.yaml"
     manifest = yaml.safe_load(manifest_path.read_text())
@@ -735,6 +746,7 @@ def test_fetch_artifact_keeps_an_already_recorded_bucket(tmp_path, monkeypatch):
         package_id="soi-table-1-1",
         year=2023,
         output_dir=output_dir,
+        kind="publisher_table",
         upload_r2=True,
         wrangler_command=str(wrangler),
     )
@@ -802,6 +814,7 @@ def _fetch_republished(output_dir, wrangler, *, upload_r2=True, **kwargs):
         package_id="soi-table-5",
         year=2022,
         output_dir=output_dir,
+        kind="publisher_table",
         upload_r2=upload_r2,
         wrangler_command=str(wrangler),
         **kwargs,
@@ -1026,6 +1039,8 @@ def test_fetch_artifact_cli_refuses_a_revision_then_records_it_on_request(
         "2022",
         "--out-dir",
         str(output_dir),
+        "--kind",
+        "publisher_table",
         "--upload-r2",
         "--wrangler-command",
         str(wrangler),
@@ -1147,6 +1162,7 @@ def _fetch_local(output_dir, source_path, *, package_id="soi-table-5", **kwargs)
         package_id=package_id,
         year=2022,
         output_dir=output_dir,
+        kind="publisher_table",
         **kwargs,
     )
 
@@ -1218,16 +1234,16 @@ def test_a_revision_is_refused_in_the_manifest_that_records_it(tmp_path):
     assert (package / TRADITIONAL_MANIFEST).read_bytes() == recorded
     assert (package / "22in05ira.xlsx").read_bytes() == b"traditional IRA table"
 
-    # Without the flag the same fetch addresses a manifest that has no entry to
-    # protect -- which is exactly why the flag exists.
-    report = _fetch_local(
-        package,
-        traditional,
-        package_id="soi-ira-traditional-contributions-2022",
-    )
+    # Choosing another named manifest cannot evade the sibling's ownership of
+    # the shared on-disk basename.
+    with pytest.raises(SourceArtifactRevisionError, match=TRADITIONAL_MANIFEST):
+        _fetch_local(
+            package,
+            traditional,
+            package_id="soi-ira-traditional-contributions-2022",
+        )
 
-    assert report.valid
-    assert report.manifest_path.endswith("manifest.yaml")
+    assert not (package / "manifest.yaml").exists()
     assert (package / TRADITIONAL_MANIFEST).read_bytes() == recorded
 
 
@@ -1262,6 +1278,8 @@ def test_fetch_artifact_cli_targets_the_named_manifest(tmp_path, capsys):
         str(package),
         "--manifest",
         TRADITIONAL_MANIFEST,
+        "--kind",
+        "publisher_table",
     ]
 
     assert harness_main(argv) == 0

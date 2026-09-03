@@ -514,6 +514,8 @@ def _command_hint(
                 year,
                 "--out-dir",
                 data_dir,
+                "--kind",
+                "publisher_table",
                 "--upload-r2",
             )
         )
@@ -522,7 +524,8 @@ def _command_hint(
             "Resolve the PE checkout path, then run "
             "`uv run chronicle fetch-artifact --url <local-path> "
             f"--source-id {source_id} --package-id {package_id} "
-            f"--year {year} --out-dir {data_dir} --upload-r2`."
+            f"--year {year} --out-dir {data_dir} "
+            "--kind publisher_table --upload-r2`."
         )
     if stage == "source_cell_scaffold":
         return " ".join(
