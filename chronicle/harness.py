@@ -421,6 +421,7 @@ def register_artifact_file(
     attested_by: str | None = None,
     attestation_evidence: str | None = None,
     pinned_from: dict[str, str] | None = None,
+    supersede_public_object: str | None = None,
     notes: str | None = None,
     allow_reissue: bool = False,
 ) -> ArtifactRegistrationReport:
@@ -450,6 +451,7 @@ def register_artifact_file(
         attested_by=attested_by,
         attestation_evidence=attestation_evidence,
         pinned_from=pinned_from,
+        supersede_public_object=supersede_public_object,
         notes=notes,
         allow_reissue=allow_reissue,
     )
@@ -1179,6 +1181,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     registration_parser.add_argument(
         "--verified-at",
+        required=True,
         help="When this checksum was verified against the reviewed pin.",
     )
     registration_parser.add_argument(
@@ -1207,6 +1210,14 @@ def main(argv: list[str] | None = None) -> int:
     registration_parser.add_argument(
         "--pinned-from-commit",
         help="Reviewed commit containing a consumer_pin.",
+    )
+    registration_parser.add_argument(
+        "--supersede-public-object",
+        metavar="REMOVAL_EVIDENCE",
+        help=(
+            "Explicitly reclassify an existing public identity after its bytes "
+            "and R2 locator have been removed, recording verifiable evidence."
+        ),
     )
     registration_parser.add_argument(
         "--notes",
@@ -1712,6 +1723,7 @@ def main(argv: list[str] | None = None) -> int:
             attested_by=args.attested_by,
             attestation_evidence=args.attestation_evidence,
             pinned_from=pinned_from,
+            supersede_public_object=args.supersede_public_object,
             notes=args.notes,
             allow_reissue=args.allow_reissue,
         )

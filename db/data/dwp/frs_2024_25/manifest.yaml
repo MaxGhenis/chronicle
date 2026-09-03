@@ -1,0 +1,316 @@
+source_id: dwp
+package_id: dwp-frs-2024-25
+kind: microdata_release
+dataset: dwp_dwp-frs-2024-25
+publisher: Department for Work and Pensions
+table: Family Resources Survey 2024-25
+files:
+  2024:
+  - filename: accounts.tab
+    access: licensed
+    licence: UK Data Service End User Licence
+    vintage: '2024_25'
+    sha256: fa7871eb45cad0db5fd05ede454ced60405d2f9c598651ea5acea5c91a6ff52f
+    size_bytes: 1812923
+    access_route: UK Data Service study SN 9563 under its End User Licence. Bytes
+      stay in the licensed environment the consumer already operates; no Chronicle
+      credential grants access to them.
+    doi: 10.5255/UKDA-SN-9563-1
+    study: UK Data Service SN 9563
+    hash_source: consumer_pin
+    attested_by: PolicyEngine/microcosm
+    verified_at: '2026-09-03'
+    pinned_from:
+      repository: PolicyEngine/microcosm
+      path: packages/microcosm-build/src/microcosm/build/uk/source_stages.json
+      commit: 09abf2ad78e9af3c5314a4b303d42a75e30d49c4
+    notes: Microcosm's frs_spine stage pins the 2024-25 tabs to UK Data Service SN
+      9563, DOI 10.5255/UKDA-SN-9563-1. SHA-256 transcribed verbatim from the consumer's
+      reviewed pin; Chronicle holds no bytes for this release and did not recompute
+      the checksum.
+  - filename: adult.tab
+    access: licensed
+    licence: UK Data Service End User Licence
+    vintage: '2024_25'
+    sha256: 4eaea0809a7ccca0fddeb98e358771e4a6e5ebb81b21c4fac4070fc9d227658d
+    size_bytes: 34885825
+    access_route: UK Data Service study SN 9563 under its End User Licence. Bytes
+      stay in the licensed environment the consumer already operates; no Chronicle
+      credential grants access to them.
+    doi: 10.5255/UKDA-SN-9563-1
+    study: UK Data Service SN 9563
+    hash_source: consumer_pin
+    attested_by: PolicyEngine/microcosm
+    verified_at: '2026-09-03'
+    pinned_from:
+      repository: PolicyEngine/microcosm
+      path: packages/microcosm-build/src/microcosm/build/uk/source_stages.json
+      commit: 09abf2ad78e9af3c5314a4b303d42a75e30d49c4
+    notes: Microcosm's frs_spine stage pins the 2024-25 tabs to UK Data Service SN
+      9563, DOI 10.5255/UKDA-SN-9563-1. SHA-256 transcribed verbatim from the consumer's
+      reviewed pin; Chronicle holds no bytes for this release and did not recompute
+      the checksum.
+  - filename: benefits.tab
+    access: licensed
+    licence: UK Data Service End User Licence
+    vintage: '2024_25'
+    sha256: f6ad22b408a13e2239c04b0d076a36418dcf5dd89a8c60daa792c4d735b911d3
+    size_bytes: 2362329
+    access_route: UK Data Service study SN 9563 under its End User Licence. Bytes
+      stay in the licensed environment the consumer already operates; no Chronicle
+      credential grants access to them.
+    doi: 10.5255/UKDA-SN-9563-1
+    study: UK Data Service SN 9563
+    hash_source: consumer_pin
+    attested_by: PolicyEngine/microcosm
+    verified_at: '2026-09-03'
+    pinned_from:
+      repository: PolicyEngine/microcosm
+      path: packages/microcosm-build/src/microcosm/build/uk/source_stages.json
+      commit: 09abf2ad78e9af3c5314a4b303d42a75e30d49c4
+    notes: Microcosm's frs_spine stage pins the 2024-25 tabs to UK Data Service SN
+      9563, DOI 10.5255/UKDA-SN-9563-1. SHA-256 transcribed verbatim from the consumer's
+      reviewed pin; Chronicle holds no bytes for this release and did not recompute
+      the checksum.
+  - filename: benunit.tab
+    access: licensed
+    licence: UK Data Service End User Licence
+    vintage: '2024_25'
+    sha256: 66b894624498316d19b6259e287a607e98ed3daacc9be3d3e9067d32b8e09a5a
+    size_bytes: 13986782
+    access_route: UK Data Service study SN 9563 under its End User Licence. Bytes
+      stay in the licensed environment the consumer already operates; no Chronicle
+      credential grants access to them.
+    doi: 10.5255/UKDA-SN-9563-1
+    study: UK Data Service SN 9563
+    hash_source: consumer_pin
+    attested_by: PolicyEngine/microcosm
+    verified_at: '2026-09-03'
+    pinned_from:
+      repository: PolicyEngine/microcosm
+      path: packages/microcosm-build/src/microcosm/build/uk/source_stages.json
+      commit: 09abf2ad78e9af3c5314a4b303d42a75e30d49c4
+    notes: Microcosm's frs_spine stage pins the 2024-25 tabs to UK Data Service SN
+      9563, DOI 10.5255/UKDA-SN-9563-1. SHA-256 transcribed verbatim from the consumer's
+      reviewed pin; Chronicle holds no bytes for this release and did not recompute
+      the checksum.
+  - filename: child.tab
+    access: licensed
+    licence: UK Data Service End User Licence
+    vintage: '2024_25'
+    sha256: 88ec53fc52eea4374864bbc74219d551f4b4c5f54a220bf9607c7a6289719aa5
+    size_bytes: 2753961
+    access_route: UK Data Service study SN 9563 under its End User Licence. Bytes
+      stay in the licensed environment the consumer already operates; no Chronicle
+      credential grants access to them.
+    doi: 10.5255/UKDA-SN-9563-1
+    study: UK Data Service SN 9563
+    hash_source: consumer_pin
+    attested_by: PolicyEngine/microcosm
+    verified_at: '2026-09-03'
+    pinned_from:
+      repository: PolicyEngine/microcosm
+      path: packages/microcosm-build/src/microcosm/build/uk/source_stages.json
+      commit: 09abf2ad78e9af3c5314a4b303d42a75e30d49c4
+    notes: Microcosm's frs_spine stage pins the 2024-25 tabs to UK Data Service SN
+      9563, DOI 10.5255/UKDA-SN-9563-1. SHA-256 transcribed verbatim from the consumer's
+      reviewed pin; Chronicle holds no bytes for this release and did not recompute
+      the checksum.
+  - filename: chldcare.tab
+    access: licensed
+    licence: UK Data Service End User Licence
+    vintage: '2024_25'
+    sha256: 7ccd3f92f299a1f49b24063188177cdb8a958d8bcd753fc3d74dadda6ad04023
+    size_bytes: 275878
+    access_route: UK Data Service study SN 9563 under its End User Licence. Bytes
+      stay in the licensed environment the consumer already operates; no Chronicle
+      credential grants access to them.
+    doi: 10.5255/UKDA-SN-9563-1
+    study: UK Data Service SN 9563
+    hash_source: consumer_pin
+    attested_by: PolicyEngine/microcosm
+    verified_at: '2026-09-03'
+    pinned_from:
+      repository: PolicyEngine/microcosm
+      path: packages/microcosm-build/src/microcosm/build/uk/source_stages.json
+      commit: 09abf2ad78e9af3c5314a4b303d42a75e30d49c4
+    notes: Microcosm's frs_spine stage pins the 2024-25 tabs to UK Data Service SN
+      9563, DOI 10.5255/UKDA-SN-9563-1. SHA-256 transcribed verbatim from the consumer's
+      reviewed pin; Chronicle holds no bytes for this release and did not recompute
+      the checksum.
+  - filename: extchild.tab
+    access: licensed
+    licence: UK Data Service End User Licence
+    vintage: '2024_25'
+    sha256: c661379a4aa5079ce482b1f98f0bfb9157ad9b3ba4eb10739b61846f9c9548e4
+    size_bytes: 15150
+    access_route: UK Data Service study SN 9563 under its End User Licence. Bytes
+      stay in the licensed environment the consumer already operates; no Chronicle
+      credential grants access to them.
+    doi: 10.5255/UKDA-SN-9563-1
+    study: UK Data Service SN 9563
+    hash_source: consumer_pin
+    attested_by: PolicyEngine/microcosm
+    verified_at: '2026-09-03'
+    pinned_from:
+      repository: PolicyEngine/microcosm
+      path: packages/microcosm-build/src/microcosm/build/uk/source_stages.json
+      commit: 09abf2ad78e9af3c5314a4b303d42a75e30d49c4
+    notes: Microcosm's frs_spine stage pins the 2024-25 tabs to UK Data Service SN
+      9563, DOI 10.5255/UKDA-SN-9563-1. SHA-256 transcribed verbatim from the consumer's
+      reviewed pin; Chronicle holds no bytes for this release and did not recompute
+      the checksum.
+  - filename: househol.tab
+    access: licensed
+    licence: UK Data Service End User Licence
+    vintage: '2024_25'
+    sha256: 2b93b6aed49e1591d6f5360736b4aee3a11ef506b276435f4d2c011a8afbb6a5
+    size_bytes: 12108606
+    access_route: UK Data Service study SN 9563 under its End User Licence. Bytes
+      stay in the licensed environment the consumer already operates; no Chronicle
+      credential grants access to them.
+    doi: 10.5255/UKDA-SN-9563-1
+    study: UK Data Service SN 9563
+    hash_source: consumer_pin
+    attested_by: PolicyEngine/microcosm
+    verified_at: '2026-09-03'
+    pinned_from:
+      repository: PolicyEngine/microcosm
+      path: packages/microcosm-build/src/microcosm/build/uk/source_stages.json
+      commit: 09abf2ad78e9af3c5314a4b303d42a75e30d49c4
+    notes: Microcosm's frs_spine stage pins the 2024-25 tabs to UK Data Service SN
+      9563, DOI 10.5255/UKDA-SN-9563-1. SHA-256 transcribed verbatim from the consumer's
+      reviewed pin; Chronicle holds no bytes for this release and did not recompute
+      the checksum.
+  - filename: job.tab
+    access: licensed
+    licence: UK Data Service End User Licence
+    vintage: '2024_25'
+    sha256: eb7faf7ada3a3851cb2afb83e2983f8907ffeec897cfbe01e56cb0dfefa853e2
+    size_bytes: 10518760
+    access_route: UK Data Service study SN 9563 under its End User Licence. Bytes
+      stay in the licensed environment the consumer already operates; no Chronicle
+      credential grants access to them.
+    doi: 10.5255/UKDA-SN-9563-1
+    study: UK Data Service SN 9563
+    hash_source: consumer_pin
+    attested_by: PolicyEngine/microcosm
+    verified_at: '2026-09-03'
+    pinned_from:
+      repository: PolicyEngine/microcosm
+      path: packages/microcosm-build/src/microcosm/build/uk/source_stages.json
+      commit: 09abf2ad78e9af3c5314a4b303d42a75e30d49c4
+    notes: Microcosm's frs_spine stage pins the 2024-25 tabs to UK Data Service SN
+      9563, DOI 10.5255/UKDA-SN-9563-1. SHA-256 transcribed verbatim from the consumer's
+      reviewed pin; Chronicle holds no bytes for this release and did not recompute
+      the checksum.
+  - filename: maint.tab
+    access: licensed
+    licence: UK Data Service End User Licence
+    vintage: '2024_25'
+    sha256: e7a8d6f47cab7bf9db9bfd7b3ad5ebe5830ec75245d065dcf8654c7c20b97a7d
+    size_bytes: 13993
+    access_route: UK Data Service study SN 9563 under its End User Licence. Bytes
+      stay in the licensed environment the consumer already operates; no Chronicle
+      credential grants access to them.
+    doi: 10.5255/UKDA-SN-9563-1
+    study: UK Data Service SN 9563
+    hash_source: consumer_pin
+    attested_by: PolicyEngine/microcosm
+    verified_at: '2026-09-03'
+    pinned_from:
+      repository: PolicyEngine/microcosm
+      path: packages/microcosm-build/src/microcosm/build/uk/source_stages.json
+      commit: 09abf2ad78e9af3c5314a4b303d42a75e30d49c4
+    notes: Microcosm's frs_spine stage pins the 2024-25 tabs to UK Data Service SN
+      9563, DOI 10.5255/UKDA-SN-9563-1. SHA-256 transcribed verbatim from the consumer's
+      reviewed pin; Chronicle holds no bytes for this release and did not recompute
+      the checksum.
+  - filename: mortgage.tab
+    access: licensed
+    licence: UK Data Service End User Licence
+    vintage: '2024_25'
+    sha256: 6a08f6846970dfdc544a7efc8a93fed4f3210d872cd2d160dfb14ca8d92d5ed0
+    size_bytes: 600552
+    access_route: UK Data Service study SN 9563 under its End User Licence. Bytes
+      stay in the licensed environment the consumer already operates; no Chronicle
+      credential grants access to them.
+    doi: 10.5255/UKDA-SN-9563-1
+    study: UK Data Service SN 9563
+    hash_source: consumer_pin
+    attested_by: PolicyEngine/microcosm
+    verified_at: '2026-09-03'
+    pinned_from:
+      repository: PolicyEngine/microcosm
+      path: packages/microcosm-build/src/microcosm/build/uk/source_stages.json
+      commit: 09abf2ad78e9af3c5314a4b303d42a75e30d49c4
+    notes: Microcosm's frs_spine stage pins the 2024-25 tabs to UK Data Service SN
+      9563, DOI 10.5255/UKDA-SN-9563-1. SHA-256 transcribed verbatim from the consumer's
+      reviewed pin; Chronicle holds no bytes for this release and did not recompute
+      the checksum.
+  - filename: oddjob.tab
+    access: licensed
+    licence: UK Data Service End User Licence
+    vintage: '2024_25'
+    sha256: dfff1baf71a3de05f3a2fcf0c01a3995df5657f242cd7846aa61f6cc27a1cead
+    size_bytes: 5339
+    access_route: UK Data Service study SN 9563 under its End User Licence. Bytes
+      stay in the licensed environment the consumer already operates; no Chronicle
+      credential grants access to them.
+    doi: 10.5255/UKDA-SN-9563-1
+    study: UK Data Service SN 9563
+    hash_source: consumer_pin
+    attested_by: PolicyEngine/microcosm
+    verified_at: '2026-09-03'
+    pinned_from:
+      repository: PolicyEngine/microcosm
+      path: packages/microcosm-build/src/microcosm/build/uk/source_stages.json
+      commit: 09abf2ad78e9af3c5314a4b303d42a75e30d49c4
+    notes: Microcosm's frs_spine stage pins the 2024-25 tabs to UK Data Service SN
+      9563, DOI 10.5255/UKDA-SN-9563-1. SHA-256 transcribed verbatim from the consumer's
+      reviewed pin; Chronicle holds no bytes for this release and did not recompute
+      the checksum.
+  - filename: penprov.tab
+    access: licensed
+    licence: UK Data Service End User Licence
+    vintage: '2024_25'
+    sha256: 9e53de0dc969baec000b3cd68387f0f2dfb3f678732e408de175e0a1d6e3fdc1
+    size_bytes: 513614
+    access_route: UK Data Service study SN 9563 under its End User Licence. Bytes
+      stay in the licensed environment the consumer already operates; no Chronicle
+      credential grants access to them.
+    doi: 10.5255/UKDA-SN-9563-1
+    study: UK Data Service SN 9563
+    hash_source: consumer_pin
+    attested_by: PolicyEngine/microcosm
+    verified_at: '2026-09-03'
+    pinned_from:
+      repository: PolicyEngine/microcosm
+      path: packages/microcosm-build/src/microcosm/build/uk/source_stages.json
+      commit: 09abf2ad78e9af3c5314a4b303d42a75e30d49c4
+    notes: Microcosm's frs_spine stage pins the 2024-25 tabs to UK Data Service SN
+      9563, DOI 10.5255/UKDA-SN-9563-1. SHA-256 transcribed verbatim from the consumer's
+      reviewed pin; Chronicle holds no bytes for this release and did not recompute
+      the checksum.
+  - filename: pension.tab
+    access: licensed
+    licence: UK Data Service End User Licence
+    vintage: '2024_25'
+    sha256: 2b9be1eb6583cc8916fc06294be27e6217f2aea73da24b97b3226293f6a6ec24
+    size_bytes: 1232411
+    access_route: UK Data Service study SN 9563 under its End User Licence. Bytes
+      stay in the licensed environment the consumer already operates; no Chronicle
+      credential grants access to them.
+    doi: 10.5255/UKDA-SN-9563-1
+    study: UK Data Service SN 9563
+    hash_source: consumer_pin
+    attested_by: PolicyEngine/microcosm
+    verified_at: '2026-09-03'
+    pinned_from:
+      repository: PolicyEngine/microcosm
+      path: packages/microcosm-build/src/microcosm/build/uk/source_stages.json
+      commit: 09abf2ad78e9af3c5314a4b303d42a75e30d49c4
+    notes: Microcosm's frs_spine stage pins the 2024-25 tabs to UK Data Service SN
+      9563, DOI 10.5255/UKDA-SN-9563-1. SHA-256 transcribed verbatim from the consumer's
+      reviewed pin; Chronicle holds no bytes for this release and did not recompute
+      the checksum.

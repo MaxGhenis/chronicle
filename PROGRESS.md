@@ -39,10 +39,21 @@
 - Added focused regressions for the boundary escapes. The registration suite is
   94 passed with only the deliberately stale committed-manifest inventory test
   outstanding; the five new source-reader path checks pass.
+- Replaced stale FRS 2023-24 registrations with FRS 2024-25 (SN 9563) and added
+  WAS round 8, LCFS 2023-24, and ETB 1977-2024 alongside SPI PUT 2022-23: five
+  publisher-release packages, 19 immutable hashes, and no microdata bytes.
+- Made generator inputs explicit temporary files from Microcosm `origin/main`,
+  emitted structured `consumer_pin` attestations, derived access from artifact
+  kind, and made public fetch plans carry publisher, vintage, filename, SHA-256,
+  and size pins.
+- Checked in synthetic source-stage fixtures and a golden covering selection,
+  emit, committed manifests, and plan. The focused suite is 104 passed and the
+  repository inventory is valid with exactly 19 hash-only registrations.
+- Added the explicit public-object removal evidence path; a public identity is
+  never silently reclassified and a still-recorded R2 object always refuses.
 
 ## Next
 
-- Align the generator, fixture-backed golden tests, and five release manifests
-  to the 19 immutable Microcosm `origin/main` pins.
+- Audit the combined diff for #226 regressions and role-path disclosures.
 - Run the full requested verification, write `out.md`, update the PR body, and
   push with `--force-with-lease`. Do not merge.

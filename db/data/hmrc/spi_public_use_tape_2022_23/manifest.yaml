@@ -18,9 +18,13 @@ files:
       to them.
     doi: 10.5255/UKDA-SN-9422-1
     study: UK Data Service SN 9422
-    verified_at: '2026-09-02'
-    hash_source: PolicyEngine/microcosm packages/microcosm-build/src/microcosm/build/uk/hmrc_income_source_stages.json
-      (hmrc_spi_income)
+    hash_source: consumer_pin
+    attested_by: PolicyEngine/microcosm
+    verified_at: '2026-09-03'
+    pinned_from:
+      repository: PolicyEngine/microcosm
+      path: packages/microcosm-build/src/microcosm/build/uk/hmrc_income_source_stages.json
+      commit: 09abf2ad78e9af3c5314a4b303d42a75e30d49c4
     notes: 'Microcosm classes this artifact kind: private_microdata with access: private_local_input.
       Chronicle registers it restricted because the bytes are held only in a private
       mirror; if the UKDS terms for SN 9422 are confirmed as End User Licence it can

@@ -79,7 +79,19 @@ REDISTRIBUTABLE_MICRODATA_LICENCES: Mapping[str, RedistributableLicence] = {
         basis="17 U.S.C. §105",
         evidence_url="https://www.copyright.gov/title17/92chap1.html#105",
     ),
+    "U.S. Government work / 17 U.S.C. §105": RedistributableLicence(
+        name="U.S. Government work",
+        basis="17 U.S.C. §105",
+        evidence_url="https://www.copyright.gov/title17/92chap1.html#105",
+    ),
     "OGL-3.0": RedistributableLicence(
+        name="Open Government Licence v3.0",
+        basis="UK Open Government Licence, version 3.0",
+        evidence_url=(
+            "https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/"
+        ),
+    ),
+    "UK Open Government Licence v3": RedistributableLicence(
         name="Open Government Licence v3.0",
         basis="UK Open Government Licence, version 3.0",
         evidence_url=(
@@ -91,7 +103,17 @@ REDISTRIBUTABLE_MICRODATA_LICENCES: Mapping[str, RedistributableLicence] = {
         basis="Creative Commons CC0 1.0 legal code",
         evidence_url="https://creativecommons.org/publicdomain/zero/1.0/legalcode",
     ),
+    "CC0 1.0": RedistributableLicence(
+        name="CC0 1.0 Universal",
+        basis="Creative Commons CC0 1.0 legal code",
+        evidence_url="https://creativecommons.org/publicdomain/zero/1.0/legalcode",
+    ),
     "CC-BY-4.0": RedistributableLicence(
+        name="Creative Commons Attribution 4.0 International",
+        basis="Creative Commons CC BY 4.0 legal code",
+        evidence_url="https://creativecommons.org/licenses/by/4.0/legalcode",
+    ),
+    "CC BY 4.0": RedistributableLicence(
         name="Creative Commons Attribution 4.0 International",
         basis="Creative Commons CC BY 4.0 legal code",
         evidence_url="https://creativecommons.org/licenses/by/4.0/legalcode",
@@ -116,6 +138,7 @@ _REGISTRATION_FIELD_ORDER: tuple[str, ...] = (
     "verified_at",
     "attestation_evidence",
     "pinned_from",
+    "public_object_removal_evidence",
     "notes",
 )
 
@@ -582,6 +605,7 @@ def register_hash_only_artifact(
     attested_by: str | None = None,
     attestation_evidence: str | None = None,
     pinned_from: Mapping[str, str] | None = None,
+    supersede_public_object: str | None = None,
     notes: str | None = None,
     allow_reissue: bool = False,
 ) -> ArtifactRegistrationReport:
@@ -743,6 +767,16 @@ def register_hash_only_artifact(
                     "Remove the public object and its locator with verifiable "
                     "evidence before registering it hash-only."
                 )
+            if entry_access(existing) == ACCESS_PUBLIC:
+                removal_evidence = _text(supersede_public_object)
+                if not removal_evidence:
+                    raise HashOnlyRegistrationError(
+                        f"Refusing to silently reclassify public identity "
+                        f"{artifact_name!r} as {access_class}. After its public "
+                        "object is verifiably removed, pass "
+                        "--supersede-public-object with the removal evidence."
+                    )
+                entry["public_object_removal_evidence"] = removal_evidence
             entries[index] = {**dict(existing), **entry}
             replaced = True
             break

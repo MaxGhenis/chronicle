@@ -1,0 +1,6 @@
+{
+  "artifacts": [
+    {"role": "household", "filename": "csv_hus.zip", "url": "https://www2.census.gov/programs-surveys/acs/data/pums/2024/1-Year/csv_hus.zip", "sha256": "8281008e53de98f0ef81e7a2ee5a8725991dda1ecfd2713ead73246425e515d0", "size_bytes": 251500587},
+    {"role": "person", "filename": "csv_pus.zip", "url": "https://www2.census.gov/programs-surveys/acs/data/pums/2024/1-Year/csv_pus.zip", "sha256": "afdc6d90c6e2f0bab365ed32d95ba4c4d8ac651162f46ac7861295b2dc469894", "size_bytes": 602847146}
+  ]
+}

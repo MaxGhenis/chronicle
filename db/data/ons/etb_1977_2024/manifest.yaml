@@ -1,0 +1,26 @@
+source_id: ons
+package_id: ons-etb-1977-2024
+kind: microdata_release
+dataset: ons_ons-etb-1977-2024
+publisher: Office for National Statistics
+table: Effects of Taxes and Benefits 1977-2024
+files:
+  1977:
+  - filename: householdv2_1977-2024.tab
+    access: restricted
+    licence: UK Data Service End User Licence (study SN 8856)
+    vintage: '1977_24'
+    sha256: d0e94ebc92e85ca1b9fb3a7353dcaf41db2c5110c9f07c7793dc8c0b695250d8
+    size_bytes: 216967663
+    access_route: UK Data Service study SN 8856 under its End User Licence.
+    doi: 10.5255/UKDA-SN-8856-4
+    study: UK Data Service SN 8856
+    hash_source: consumer_pin
+    attested_by: PolicyEngine/microcosm
+    verified_at: '2026-09-03'
+    pinned_from:
+      repository: PolicyEngine/microcosm
+      path: packages/microcosm-build/src/microcosm/build/uk/source_stages.json
+      commit: 09abf2ad78e9af3c5314a4b303d42a75e30d49c4
+    notes: SHA-256 transcribed verbatim from the consumer's reviewed pin; Chronicle
+      holds no bytes for this release and did not recompute the checksum.

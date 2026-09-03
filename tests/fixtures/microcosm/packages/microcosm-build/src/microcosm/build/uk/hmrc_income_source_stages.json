@@ -1,0 +1,10 @@
+{
+  "stages": [
+    {
+      "stage": "hmrc_spi_income",
+      "artifacts": [
+        {"role": "qrf_donor", "kind": "private_microdata", "vintage": "2022-23", "filename": "put2223uk.tab", "sha256": "5ef829461060c91a2a47be59ad541d9b519fc3976d66ca80d4920f711bb96f66", "size_bytes": 141323762}
+      ]
+    }
+  ]
+}

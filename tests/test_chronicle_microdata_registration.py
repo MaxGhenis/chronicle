@@ -53,10 +53,15 @@ from chronicle.source_package import SourceArtifactSpec, validate_source_package
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-FRS_PACKAGE = REPO_ROOT / "db" / "data" / "dwp" / "frs_2023_24"
+FRS_PACKAGE = REPO_ROOT / "db" / "data" / "dwp" / "frs_2024_25"
 SPI_PACKAGE = REPO_ROOT / "db" / "data" / "hmrc" / "spi_public_use_tape_2022_23"
-# Read-only consumer checkout the emit/plan script resolves pins against.
-MICROCOSM_ROOT = Path.home() / "PolicyEngine" / "populace"
+RELEASE_PACKAGES = (
+    FRS_PACKAGE,
+    REPO_ROOT / "db" / "data" / "ons" / "was_round_8",
+    REPO_ROOT / "db" / "data" / "ons" / "lcfs_2023_24",
+    REPO_ROOT / "db" / "data" / "ons" / "etb_1977_2024",
+    SPI_PACKAGE,
+)
 
 # A syntactically valid checksum that identifies no real publisher bytes.
 FIXTURE_SHA = "a" * 64
@@ -110,12 +115,16 @@ def test_hash_sources_are_the_closed_contract_set():
 
 
 def test_redistributable_microdata_licences_have_authoritative_evidence():
-    assert set(REDISTRIBUTABLE_MICRODATA_LICENCES) == {
+    assert {
         "US-GOVERNMENT-WORK-17-USC-105",
         "OGL-3.0",
         "CC0-1.0",
         "CC-BY-4.0",
-    }
+        "U.S. Government work / 17 U.S.C. §105",
+        "UK Open Government Licence v3",
+        "CC0 1.0",
+        "CC BY 4.0",
+    } <= set(REDISTRIBUTABLE_MICRODATA_LICENCES)
     for licence in REDISTRIBUTABLE_MICRODATA_LICENCES.values():
         assert licence.basis
         assert licence.evidence_url.startswith("https://")
@@ -436,9 +445,59 @@ def test_register_refuses_public_to_restricted_while_r2_is_recorded(tmp_path):
     before = manifest_path.read_bytes()
 
     with pytest.raises(HashOnlyRegistrationError, match="still records storage.r2"):
+        _register(
+            output_dir,
+            supersede_public_object="https://example.test/removal/123",
+        )
+
+    assert manifest_path.read_bytes() == before
+
+
+def test_register_requires_evidence_for_public_to_restricted_reclassification(
+    tmp_path,
+):
+    output_dir = tmp_path / "pkg"
+    output_dir.mkdir()
+    manifest_path = output_dir / "manifest.yaml"
+    manifest_path.write_text(
+        yaml.safe_dump(
+            {
+                "source_id": "dwp",
+                "package_id": "dwp-frs-2023-24",
+                "kind": "microdata_release",
+                "source_page": "https://example.test/release",
+                "files": {
+                    2023: [
+                        {
+                            "filename": "adult.tab",
+                            "access": "public",
+                            "licence": "OGL-3.0",
+                            "vintage": "2023_24",
+                            "sha256": FIXTURE_SHA,
+                            "hash_source": "chronicle_fetch",
+                            "attested_by": "chronicle",
+                            "verified_at": "2026-09-02",
+                        }
+                    ]
+                },
+            }
+        )
+    )
+    before = manifest_path.read_bytes()
+
+    with pytest.raises(HashOnlyRegistrationError, match="silently reclassify"):
         _register(output_dir)
 
     assert manifest_path.read_bytes() == before
+    _register(
+        output_dir,
+        supersede_public_object="https://example.test/removal/123",
+    )
+    entry = yaml.safe_load(manifest_path.read_text())["files"][2023][0]
+    assert entry["access"] == "licensed"
+    assert entry["public_object_removal_evidence"] == (
+        "https://example.test/removal/123"
+    )
 
 
 def test_register_reuses_a_quoted_year_key(tmp_path):
@@ -1003,21 +1062,21 @@ def test_inventory_rejects_a_list_entry_outside_a_microdata_release(tmp_path):
 def test_source_artifact_spec_refuses_to_parse_a_registered_release():
     spec = SourceArtifactSpec(
         source_name="dwp",
-        source_table="Family Resources Survey 2023-24",
+        source_table="Family Resources Survey 2024-25",
         resource_package="db",
-        resource_directory="data/dwp/frs_2023_24",
+        resource_directory="data/dwp/frs_2024_25",
         manifest="manifest.yaml",
-        vintage="2023_24",
+        vintage="2024_25",
         extracted_at="2026-09-02",
         extraction_method="none",
         parser="delimited_text_full_rows",
-        artifact_year=2023,
+        artifact_year=2024,
     )
 
     with pytest.raises(MicrodataReleaseNotParseableError, match="registers a"):
         spec.assert_parseable_manifest()
     with pytest.raises(MicrodataReleaseNotParseableError):
-        spec._artifact_content(2023)
+        spec._artifact_content(2024)
 
 
 def test_year_mapping_refuses_a_multi_file_vintage():
@@ -1030,25 +1089,25 @@ def test_year_mapping_refuses_a_multi_file_vintage():
 
 
 def test_validate_package_reports_a_microdata_release_carve_out(tmp_path):
-    package_dir = tmp_path / "frs_2023_24"
+    package_dir = tmp_path / "frs_2024_25"
     package_dir.mkdir()
     (package_dir / "source_package.yaml").write_text(
         yaml.safe_dump(
             {
                 "schema_version": "ledger.source_package.v1",
-                "package_id": "dwp-frs-2023-24-parse-attempt",
+                "package_id": "dwp-frs-2024-25-parse-attempt",
                 "label": "Attempt to parse a registered microdata release",
                 "artifact": {
                     "source_name": "dwp",
-                    "source_table": "Family Resources Survey 2023-24",
+                    "source_table": "Family Resources Survey 2024-25",
                     "resource_package": "db",
-                    "resource_directory": "data/dwp/frs_2023_24",
+                    "resource_directory": "data/dwp/frs_2024_25",
                     "manifest": "manifest.yaml",
-                    "vintage": "2023_24",
+                    "vintage": "2024_25",
                     "extracted_at": "2026-09-02",
                     "extraction_method": "none",
                     "parser": "delimited_text_full_rows",
-                    "artifact_year": 2023,
+                    "artifact_year": 2024,
                 },
                 "record_sets": [],
             },
@@ -1056,7 +1115,7 @@ def test_validate_package_reports_a_microdata_release_carve_out(tmp_path):
         )
     )
 
-    report = validate_source_package(package_dir, year=2023)
+    report = validate_source_package(package_dir, year=2024)
 
     assert not report.valid
     assert "microdata_release_not_parseable" in {issue.code for issue in report.errors}
@@ -1360,88 +1419,6 @@ def test_fetch_rejects_an_unknown_manifest_kind(tmp_path):
 
 
 # --------------------------------------------------------------------------
-# The generated fetch plan
-# --------------------------------------------------------------------------
-
-
-def test_planned_fetch_commands_parse_against_the_real_cli():
-    """Every command `plan` prints must be runnable as printed."""
-    import argparse
-    import contextlib
-    import shlex
-    import subprocess
-    import sys
-
-    result = subprocess.run(
-        [
-            sys.executable,
-            str(REPO_ROOT / "scripts" / "register_microdata_releases.py"),
-            "--microcosm-root",
-            str(MICROCOSM_ROOT),
-            "plan",
-        ],
-        capture_output=True,
-        text=True,
-        cwd=REPO_ROOT,
-    )
-    if result.returncode != 0:
-        pytest.skip(f"No readable microcosm checkout: {result.stderr.strip()[:120]}")
-
-    commands = [
-        line
-        for line in result.stdout.splitlines()
-        if line.startswith("uv run chronicle")
-    ]
-    assert commands
-
-    captured: dict[str, argparse.ArgumentParser] = {}
-    real_parse = argparse.ArgumentParser.parse_args
-
-    def capture(self, args=None, namespace=None):
-        captured["parser"] = self
-        raise SystemExit(0)
-
-    argparse.ArgumentParser.parse_args = capture
-    try:
-        with contextlib.suppress(SystemExit):
-            harness_main(["--help"])
-    finally:
-        argparse.ArgumentParser.parse_args = real_parse
-
-    parser = captured["parser"]
-    for command in commands:
-        argv = shlex.split(command)[3:]
-        namespace = parser.parse_args(argv)
-        assert namespace.command == "fetch-artifact"
-        assert namespace.access == "public"
-        assert namespace.licence
-        assert namespace.kind == "microdata_release"
-
-
-def test_plan_never_prints_a_fabricated_url():
-    """A release Microcosm does not pin a URL for prints TODO, not a guess."""
-    import subprocess
-    import sys
-
-    result = subprocess.run(
-        [
-            sys.executable,
-            str(REPO_ROOT / "scripts" / "register_microdata_releases.py"),
-            "--microcosm-root",
-            str(MICROCOSM_ROOT),
-            "plan",
-        ],
-        capture_output=True,
-        text=True,
-        cwd=REPO_ROOT,
-    )
-    if result.returncode != 0:
-        pytest.skip("No readable microcosm checkout")
-
-    assert "TODO_PUBLISHER_URL" in result.stdout
-
-
-# --------------------------------------------------------------------------
 # The committed registrations
 # --------------------------------------------------------------------------
 
@@ -1473,7 +1450,7 @@ def test_committed_frs_registration_covers_every_pinned_tab():
     ]
 
 
-@pytest.mark.parametrize("package", [FRS_PACKAGE, SPI_PACKAGE])
+@pytest.mark.parametrize("package", RELEASE_PACKAGES)
 def test_committed_registrations_are_identity_only(package):
     entries = _committed_entries(package)
 
@@ -1483,6 +1460,10 @@ def test_committed_registrations_are_identity_only(package):
         assert entry["licence"]
         assert entry["vintage"]
         assert entry["verified_at"]
+        assert entry["hash_source"] == "consumer_pin"
+        assert entry["attested_by"] == "PolicyEngine/microcosm"
+        assert entry["pinned_from"]["repository"] == "PolicyEngine/microcosm"
+        assert len(entry["pinned_from"]["commit"]) == 40
         assert len(entry["sha256"]) == 64
         assert int(entry["size_bytes"]) > 0
         assert "storage" not in entry
@@ -1490,7 +1471,7 @@ def test_committed_registrations_are_identity_only(package):
         assert not (package / entry["filename"]).exists()
 
 
-@pytest.mark.parametrize("package", [FRS_PACKAGE, SPI_PACKAGE])
+@pytest.mark.parametrize("package", RELEASE_PACKAGES)
 def test_committed_registrations_hold_no_microdata_bytes(package):
     assert sorted(path.name for path in package.iterdir()) == ["manifest.yaml"]
 
@@ -1500,13 +1481,13 @@ def test_committed_registrations_pass_inventory():
     hash_only = [entry for entry in report.entries if entry.hash_only]
 
     assert report.valid
-    assert len(hash_only) == 15
+    assert len(hash_only) == 19
     assert all(entry.valid and not entry.exists for entry in hash_only)
     assert all(entry.r2 is None for entry in hash_only)
 
 
 def test_no_committed_registration_computes_an_r2_key():
-    for package in (FRS_PACKAGE, SPI_PACKAGE):
+    for package in RELEASE_PACKAGES:
         text = (package / "manifest.yaml").read_text()
         assert "storage:" not in text
         assert "ledger-raw" not in text
@@ -1516,13 +1497,8 @@ def test_no_committed_registration_computes_an_r2_key():
 def test_registration_hashes_are_not_hashes_of_anything_chronicle_holds():
     # A registered checksum identifies publisher bytes Chronicle never sees;
     # it must never coincide with the hash of the manifest that records it.
-    for package in (FRS_PACKAGE, SPI_PACKAGE):
+    for package in RELEASE_PACKAGES:
         manifest_hash = hashlib.sha256(
             (package / "manifest.yaml").read_bytes()
         ).hexdigest()
         assert manifest_hash not in (package / "manifest.yaml").read_text()
-    (canonical_artifact_filename,)
-    (effective_entry_access,)
-    (manifest_filename_errors,)
-    (normalize_hash_source,)
-    (resolve_year_key,)

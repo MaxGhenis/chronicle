@@ -389,17 +389,22 @@ uv run chronicle publish-raw --root db/data
 # fetched, stored, or uploaded, and no R2 key is recorded:
 uv run chronicle register-artifact \
   --source-id dwp \
-  --package-id dwp-frs-2023-24 \
-  --year 2023 \
-  --out-dir db/data/dwp/frs_2023_24 \
+  --package-id dwp-frs-2024-25 \
+  --year 2024 \
+  --out-dir db/data/dwp/frs_2024_25 \
   --filename adult.tab \
-  --sha256 e09f9647d03585c81a528636028b2ed495f8f1fbcf64c5e7b4fe521b67367e06 \
-  --size-bytes 35323384 \
-  --vintage 2023_24 \
+  --sha256 4eaea0809a7ccca0fddeb98e358771e4a6e5ebb81b21c4fac4070fc9d227658d \
+  --size-bytes 34885825 \
+  --vintage 2024_25 \
   --licence "UK Data Service End User Licence" \
   --access licensed \
-  --doi 10.5255/UKDA-SN-9367-2 \
-  --verified-at 2026-09-02
+  --doi 10.5255/UKDA-SN-9563-1 \
+  --verified-at 2026-09-03 \
+  --hash-source consumer_pin \
+  --attested-by PolicyEngine/microcosm \
+  --pinned-from-repository PolicyEngine/microcosm \
+  --pinned-from-path packages/microcosm-build/src/microcosm/build/uk/source_stages.json \
+  --pinned-from-commit 09abf2ad78e9af3c5314a4b303d42a75e30d49c4
 ```
 
 To coordinate broad PE source migration without jumping straight to semantic

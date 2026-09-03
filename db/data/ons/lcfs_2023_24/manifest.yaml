@@ -1,0 +1,44 @@
+source_id: ons
+package_id: ons-lcfs-2023-24
+kind: microdata_release
+dataset: ons_ons-lcfs-2023-24
+publisher: Office for National Statistics
+table: Living Costs and Food Survey 2023-24
+files:
+  2023:
+  - filename: dvhh_ukanon_v2_2023.tab
+    access: restricted
+    licence: UK Data Service End User Licence (study SN 9468)
+    vintage: '2023_24'
+    sha256: 6e78f0914be38e63853165486d641cbd790753cc471086210c6f672bfa18ca72
+    size_bytes: 22812887
+    access_route: UK Data Service study SN 9468 under its End User Licence.
+    doi: 10.5255/UKDA-SN-9468-3
+    study: UK Data Service SN 9468
+    hash_source: consumer_pin
+    attested_by: PolicyEngine/microcosm
+    verified_at: '2026-09-03'
+    pinned_from:
+      repository: PolicyEngine/microcosm
+      path: packages/microcosm-build/src/microcosm/build/uk/source_stages.json
+      commit: 09abf2ad78e9af3c5314a4b303d42a75e30d49c4
+    notes: SHA-256 transcribed verbatim from the consumer's reviewed pin; Chronicle
+      holds no bytes for this release and did not recompute the checksum.
+  - filename: dvper_ukanon_202324_2023.tab
+    access: restricted
+    licence: UK Data Service End User Licence (study SN 9468)
+    vintage: '2023_24'
+    sha256: f32d54d83cdecf023f0ac73530be3a99372099b596e0106a56eae42a64929e50
+    size_bytes: 6545146
+    access_route: UK Data Service study SN 9468 under its End User Licence.
+    doi: 10.5255/UKDA-SN-9468-3
+    study: UK Data Service SN 9468
+    hash_source: consumer_pin
+    attested_by: PolicyEngine/microcosm
+    verified_at: '2026-09-03'
+    pinned_from:
+      repository: PolicyEngine/microcosm
+      path: packages/microcosm-build/src/microcosm/build/uk/source_stages.json
+      commit: 09abf2ad78e9af3c5314a4b303d42a75e30d49c4
+    notes: SHA-256 transcribed verbatim from the consumer's reviewed pin; Chronicle
+      holds no bytes for this release and did not recompute the checksum.

@@ -1,0 +1,26 @@
+source_id: ons
+package_id: ons-was-round-8
+kind: microdata_release
+dataset: ons_ons-was-round-8
+publisher: Office for National Statistics
+table: Wealth and Assets Survey round 8
+files:
+  2018:
+  - filename: was_round_8_hhold_eul_may_2025_230525.tab
+    access: restricted
+    licence: UK Data Service End User Licence (study SN 7215)
+    vintage: '2018_20'
+    sha256: 18b3eb980c02c99f3d8a3254af859bee31682b2bdc11703877677292b3ce9374
+    size_bytes: 39073613
+    access_route: UK Data Service study SN 7215 under its End User Licence.
+    doi: 10.5255/UKDA-SN-7215-20
+    study: UK Data Service SN 7215
+    hash_source: consumer_pin
+    attested_by: PolicyEngine/microcosm
+    verified_at: '2026-09-03'
+    pinned_from:
+      repository: PolicyEngine/microcosm
+      path: packages/microcosm-build/src/microcosm/build/uk/source_stages.json
+      commit: 09abf2ad78e9af3c5314a4b303d42a75e30d49c4
+    notes: SHA-256 transcribed verbatim from the consumer's reviewed pin; Chronicle
+      holds no bytes for this release and did not recompute the checksum.

@@ -1,0 +1,43 @@
+{
+  "stages": [
+    {
+      "stage": "frs_spine",
+      "artifacts": [
+        {"role": "frs_table", "table": "accounts", "kind": "licensed_microdata", "vintage": "2024_25", "locator": "accounts.tab", "sha256": "fa7871eb45cad0db5fd05ede454ced60405d2f9c598651ea5acea5c91a6ff52f", "size_bytes": 1812923},
+        {"role": "frs_table", "table": "adult", "kind": "licensed_microdata", "vintage": "2024_25", "locator": "adult.tab", "sha256": "4eaea0809a7ccca0fddeb98e358771e4a6e5ebb81b21c4fac4070fc9d227658d", "size_bytes": 34885825},
+        {"role": "frs_table", "table": "benefits", "kind": "licensed_microdata", "vintage": "2024_25", "locator": "benefits.tab", "sha256": "f6ad22b408a13e2239c04b0d076a36418dcf5dd89a8c60daa792c4d735b911d3", "size_bytes": 2362329},
+        {"role": "frs_table", "table": "benunit", "kind": "licensed_microdata", "vintage": "2024_25", "locator": "benunit.tab", "sha256": "66b894624498316d19b6259e287a607e98ed3daacc9be3d3e9067d32b8e09a5a", "size_bytes": 13986782},
+        {"role": "frs_table", "table": "child", "kind": "licensed_microdata", "vintage": "2024_25", "locator": "child.tab", "sha256": "88ec53fc52eea4374864bbc74219d551f4b4c5f54a220bf9607c7a6289719aa5", "size_bytes": 2753961},
+        {"role": "frs_table", "table": "chldcare", "kind": "licensed_microdata", "vintage": "2024_25", "locator": "chldcare.tab", "sha256": "7ccd3f92f299a1f49b24063188177cdb8a958d8bcd753fc3d74dadda6ad04023", "size_bytes": 275878},
+        {"role": "frs_table", "table": "extchild", "kind": "licensed_microdata", "vintage": "2024_25", "locator": "extchild.tab", "sha256": "c661379a4aa5079ce482b1f98f0bfb9157ad9b3ba4eb10739b61846f9c9548e4", "size_bytes": 15150},
+        {"role": "frs_table", "table": "househol", "kind": "licensed_microdata", "vintage": "2024_25", "locator": "househol.tab", "sha256": "2b93b6aed49e1591d6f5360736b4aee3a11ef506b276435f4d2c011a8afbb6a5", "size_bytes": 12108606},
+        {"role": "frs_table", "table": "job", "kind": "licensed_microdata", "vintage": "2024_25", "locator": "job.tab", "sha256": "eb7faf7ada3a3851cb2afb83e2983f8907ffeec897cfbe01e56cb0dfefa853e2", "size_bytes": 10518760},
+        {"role": "frs_table", "table": "maint", "kind": "licensed_microdata", "vintage": "2024_25", "locator": "maint.tab", "sha256": "e7a8d6f47cab7bf9db9bfd7b3ad5ebe5830ec75245d065dcf8654c7c20b97a7d", "size_bytes": 13993},
+        {"role": "frs_table", "table": "mortgage", "kind": "licensed_microdata", "vintage": "2024_25", "locator": "mortgage.tab", "sha256": "6a08f6846970dfdc544a7efc8a93fed4f3210d872cd2d160dfb14ca8d92d5ed0", "size_bytes": 600552},
+        {"role": "frs_table", "table": "oddjob", "kind": "licensed_microdata", "vintage": "2024_25", "locator": "oddjob.tab", "sha256": "dfff1baf71a3de05f3a2fcf0c01a3995df5657f242cd7846aa61f6cc27a1cead", "size_bytes": 5339},
+        {"role": "frs_table", "table": "penprov", "kind": "licensed_microdata", "vintage": "2024_25", "locator": "penprov.tab", "sha256": "9e53de0dc969baec000b3cd68387f0f2dfb3f678732e408de175e0a1d6e3fdc1", "size_bytes": 513614},
+        {"role": "frs_table", "table": "pension", "kind": "licensed_microdata", "vintage": "2024_25", "locator": "pension.tab", "sha256": "2b9be1eb6583cc8916fc06294be27e6217f2aea73da24b97b3226293f6a6ec24", "size_bytes": 1232411}
+      ]
+    },
+    {
+      "stage": "was_wealth",
+      "artifacts": [
+        {"role": "was_qrf_donor", "kind": "private_microdata", "filename": "was_round_8_hhold_eul_may_2025_230525.tab", "sha256": "18b3eb980c02c99f3d8a3254af859bee31682b2bdc11703877677292b3ce9374", "size_bytes": 39073613}
+      ]
+    },
+    {
+      "stage": "lcfs_consumption",
+      "artifacts": [
+        {"role": "lcfs_household_tab", "kind": "private_microdata", "vintage": "2023_24", "filename": "dvhh_ukanon_v2_2023.tab", "sha256": "6e78f0914be38e63853165486d641cbd790753cc471086210c6f672bfa18ca72", "size_bytes": 22812887},
+        {"role": "lcfs_person_tab", "kind": "private_microdata", "vintage": "2023_24", "filename": "dvper_ukanon_202324_2023.tab", "sha256": "f32d54d83cdecf023f0ac73530be3a99372099b596e0106a56eae42a64929e50", "size_bytes": 6545146},
+        {"role": "was_bridge_donor", "kind": "private_microdata", "vintage": "2018_20", "filename": "was_round_8_hhold_eul_may_2025_230525.tab", "sha256": "18b3eb980c02c99f3d8a3254af859bee31682b2bdc11703877677292b3ce9374", "size_bytes": 39073613}
+      ]
+    },
+    {
+      "stage": "etb_vat",
+      "artifacts": [
+        {"role": "etb_household_tab", "kind": "private_microdata", "vintage": "1977_24", "filename": "householdv2_1977-2024.tab", "sha256": "d0e94ebc92e85ca1b9fb3a7353dcaf41db2c5110c9f07c7793dc8c0b695250d8", "size_bytes": 216967663}
+      ]
+    }
+  ]
+}

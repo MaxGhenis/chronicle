@@ -60,16 +60,15 @@ no `ledger-raw` key exists for them.
 
    ```bash
    uv run python scripts/register_microdata_releases.py \
-     --microcosm-root ~/PolicyEngine/microcosm \
+     --microcosm-root "$TEMP_MICROCOSM_ORIGIN_MAIN" \
      --root db/data \
      --release statbel-be-silc-2023 \
-     emit --verified-at <date>
+     emit --verified-at <date> --microcosm-commit <origin-main-commit>
    ```
 
 3. Delete the `blocker` field from the `statbel-be-silc-2023` catalogue entry,
    and delete this document.
 
-Until then `uv run chronicle inventory-artifacts --root db/data` reports 15
-hash-only registrations — the 14 DWP Family Resources Survey 2023-24 tabs and
-the HMRC Survey of Personal Incomes Public Use Tape 2022-23 — and BE-SILC is
-absent by design.
+Until then `uv run chronicle inventory-artifacts --root db/data` reports 19
+hash-only registrations: FRS 2024-25, WAS round 8, LCFS 2023-24, ETB 1977-2024,
+and the SPI Public Use Tape 2022-23. BE-SILC is absent by design.

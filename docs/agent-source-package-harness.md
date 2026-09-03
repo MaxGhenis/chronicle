@@ -63,17 +63,22 @@ fetched, written, or uploaded. Agents should register one with:
 ```bash
 uv run chronicle register-artifact \
   --source-id dwp \
-  --package-id dwp-frs-2023-24 \
-  --year 2023 \
-  --out-dir db/data/dwp/frs_2023_24 \
+  --package-id dwp-frs-2024-25 \
+  --year 2024 \
+  --out-dir db/data/dwp/frs_2024_25 \
   --filename adult.tab \
-  --sha256 e09f9647d03585c81a528636028b2ed495f8f1fbcf64c5e7b4fe521b67367e06 \
-  --size-bytes 35323384 \
-  --vintage 2023_24 \
+  --sha256 4eaea0809a7ccca0fddeb98e358771e4a6e5ebb81b21c4fac4070fc9d227658d \
+  --size-bytes 34885825 \
+  --vintage 2024_25 \
   --licence "UK Data Service End User Licence" \
   --access licensed \
-  --doi 10.5255/UKDA-SN-9367-2 \
-  --verified-at 2026-09-02
+  --doi 10.5255/UKDA-SN-9563-1 \
+  --verified-at 2026-09-03 \
+  --hash-source consumer_pin \
+  --attested-by PolicyEngine/microcosm \
+  --pinned-from-repository PolicyEngine/microcosm \
+  --pinned-from-path packages/microcosm-build/src/microcosm/build/uk/source_stages.json \
+  --pinned-from-commit <immutable-origin-main-commit>
 ```
 
 Agents should never invent a checksum to satisfy the command: `--sha256` must
@@ -98,14 +103,19 @@ declares what it is:
 
 ```bash
 uv run chronicle fetch-artifact \
-  --url https://www2.census.gov/programs-surveys/acs/data/pums/2022/1-Year/csv_hus.zip \
+  --url https://www2.census.gov/programs-surveys/acs/data/pums/2024/1-Year/csv_hus.zip \
   --source-id census_acs \
-  --package-id census-acs-pums-2022-1yr \
-  --year 2022 \
-  --out-dir db/data/census/acs_pums_2022_1yr \
+  --package-id census-acs-pums-2024-1yr \
+  --year 2024 \
+  --out-dir db/data/census/acs_pums_2024_1yr \
+  --filename csv_hus.zip \
+  --publisher "U.S. Census Bureau" \
+  --vintage 2024 \
   --access public \
-  --licence "U.S. Census Bureau public-use file" \
+  --licence US-GOVERNMENT-WORK-17-USC-105 \
   --kind microdata_release \
+  --expected-sha256 8281008e53de98f0ef81e7a2ee5a8725991dda1ecfd2713ead73246425e515d0 \
+  --expected-size-bytes 251500587 \
   --upload-r2
 ```
 
@@ -116,14 +126,15 @@ under any other manifest kind is an error. A fetch replaces only the entry for
 its own filename, so acquiring a second file never drops the first.
 
 No source package parses a microdata release. `validate-package` fails with
-`microdata_release_not_parseable` if a package spec points at one, and no
-microdata row, cell, or fact ever enters Chronicle. Registration is
+`microdata_release_not_parseable` if a package spec points at one. No microdata
+records, rows, columns, row values, or cells ever enter Chronicle. Registration is
 manifest-level identity; see `docs/adr-chronicle-raw-microdata-identity.md`.
 
-`scripts/register_microdata_releases.py` drives both halves from a read-only
-PolicyEngine/microcosm checkout: `emit` writes the hash-only manifests from
-Microcosm's reviewed pins, and `plan` prints the `fetch-artifact` commands to
-run for public releases from a networked machine.
+`scripts/register_microdata_releases.py` drives both halves from synthetic test
+fixtures or files materialized with `git show origin/main:<path>` into a temporary
+directory, never from a clone's working tree. `emit` writes hash-only manifests
+from Microcosm's reviewed pins, and `plan` prints `fetch-artifact` commands for
+public releases.
 
 For broad PE source migration, generate the agent queue from the manifest before
 assigning work:

@@ -23,14 +23,11 @@ onto Chronicle's ``{source_id, package_id, year, sha256, filename}`` identity
 and records the publisher's terms. Run it read-only against a Microcosm
 checkout; this script never writes to that repository.
 
-Usage::
-
-    python scripts/register_microdata_releases.py emit \\
-        --microcosm-root ~/PolicyEngine/microcosm \\
-        --root db/data --verified-at 2026-09-02
-
-    python scripts/register_microdata_releases.py plan \\
-        --microcosm-root ~/PolicyEngine/microcosm --root db/data
+Input must be materialized into a temporary directory with ``git show
+origin/main:<manifest-path>``. Pass that directory with ``--microcosm-root``;
+never point this command at a clone's working tree. ``emit`` also requires the
+exact ``origin/main`` commit through ``--microcosm-commit`` so every emitted
+``consumer_pin`` remains immutable and auditable.
 """
 
 from __future__ import annotations
@@ -132,7 +129,7 @@ US_ACS_2024 = (
     "packages/microcosm-build/src/microcosm/build/us_runtime/acs_2024_1yr_sources.json"
 )
 
-#: FRS 2023-24 tabs, in the order Microcosm's ``frs_spine`` stage lists them.
+#: FRS 2024-25 tabs, in the order Microcosm's ``frs_spine`` stage lists them.
 FRS_TABS: tuple[str, ...] = (
     "accounts",
     "adult",
@@ -151,26 +148,22 @@ FRS_TABS: tuple[str, ...] = (
 )
 
 FRS_LICENCE = "UK Data Service End User Licence"
-FRS_STUDY = "UK Data Service SN 9367"
-FRS_DOI = "10.5255/UKDA-SN-9367-2"
+FRS_STUDY = "UK Data Service SN 9563"
+FRS_DOI = "10.5255/UKDA-SN-9563-1"
 FRS_ACCESS_ROUTE = (
-    "UK Data Service study SN 9367 under its End User Licence. Bytes stay in "
+    "UK Data Service study SN 9563 under its End User Licence. Bytes stay in "
     "the licensed environment the consumer already operates; no Chronicle "
     "credential grants access to them."
 )
 FRS_NOTES = (
-    "Microcosm's frs_spine stage cites 'UK Data Service SN 9367, DOI "
-    "10.5255/UKDA-SN-9367-2'; its frs_employment, frs_council_tax, "
-    "frs_education, and frs_legacy_proxies stages cite 'SN 9252' for the same "
-    "2023_24 tabs. The tabs are the same bytes across all five stages (identical "
-    "SHA-256), so the registration carries the study reference that also carries "
-    "a DOI. " + HASH_PROVENANCE
+    "Microcosm's frs_spine stage pins the 2024-25 tabs to UK Data Service "
+    "SN 9563, DOI 10.5255/UKDA-SN-9563-1. " + HASH_PROVENANCE
 )
 
 CATALOGUE: tuple[Release, ...] = (
     *(
         Release(
-            release_id=f"dwp-frs-2023-24:{tab}",
+            release_id=f"dwp-frs-2024-25:{tab}",
             manifest=UK_STAGES,
             selector=ArtifactSelector(
                 stage="frs_spine",
@@ -178,10 +171,10 @@ CATALOGUE: tuple[Release, ...] = (
                 match={"table": tab},
             ),
             source_id="dwp",
-            package_id="dwp-frs-2023-24",
-            package_dir="dwp/frs_2023_24",
-            year=2023,
-            table="Family Resources Survey 2023-24",
+            package_id="dwp-frs-2024-25",
+            package_dir="dwp/frs_2024_25",
+            year=2024,
+            table="Family Resources Survey 2024-25",
             publisher="Department for Work and Pensions",
             licence=FRS_LICENCE,
             access="licensed",
@@ -192,6 +185,92 @@ CATALOGUE: tuple[Release, ...] = (
             notes=FRS_NOTES,
         )
         for tab in FRS_TABS
+    ),
+    Release(
+        release_id="ons-was-round-8",
+        manifest=UK_STAGES,
+        selector=ArtifactSelector(
+            stage="was_wealth",
+            kind="private_microdata",
+            match={"role": "was_qrf_donor"},
+        ),
+        source_id="ons",
+        package_id="ons-was-round-8",
+        package_dir="ons/was_round_8",
+        year=2018,
+        table="Wealth and Assets Survey round 8",
+        publisher="Office for National Statistics",
+        licence="UK Data Service End User Licence (study SN 7215)",
+        access="restricted",
+        study="UK Data Service SN 7215",
+        doi="10.5255/UKDA-SN-7215-20",
+        access_route="UK Data Service study SN 7215 under its End User Licence.",
+        vintage="2018_20",
+        notes=HASH_PROVENANCE,
+    ),
+    Release(
+        release_id="ons-lcfs-2023-24:household",
+        manifest=UK_STAGES,
+        selector=ArtifactSelector(
+            stage="lcfs_consumption",
+            kind="private_microdata",
+            match={"role": "lcfs_household_tab"},
+        ),
+        source_id="ons",
+        package_id="ons-lcfs-2023-24",
+        package_dir="ons/lcfs_2023_24",
+        year=2023,
+        table="Living Costs and Food Survey 2023-24",
+        publisher="Office for National Statistics",
+        licence="UK Data Service End User Licence (study SN 9468)",
+        access="restricted",
+        study="UK Data Service SN 9468",
+        doi="10.5255/UKDA-SN-9468-3",
+        access_route="UK Data Service study SN 9468 under its End User Licence.",
+        notes=HASH_PROVENANCE,
+    ),
+    Release(
+        release_id="ons-lcfs-2023-24:person",
+        manifest=UK_STAGES,
+        selector=ArtifactSelector(
+            stage="lcfs_consumption",
+            kind="private_microdata",
+            match={"role": "lcfs_person_tab"},
+        ),
+        source_id="ons",
+        package_id="ons-lcfs-2023-24",
+        package_dir="ons/lcfs_2023_24",
+        year=2023,
+        table="Living Costs and Food Survey 2023-24",
+        publisher="Office for National Statistics",
+        licence="UK Data Service End User Licence (study SN 9468)",
+        access="restricted",
+        study="UK Data Service SN 9468",
+        doi="10.5255/UKDA-SN-9468-3",
+        access_route="UK Data Service study SN 9468 under its End User Licence.",
+        notes=HASH_PROVENANCE,
+    ),
+    Release(
+        release_id="ons-etb-1977-2024",
+        manifest=UK_STAGES,
+        selector=ArtifactSelector(
+            stage="etb_vat",
+            kind="private_microdata",
+            match={"role": "etb_household_tab"},
+        ),
+        source_id="ons",
+        package_id="ons-etb-1977-2024",
+        package_dir="ons/etb_1977_2024",
+        year=1977,
+        table="Effects of Taxes and Benefits 1977-2024",
+        publisher="Office for National Statistics",
+        licence="UK Data Service End User Licence (study SN 8856)",
+        access="restricted",
+        study="UK Data Service SN 8856",
+        doi="10.5255/UKDA-SN-8856-4",
+        access_route="UK Data Service study SN 8856 under its End User Licence.",
+        vintage="1977_24",
+        notes=HASH_PROVENANCE,
     ),
     Release(
         release_id="hmrc-spi-public-use-tape-2022-23:put2223uk",
@@ -270,7 +349,7 @@ CATALOGUE: tuple[Release, ...] = (
         year=2023,
         table="CPS Annual Social and Economic Supplement 2023 public-use files",
         publisher="U.S. Census Bureau",
-        licence="U.S. Census Bureau public-use file; U.S. Government work, no copyright",
+        licence="US-GOVERNMENT-WORK-17-USC-105",
         access=ACCESS_PUBLIC,
         source_page="https://www.census.gov/programs-surveys/cps/data/datasets.html",
     ),
@@ -287,7 +366,7 @@ CATALOGUE: tuple[Release, ...] = (
         year=2024,
         table="CPS basic monthly public-use files, January-December 2024",
         publisher="U.S. Census Bureau",
-        licence="U.S. Census Bureau public-use file; U.S. Government work, no copyright",
+        licence="US-GOVERNMENT-WORK-17-USC-105",
         access=ACCESS_PUBLIC,
         source_page="https://www2.census.gov/programs-surveys/cps/datasets/2024/basic/",
         notes=(
@@ -311,7 +390,7 @@ CATALOGUE: tuple[Release, ...] = (
         year=2022,
         table="ACS 2022 1-Year PUMS household file",
         publisher="U.S. Census Bureau",
-        licence="U.S. Census Bureau public-use file; U.S. Government work, no copyright",
+        licence="US-GOVERNMENT-WORK-17-USC-105",
         access=ACCESS_PUBLIC,
         url_field="official_household_source",
         source_page="https://www.census.gov/programs-surveys/acs",
@@ -335,7 +414,7 @@ CATALOGUE: tuple[Release, ...] = (
         year=2022,
         table="ACS 2022 1-Year PUMS person file",
         publisher="U.S. Census Bureau",
-        licence="U.S. Census Bureau public-use file; U.S. Government work, no copyright",
+        licence="US-GOVERNMENT-WORK-17-USC-105",
         access=ACCESS_PUBLIC,
         url_field="official_person_source",
         source_page="https://www.census.gov/programs-surveys/acs",
@@ -356,7 +435,7 @@ CATALOGUE: tuple[Release, ...] = (
         year=2024,
         table="ACS 2024 1-Year PUMS household file",
         publisher="U.S. Census Bureau",
-        licence="U.S. Census Bureau public-use file; U.S. Government work, no copyright",
+        licence="US-GOVERNMENT-WORK-17-USC-105",
         access=ACCESS_PUBLIC,
         url_field="url",
         source_page="https://www2.census.gov/programs-surveys/acs/data/pums/2024/1-Year/",
@@ -371,7 +450,7 @@ CATALOGUE: tuple[Release, ...] = (
         year=2024,
         table="ACS 2024 1-Year PUMS person file",
         publisher="U.S. Census Bureau",
-        licence="U.S. Census Bureau public-use file; U.S. Government work, no copyright",
+        licence="US-GOVERNMENT-WORK-17-USC-105",
         access=ACCESS_PUBLIC,
         url_field="url",
         source_page="https://www2.census.gov/programs-surveys/acs/data/pums/2024/1-Year/",
@@ -390,7 +469,7 @@ CATALOGUE: tuple[Release, ...] = (
         year=2022,
         table="Survey of Consumer Finances 2022 summary extract",
         publisher="Board of Governors of the Federal Reserve System",
-        licence="Federal Reserve Board public-use file; U.S. Government work, no copyright",
+        licence="US-GOVERNMENT-WORK-17-USC-105",
         access=ACCESS_PUBLIC,
         source_page="https://www.federalreserve.gov/econres/scfindex.htm",
     ),
@@ -408,7 +487,7 @@ CATALOGUE: tuple[Release, ...] = (
         year=2022,
         table="Survey of Consumer Finances 2022 full public data set",
         publisher="Board of Governors of the Federal Reserve System",
-        licence="Federal Reserve Board public-use file; U.S. Government work, no copyright",
+        licence="US-GOVERNMENT-WORK-17-USC-105",
         access=ACCESS_PUBLIC,
         source_page="https://www.federalreserve.gov/econres/scfindex.htm",
         notes=(
@@ -431,7 +510,7 @@ CATALOGUE: tuple[Release, ...] = (
         year=2023,
         table="Survey of Income and Program Participation 2023 public-use file",
         publisher="U.S. Census Bureau",
-        licence="U.S. Census Bureau public-use file; U.S. Government work, no copyright",
+        licence="US-GOVERNMENT-WORK-17-USC-105",
         access=ACCESS_PUBLIC,
         source_page="https://www.census.gov/programs-surveys/sipp.html",
         pinned_sha_is_publisher_bytes=False,
@@ -562,7 +641,15 @@ class ResolvedRelease:
     @property
     def vintage(self) -> str:
         """Publisher vintage label, from the release or the artifact."""
-        return str(self.release.vintage or self.artifact.get("vintage") or "")
+        return str(
+            self.release.vintage or self.artifact.get("vintage") or self.release.year
+        )
+
+    @property
+    def access(self) -> str:
+        """Chronicle access derived from Microcosm's artifact kind."""
+        kind = str(self.artifact.get("kind") or "")
+        return ACCESS_BY_MICROCOSM_KIND.get(kind, self.release.access)
 
 
 def resolve(
@@ -586,16 +673,12 @@ def resolve(
     return resolved
 
 
-def hash_source(release: Release) -> str:
-    """Return the provenance pointer recorded on a registration."""
-    return f"PolicyEngine/microcosm {release.manifest} ({release.selector.stage})"
-
-
 def emit(
     resolved: Sequence[ResolvedRelease],
     *,
     root: Path,
     verified_at: str,
+    microcosm_commit: str,
     allow_reissue: bool = False,
 ) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
     """Write hash-only manifests for every registrable non-public release.
@@ -607,7 +690,7 @@ def emit(
     blockers: list[dict[str, str]] = []
     for item in resolved:
         release = item.release
-        if release.access == ACCESS_PUBLIC:
+        if item.access == ACCESS_PUBLIC:
             continue
         if release.blocker:
             blockers.append({"release": release.release_id, "reason": release.blocker})
@@ -634,7 +717,7 @@ def emit(
             filename=filename,
             sha256=checksum,
             licence=release.licence,
-            access=release.access,
+            access=item.access,
             vintage=item.vintage,
             size_bytes=item.size_bytes,
             source_page=release.source_page,
@@ -644,7 +727,13 @@ def emit(
             table=release.table,
             publisher=release.publisher,
             verified_at=verified_at,
-            hash_source=hash_source(release),
+            hash_source="consumer_pin",
+            attested_by="PolicyEngine/microcosm",
+            pinned_from={
+                "repository": "PolicyEngine/microcosm",
+                "path": release.manifest,
+                "commit": microcosm_commit,
+            },
             notes=release.notes or HASH_PROVENANCE,
             allow_reissue=allow_reissue,
         )
@@ -688,7 +777,13 @@ def fetch_command(
         str(root / release.package_dir),
         "--url",
         url,
+        "--publisher",
+        release.publisher,
+        "--vintage",
+        item.vintage,
     ]
+    if item.filename:
+        argv += ["--filename", item.filename]
     if release.source_page:
         argv += ["--source-page", release.source_page]
     argv += [
@@ -707,11 +802,9 @@ def fetch_command(
         r2_bucket,
     ]
     if item.sha256 and release.pinned_sha_is_publisher_bytes:
-        todos.append(
-            f"{release.release_id}: expect sha256 {item.sha256}"
-            + (f" and size {item.size_bytes}" if item.size_bytes else "")
-            + " — fail the registration if the fetched bytes differ."
-        )
+        argv += ["--expected-sha256", item.sha256]
+        if item.size_bytes is not None:
+            argv += ["--expected-size-bytes", str(item.size_bytes)]
     elif item.sha256:
         todos.append(
             f"{release.release_id}: Microcosm's pinned sha256 {item.sha256} is "
@@ -733,7 +826,7 @@ def plan(
     commands: list[str] = []
     todos: list[str] = []
     for item in resolved:
-        if item.release.access != ACCESS_PUBLIC:
+        if item.access != ACCESS_PUBLIC:
             continue
         command, item_todos = fetch_command(item, root=root, r2_bucket=r2_bucket)
         commands.append(command)
@@ -750,8 +843,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--microcosm-root",
         type=Path,
-        default=Path.home() / "PolicyEngine" / "microcosm",
-        help="Read-only path to a PolicyEngine/microcosm checkout.",
+        required=True,
+        help=(
+            "Read-only directory populated from PolicyEngine/microcosm "
+            "origin/main with git show; never use a checkout working tree."
+        ),
     )
     parser.add_argument(
         "--root",
@@ -783,6 +879,11 @@ def build_parser() -> argparse.ArgumentParser:
             "Date the pins were verified against Microcosm, as YYYY-MM-DD. "
             "Required so repeated runs are byte-stable."
         ),
+    )
+    emit_parser.add_argument(
+        "--microcosm-commit",
+        required=True,
+        help="Immutable origin/main commit that supplied the extracted manifests.",
     )
     emit_parser.add_argument(
         "--allow-reissue",
@@ -827,6 +928,7 @@ def main(argv: list[str] | None = None) -> int:
                 resolved,
                 root=args.root,
                 verified_at=args.verified_at,
+                microcosm_commit=args.microcosm_commit,
                 allow_reissue=args.allow_reissue,
             )
         except HashOnlyRegistrationError as exc:
