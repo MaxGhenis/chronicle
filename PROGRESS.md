@@ -13,6 +13,8 @@
   suite passes with 822 tests passed and 1 skipped; repository lint, changed-file
   formatting, and the offline wheel/import smoke pass.
 - Independent final `ledger-contract` and `ledger-boundary` reviews pass.
+- Final report is committed; `PR_BODY_ADDENDUM.md` is prepared and intentionally
+  remains uncommitted for the dispatching session.
 - The exact directory-wide format check still reports eight files that are
   byte-identical to the requested starting head and outside this review diff.
 - This lane has no network access; `git fetch origin` could not resolve GitHub.
@@ -66,9 +68,9 @@
   fixture/schema paths, and unchanged pinned SHA-256 values.
 - Passed independent final `ledger-contract` and `ledger-boundary` reviews.
 - Wrote the complete review-fix and verification report to `out.md`.
+- Prepared the required `PR_BODY_ADDENDUM.md` with the review-fix summary,
+  verification results, and role-path disclosure without staging it.
 
 ## Next
 
-- Write an uncommitted `PR_BODY_ADDENDUM.md` with the review-fix summary and
-  allowed-path disclosure.
 - Leave the committed branch for the network-enabled dispatching session to push.
