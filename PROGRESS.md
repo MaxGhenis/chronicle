@@ -2,73 +2,38 @@
 
 ## State
 
-- Branch: `epoch-dual-domain` from `origin/main` at `ff3efd3`.
-- Assignment: chronicle#143 mechanism 1, step 1 (dual-domain acceptance; emit unchanged).
+- Branch initialized at `af418dc7e0e65b306a753089b21798c9f07b6b8e` from the local `origin/epoch-dual-domain` ref.
+- Review findings are being implemented and regression-tested one coherent change at a time.
+- This lane has no network access; `git fetch origin` could not resolve GitHub.
+- The sandbox does not expose the process list, so `pgrep -fl epoch-dual-domain` could not complete.
 - Approved role: `ledger-contract-maintainer`.
-- Implementation, adversarial review, and local verification are complete.
-- Publication is externally blocked. Direct `git push` and the required
-  `gh pr create --body-file` cannot reach GitHub from the sandbox, and the
-  installed GitHub connector cancels write mutations despite reporting admin
-  permission for the active account.
 
 ## Done
 
-- Read `AGENTS.md`, `.github/chronicle-agents.yml`,
-  `docs/chronicle-governance.md`, and `docs/adr-chronicle-fact-identity-v2.md`.
-- Confirmed the worktree began clean at the requested base commit.
-- Retrieved and read Max's first-comment migration spec through the GitHub API.
-- Completed the initial inventory of hashed domains, schema ids, validators,
-  emitters, tests, and role-path implications.
-- Confirmed that the live facts-only consumer artifact is v2→v3; retired
-  target-profile and resolved-target v1 contracts must not be reintroduced.
-- Added the central frozen Ledger/Chronicle epoch registry with Ledger as the
-  single emission default.
-- Wired fact, source-cell, source-row, source-column, source-row-value, and all
-  eight consumer-contract hash builders to the registry with invariant digest
-  suffixes across epochs.
-- Added dual-epoch lineage validation, consumer-row schema normalization,
-  artifact loading (including declared row-schema pins), mixed-epoch acceptance,
-  and clear unknown-domain errors.
-- Pinned all existing fixture and consumer-schema bytes by SHA-256; focused
-  identity/artifact/schema verification passes (96 tests).
-- Made bundle ingestion validate Chronicle-only and mixed-epoch rows, with
-  cross-epoch duplicate accounting and unknown-domain rejection.
-- Added Chronicle relational emission/load coverage with valid SQLite foreign
-  keys, invariant build/build-artifact digests, and Ledger-default output.
-- Made source-package and offline-fetch readers accept both registered schema
-  ids while scaffolds and administrative generators still emit Ledger ids.
-- Addressed adversarial audit findings in governance schema validation,
-  source-cell/suite lineage resolution, explicit Ledger-canonical build hashing,
-  the Statbel package generator, and `validate-facts` CLI coverage.
-- Preserved the bundle reader's historical permissive row-shape boundary while
-  adding a non-mutating dual-epoch identifier gate; the two full-build bundle
-  regressions and Chronicle/mixed/unknown-domain cases pass.
-- Passed the complete test suite: 783 passed, 1 skipped, 14 warnings.
-- Passed repository-wide Ruff lint and formatting for every changed Python file.
-  The exact repository-wide format check still identifies eight untouched
-  baseline files, all byte-identical to `origin/main`.
-- Built the sdist and wheel offline with uv from cached build dependencies, then
-  installed the wheel into a clean venv and passed the epoch import smoke.
-- Passed independent `ledger-contract` and `ledger-boundary` judge reviews.
-- Confirmed no changes under `releases/`, frozen fixture directories, frozen
-  schema directories, or `.github/chronicle-agents.yml`.
-- Removed the generated `.gitnexus/` index and incomplete ignored local `.venv/`.
-- Committed `out.md` with the complete verification, scope, governance,
-  residual-risk, and downstream-consumer handoff report.
-- Prepared the completed PR-template body ending in the required Claude Code
-  attribution.
-- Attempted `git push origin epoch-dual-domain`; it failed because the sandbox
-  cannot resolve or connect to GitHub.
-- Attempted the exact required `gh pr create --body-file` flow; it failed because
-  `api.github.com` is unreachable.
-- Confirmed the installed GitHub connector sees `MaxGhenis` with admin
-  permission on `PolicyEngine/chronicle`, but both branch and blob creation were
-  cancelled by the connector before mutation.
+- Confirmed the checked-out branch and local remote-tracking ref both matched the requested head.
+- Read the repository instructions and the GitNexus debugging workflow; no GitNexus integration is available in this environment.
+- The original dual-domain acceptance implementation established the frozen
+  Ledger/Chronicle epoch registry while retaining Ledger as the single emission
+  default.
+- Fact, source lineage, and all eight consumer-contract hash builders accept both
+  epochs with invariant digest suffixes.
+- Dual-epoch lineage validation, consumer-row normalization, artifact loading,
+  bundle ingestion, relational emission/load, source-package readers, offline
+  fetch, administrative generators, and CLI coverage were completed before this
+  review-fix assignment.
+- Existing fixtures and consumer schema bytes were pinned, Chronicle and mixed-
+  epoch database paths were covered, and adversarial governance and lineage
+  findings from the original implementation were addressed.
+- The prior lane passed 783 tests with 1 skipped, repository-wide Ruff lint,
+  focused formatting, an offline wheel build/import smoke, and independent
+  `ledger-contract` and `ledger-boundary` judge reviews.
+- The prior lane confirmed no changes under `releases/`, frozen fixture/schema
+  directories, or `.github/chronicle-agents.yml`.
 
 ## Next
 
-- Restore outbound GitHub access or authorize GitHub connector write mutations.
-- Push `epoch-dual-domain` and open the requested PR against `main` after
-  regenerating the already reviewed body-file content.
-- Record the PR URL in `out.md`, commit that final state, and push it.
-- Do not merge the PR and do not comment on issue #143.
+- Fix consumer-row verification so every content-addressed key is recomputed under its declared epoch, with nested identities in ledger form.
+- Deduplicate cross-epoch source-cell and source-row aliases during database insertion.
+- Exercise governance validation against both accepted approved-agent schema identifiers.
+- Run the requested full verification matrix and record it in `out.md`.
+- Write an uncommitted `PR_BODY_ADDENDUM.md` with the review-fix summary and allowed-path disclosure.
