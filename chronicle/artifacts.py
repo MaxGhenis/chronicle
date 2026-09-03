@@ -1016,7 +1016,8 @@ def inventory_source_artifacts(
     manifests = sorted(root_path.rglob(manifest_filename))
     for manifest_path in manifests:
         try:
-            files = _read_manifest(manifest_path).get("files") or {}
+            manifest = _read_manifest(manifest_path)
+            files = manifest.get("files") or {}
         except (OSError, MalformedManifestError) as exc:
             errors.append(f"Could not read {manifest_path}: {exc}")
             continue

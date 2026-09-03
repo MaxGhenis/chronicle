@@ -24,6 +24,9 @@
   strict reader, named-manifest routing, revision protection, R2 locator
   validation, bucket configuration, and Chronicle namespace changes together
   with this branch's access, kind, registration, and hash-only guards.
+- Ran the rebased artifact and registration tests: 136 passed and nine exposed
+  one integration defect in `inventory_source_artifacts` (the strict manifest
+  read did not bind the payload used by the kind checks). Corrected the binding.
 
 ## Next
 
