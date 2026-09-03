@@ -2,8 +2,8 @@
 
 ## State
 
-- Branch: `microdata-registration`, rebasing the reviewed head `2961c69d` onto
-  `origin/ops-rename-slice1` at `ea67f0a0` before applying round-1 gate fixes.
+- Branch: `microdata-registration`, with reviewed head `2961c69d` rebased onto
+  `origin/ops-rename-slice1` at `ea67f0a0` before round-1 gate fixes.
 - Scope: close all listed artifact-registration boundary escapes, adopt the raw
   microdata ADR contract, and align registrations with microcosm#853.
 - Roles: `ledger-source-ingestor` (manifests) and
@@ -17,15 +17,16 @@
   both `pgrep` and `ps` process-table access.
 - Attempted `git fetch origin`; DNS is unavailable. Verified the cached remote
   refs exactly match the supplied heads: `2961c69d` and `ea67f0a0`.
-- Hard-reset the branch to `origin/microdata-registration` and started the
+- Hard-reset the branch to `origin/microdata-registration` and completed the
   requested rebase onto `origin/ops-rename-slice1`.
-- Began recording rebase conflicts for the final report; `PROGRESS.md` is the
-  first conflict and is resolved as this assignment's active state log.
+- Resolved rebase conflicts in `PROGRESS.md`, `chronicle/artifacts.py`,
+  `chronicle/harness.py`, and `chronicle/source_package.py`, keeping #226's
+  strict reader, named-manifest routing, revision protection, R2 locator
+  validation, bucket configuration, and Chronicle namespace changes together
+  with this branch's access, kind, registration, and hash-only guards.
 
 ## Next
 
-- Complete the rebase, preserving #226's strict manifest reader, explicit
-  `--manifest`, revision identity checks, and R2 locator cross-checks.
 - Read the PR gate comments, ADR, governance role paths, and current Microcosm
   pins from immutable refs.
 - Implement and regression-test findings A1-A9, B10-B12, and C13 in coherent
