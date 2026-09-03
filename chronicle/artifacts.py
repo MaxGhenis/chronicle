@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import mimetypes
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -14,6 +14,7 @@ import re
 import shlex
 import sqlite3
 import subprocess
+import tempfile
 from typing import Any
 from urllib.parse import unquote, urlparse
 
@@ -31,6 +32,7 @@ from chronicle.registration import (
     HASH_SOURCE_CHRONICLE_FETCH,
     MICRODATA_RELEASE_KIND,
     PUBLISHER_TABLE_KIND,
+    REDISTRIBUTABLE_MICRODATA_LICENCES,
     manifest_kind as normalize_manifest_kind,
     ListSpecRejected,
     ManifestAccessError,
@@ -39,6 +41,7 @@ from chronicle.registration import (
     is_hash_only,
     iter_file_specs,
     manifest_filename_errors,
+    microdata_licence_evidence_errors,
     normalize_access,
     recorded_r2,
     resolve_year_key,
@@ -576,14 +579,16 @@ def fetch_source_artifact(
     table: str | None = None,
     filename: str | None = None,
     manifest_filename: str = DEFAULT_MANIFEST_FILENAME,
-    access: str = ACCESS_PUBLIC,
+    access: str | None = None,
     licence: str | None = None,
+    licence_evidence: Mapping[str, str] | None = None,
     kind: str | None = None,
     publisher: str | None = None,
     vintage: str | None = None,
     expected_sha256: str | None = None,
     expected_size_bytes: int | None = None,
     upload_r2: bool = False,
+    staging_dir: str | Path | None = None,
     record_revision: bool = False,
     r2_bucket: str | None = None,
     r2_prefix: str | None = None,
@@ -603,9 +608,9 @@ def fetch_source_artifact(
     that disagree with the entry's recorded identity raise
     :class:`SourceArtifactRevisionError` before anything is overwritten.
 
-    Only ``public`` artifacts travel this path: it writes bytes into the package
-    tree and can upload them to the raw bucket. Licensed and restricted
-    artifacts are registered hash-only with
+    Only ``public`` artifacts travel this path. Publisher tables are written
+    into the package tree; public microdata is staged transiently outside it
+    and uploaded directly. Licensed and restricted artifacts are hash-only with
     :func:`chronicle.registration.register_hash_only_artifact`.
     """
     r2_bucket = r2_bucket or default_r2_raw_bucket()
@@ -624,6 +629,12 @@ def fetch_source_artifact(
         existing_manifest,
         manifest_path=manifest_path,
         kind=manifest_kind_value,
+    )
+    _validate_manifest_identity_before_fetch(
+        existing_manifest,
+        manifest_path=manifest_path,
+        source_id=source_id,
+        package_id=package_id,
     )
 
     inferred_before_fetch = _filename_from_url(source_url)
@@ -659,6 +670,11 @@ def fetch_source_artifact(
             f"--expected-size-bytes must be non-negative; got {expected_size_bytes!r}."
         )
 
+    if manifest_kind_value == MICRODATA_RELEASE_KIND and access is None:
+        raise ManifestAccessError(
+            "A microdata fetch must declare --access explicitly before bytes "
+            "are read. Missing access is never inferred as public."
+        )
     access_class = normalize_access(access)
     licence_text = licence.strip() if isinstance(licence, str) else None
     if (
@@ -670,20 +686,38 @@ def fetch_source_artifact(
             f"{manifest_path} registers a microdata release, so every entry "
             "must record its publisher licence; pass --licence."
         )
-    effective_access = effective_entry_access(
-        {"access": access_class, "licence": licence_text},
-        kind=manifest_kind_value,
+    evidence = dict(licence_evidence) if isinstance(licence_evidence, Mapping) else None
+    evidence_sha = (
+        evidence.get("covered_sha256") if isinstance(evidence, Mapping) else None
     )
+    proposed_entry = {
+        "access": access_class,
+        "licence": licence_text,
+        "sha256": expected_sha256 or evidence_sha,
+        "licence_evidence": evidence,
+    }
+    effective_access = effective_entry_access(proposed_entry, kind=manifest_kind_value)
     if is_hash_only(effective_access):
-        reason = (
-            f"access={access_class!r}"
-            if access_class != ACCESS_PUBLIC
-            else f"non-allowlisted public microdata licence {licence_text!r}"
-        )
+        if access_class != ACCESS_PUBLIC:
+            reason = f"access={access_class!r}"
+        elif not licence_text or licence_text not in REDISTRIBUTABLE_MICRODATA_LICENCES:
+            reason = f"non-allowlisted public microdata licence {licence_text!r}"
+        else:
+            evidence_errors = microdata_licence_evidence_errors(proposed_entry)
+            reason = (
+                "invalid artifact-bound licence evidence ("
+                + ", ".join(evidence_errors)
+                + ")"
+            )
         raise ManifestAccessError(
             f"fetch-artifact stores bytes and refuses {reason}. Register the "
             "artifact hash-only with `chronicle register-artifact`."
         )
+    if manifest_kind_value == MICRODATA_RELEASE_KIND:
+        assert evidence is not None
+        covered_sha256 = str(evidence["covered_sha256"])
+        if expected_sha256 is None:
+            expected_sha256 = covered_sha256
     if manifest_kind_value == MICRODATA_RELEASE_KIND:
         if not publisher or not publisher.strip():
             raise ManifestAccessError(
@@ -693,6 +727,22 @@ def fetch_source_artifact(
             raise ManifestAccessError(
                 "A microdata fetch must record --vintage before bytes are read."
             )
+        if not upload_r2:
+            raise ManifestAccessError(
+                "Public microdata bytes may only be acquired for immediate R2 "
+                "upload; pass --upload-r2 and --staging-dir."
+            )
+        if staging_dir is None:
+            raise ManifestAccessError(
+                "Public microdata bytes require an untracked transient "
+                "--staging-dir outside db/data before bytes are read."
+            )
+        staging_root = _validated_microdata_staging_dir(
+            staging_dir,
+            output_dir=output,
+        )
+    else:
+        staging_root = None
 
     resolved_r2_prefix = resolve_r2_prefix(
         prefix=r2_prefix,
@@ -735,10 +785,6 @@ def fetch_source_artifact(
         record_revision=record_revision,
     )
 
-    output.mkdir(parents=True, exist_ok=True)
-    local_path = output / artifact_filename
-    local_path.write_bytes(content)
-
     r2_location = ArtifactStorageLocation(
         provider="r2",
         bucket=r2_bucket,
@@ -754,15 +800,49 @@ def fetch_source_artifact(
     )
     r2_upload = None
     errors: list[str] = []
-    if upload_r2:
-        r2_upload = _upload_r2_object(
-            r2_location,
-            local_path,
-            wrangler_command=wrangler_command,
-        )
+    if staging_root is not None:
+        staging_root.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(
+            prefix="chronicle-microdata-",
+            dir=staging_root,
+        ) as temporary:
+            local_path = Path(temporary) / artifact_filename
+            local_path.write_bytes(content)
+            r2_upload = _upload_r2_object(
+                r2_location,
+                local_path,
+                wrangler_command=wrangler_command,
+            )
         if not r2_upload.ok:
-            errors.append("r2_upload_failed")
+            return ArtifactFetchReport(
+                source_id=source_id,
+                package_id=package_id,
+                year=year,
+                source_url=source_url,
+                filename=artifact_filename,
+                local_path=str(local_path),
+                manifest_path=str(manifest_path),
+                sha256=sha256,
+                size_bytes=size_bytes,
+                fetched_at=fetched_at,
+                r2_location=None,
+                r2_upload=r2_upload,
+                errors=("r2_upload_failed",),
+            )
+    else:
+        output.mkdir(parents=True, exist_ok=True)
+        local_path = output / artifact_filename
+        local_path.write_bytes(content)
+        if upload_r2:
+            r2_upload = _upload_r2_object(
+                r2_location,
+                local_path,
+                wrangler_command=wrangler_command,
+            )
+            if not r2_upload.ok:
+                errors.append("r2_upload_failed")
 
+    output.mkdir(parents=True, exist_ok=True)
     _upsert_manifest(
         manifest_path,
         source_id=source_id,
@@ -778,6 +858,7 @@ def fetch_source_artifact(
         fetched_at=fetched_at,
         access=access_class,
         licence=licence_text,
+        licence_evidence=evidence,
         kind=manifest_kind_value,
         publisher=publisher,
         vintage=vintage,
@@ -800,6 +881,26 @@ def fetch_source_artifact(
         r2_upload=r2_upload,
         errors=tuple(errors),
     )
+
+
+def _validated_microdata_staging_dir(
+    staging_dir: str | Path,
+    *,
+    output_dir: Path,
+) -> Path:
+    """Return a staging root that cannot put microdata beside its manifest."""
+    staging = Path(staging_dir).resolve()
+    output = output_dir.resolve()
+    if staging == output or staging in output.parents or output in staging.parents:
+        raise ManifestAccessError(
+            "--staging-dir must be separate from the microdata manifest directory."
+        )
+    parts = staging.parts
+    if any(parts[index : index + 2] == ("db", "data") for index in range(len(parts))):
+        raise ManifestAccessError(
+            "--staging-dir for public microdata must be outside db/data."
+        )
+    return staging
 
 
 def publish_derived_artifacts(
@@ -1545,6 +1646,23 @@ def _validate_existing_manifest_before_fetch(
             )
 
 
+def _validate_manifest_identity_before_fetch(
+    manifest: dict[str, Any],
+    *,
+    manifest_path: Path,
+    source_id: str,
+    package_id: str,
+) -> None:
+    """Refuse a source/package mismatch before download, write, or upload."""
+    for field, value in (("source_id", source_id), ("package_id", package_id)):
+        recorded = manifest.get(field)
+        if recorded is not None and recorded != value:
+            raise SourceArtifactManifestError(
+                f"{manifest_path} declares {field}={recorded!r}; refusing to "
+                f"write {field}={value!r}."
+            )
+
+
 def _validate_fetch_slot(
     manifest: dict[str, Any],
     *,
@@ -1891,6 +2009,7 @@ def _upsert_manifest(
     fetched_at: str,
     access: str,
     licence: str | None,
+    licence_evidence: Mapping[str, str] | None,
     kind: str,
     publisher: str | None,
     vintage: str | None,
@@ -1983,6 +2102,8 @@ def _upsert_manifest(
     )
     if licence:
         file_entry["licence"] = licence
+    if licence_evidence:
+        file_entry["licence_evidence"] = dict(licence_evidence)
     if vintage:
         file_entry["vintage"] = vintage
     file_entry.update(
@@ -2210,6 +2331,36 @@ def _publish_raw_manifest_entry(
             )
     kind_value = kind or safe_manifest_kind(manifest)[0]
     access = effective_entry_access(spec, kind=kind_value)
+    if kind_value == MICRODATA_RELEASE_KIND and access == ACCESS_PUBLIC:
+        local_exists = (manifest_path.parent / filename).exists() if filename else False
+        errors.extend(
+            validate_file_entry(
+                spec,
+                kind=kind_value,
+                manifest=manifest,
+                local_file_exists=local_exists,
+            )
+        )
+        r2 = recorded_r2(spec)
+        if r2 is None:
+            errors.append("public_microdata_missing_r2_location")
+        return (
+            RawArtifactPublishEntry(
+                manifest_path=str(manifest_path),
+                source_id=source_id,
+                package_id=package_id,
+                year=str(year),
+                filename=filename,
+                local_path=str(manifest_path.parent / filename),
+                sha256=spec.get("sha256"),
+                size_bytes=spec.get("size_bytes"),
+                r2_location=None,
+                upload=None,
+                errors=tuple(dict.fromkeys(errors)),
+                skipped="public_microdata_uploaded_via_transient_fetch",
+            ),
+            None,
+        )
     if is_hash_only(access):
         # Refuse before touching bytes: no Chronicle store holds a licensed or
         # restricted artifact, so there is nothing here to upload. The entry is
@@ -2294,14 +2445,17 @@ def _publish_raw_manifest_entry(
         return refuse()
 
     try:
-        recorded_r2 = _validated_recorded_r2(
+        recorded_r2_object = _validated_recorded_r2(
             spec, manifest_path=manifest_path, year=year
         )
     except SourceArtifactManifestError as error:
         # A block that does not name one object cannot be treated as history,
         # and publishing under it would ship whichever field was read.
         return refuse(f"recorded_r2_locator_invalid:{error}")
-    if recorded_r2 is not None and (recorded_r2.sha256, recorded_r2.filename) != (
+    if recorded_r2_object is not None and (
+        recorded_r2_object.sha256,
+        recorded_r2_object.filename,
+    ) != (
         sha256_actual or "",
         filename,
     ):
@@ -2312,8 +2466,8 @@ def _publish_raw_manifest_entry(
         # `fetch-artifact --record-revision`, not a publish-time rewrite.
         return refuse(
             "recorded_r2_identity_mismatch:"
-            f"recorded_sha256={recorded_r2.sha256}:"
-            f"recorded_filename={recorded_r2.filename}:"
+            f"recorded_sha256={recorded_r2_object.sha256}:"
+            f"recorded_filename={recorded_r2_object.filename}:"
             f"local_sha256={sha256_actual}:"
             f"local_filename={filename}"
         )
@@ -2331,7 +2485,9 @@ def _publish_raw_manifest_entry(
             package_path=manifest_path,
         ),
     )
-    recorded_bucket = recorded_r2.bucket if recorded_r2 is not None else None
+    recorded_bucket = (
+        recorded_r2_object.bucket if recorded_r2_object is not None else None
+    )
     if recorded_bucket and recorded_bucket != location.bucket:
         # The recorded bucket is preserved history. Publishing the same bytes
         # into a renamed bucket is a backfill copy, not a restatement, so the
@@ -2340,7 +2496,7 @@ def _publish_raw_manifest_entry(
             "recorded_r2_bucket_is_preserved_history:"
             f"recorded={recorded_bucket}:requested={location.bucket}"
         )
-    recorded_key = recorded_r2.key if recorded_r2 is not None else None
+    recorded_key = recorded_r2_object.key if recorded_r2_object is not None else None
     if recorded_key and recorded_key != location.key:
         return refuse(
             "recorded_r2_key_disagrees_with_country_prefix:"
@@ -2460,7 +2616,10 @@ def _inventory_entry(
         # never holds the bytes, so a missing local file is the correct state.
         pass
     elif not exists:
-        errors.append("missing_file")
+        if kind_value == MICRODATA_RELEASE_KIND and recorded_r2(spec) is not None:
+            size_bytes = spec.get("size_bytes")
+        else:
+            errors.append("missing_file")
     else:
         content = artifact_path.read_bytes()
         sha256_actual = hashlib.sha256(content).hexdigest()

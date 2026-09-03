@@ -18,6 +18,7 @@ import pytest
 import yaml
 
 from chronicle.artifacts import (
+    ArtifactCommandResult,
     SourceArtifactManifestError,
     fetch_source_artifact,
     inventory_source_artifacts,
@@ -67,6 +68,75 @@ RELEASE_PACKAGES = (
 FIXTURE_SHA = "a" * 64
 
 
+def _successful_upload(*_args, **_kwargs) -> ArtifactCommandResult:
+    """Return a successful R2 command without crossing the test boundary."""
+    return ArtifactCommandResult(
+        command=("wrangler", "r2", "object", "put"),
+        returncode=0,
+        stdout="",
+        stderr="",
+    )
+
+
+def _public_licence_evidence(
+    covered_sha256: str,
+    *,
+    licence_id: str = "US-GOVERNMENT-WORK-17-USC-105",
+) -> dict[str, str]:
+    """Return complete artifact-bound redistribution evidence for a fixture."""
+    return {
+        "issuer": "Fixture publisher",
+        "licence_id": licence_id,
+        "licence_version": (
+            "3.0" if licence_id == "OGL-3.0" else "17 U.S.C. section 105"
+        ),
+        "scope_statement": "The licence covers this exact publisher artifact.",
+        "evidence_url": "https://example.test/publisher/licence",
+        "covered_sha256": covered_sha256,
+    }
+
+
+def _public_gated_duplicate_manifest() -> dict:
+    """Return two incompatible identities sharing one exact basename."""
+    return {
+        "source_id": "dwp",
+        "package_id": "dwp-frs-2023-24",
+        "kind": "microdata_release",
+        "publisher": "Fixture publisher",
+        "source_page": "https://example.test/release",
+        "files": {
+            2022: [
+                {
+                    "filename": "adult.tab",
+                    "access": "public",
+                    "licence": "US-GOVERNMENT-WORK-17-USC-105",
+                    "vintage": "2022_23",
+                    "sha256": "b" * 64,
+                    "source_url": "https://example.test/public/adult.tab",
+                    "verified_at": "2026-09-03",
+                    "hash_source": "chronicle_fetch",
+                    "attested_by": "chronicle",
+                    "licence_evidence": _public_licence_evidence("b" * 64),
+                }
+            ],
+            2023: [
+                {
+                    "filename": "adult.tab",
+                    "access": "licensed",
+                    "licence": "UK Data Service End User Licence",
+                    "vintage": "2023_24",
+                    "sha256": FIXTURE_SHA,
+                    "doi": "10.5255/UKDA-SN-9367-2",
+                    "verified_at": "2026-09-03",
+                    "hash_source": "consumer_attested",
+                    "attested_by": "PolicyEngine/microcosm",
+                    "attestation_evidence": "https://example.test/hash-attestation",
+                }
+            ],
+        },
+    }
+
+
 def _register(output_dir: Path, **overrides: object) -> object:
     """Register a fixture licensed artifact, with per-test overrides."""
     kwargs: dict[str, object] = {
@@ -80,6 +150,7 @@ def _register(output_dir: Path, **overrides: object) -> object:
         "access": "licensed",
         "vintage": "2023_24",
         "size_bytes": 35323384,
+        "publisher": "Department for Work and Pensions",
         "doi": "10.5255/UKDA-SN-9367-2",
         "verified_at": "2026-09-02",
         "hash_source": "consumer_pin",
@@ -291,6 +362,49 @@ def test_non_allowlisted_public_microdata_is_treated_as_hash_only():
     assert "public_microdata_licence_not_allowlisted" in errors
 
 
+def test_public_microdata_entry_requires_artifact_bound_licence_evidence():
+    entry = {
+        "filename": "adult.tab",
+        "access": "public",
+        "licence": "US-GOVERNMENT-WORK-17-USC-105",
+        "vintage": "2024",
+        "sha256": FIXTURE_SHA,
+        "source_url": "https://example.test/adult.tab",
+        "hash_source": "chronicle_fetch",
+        "attested_by": "chronicle",
+        "verified_at": "2026-09-03",
+    }
+
+    assert "missing_licence_evidence" in validate_file_entry(
+        entry,
+        kind="microdata_release",
+        manifest={},
+        local_file_exists=False,
+    )
+
+
+def test_public_microdata_entry_rejects_evidence_for_other_bytes():
+    entry = {
+        "filename": "adult.tab",
+        "access": "public",
+        "licence": "US-GOVERNMENT-WORK-17-USC-105",
+        "vintage": "2024",
+        "sha256": FIXTURE_SHA,
+        "source_url": "https://example.test/adult.tab",
+        "hash_source": "chronicle_fetch",
+        "attested_by": "chronicle",
+        "verified_at": "2026-09-03",
+        "licence_evidence": _public_licence_evidence("b" * 64),
+    }
+
+    assert "licence_evidence_sha256_mismatch" in validate_file_entry(
+        entry,
+        kind="microdata_release",
+        manifest={},
+        local_file_exists=False,
+    )
+
+
 @pytest.mark.parametrize(
     "filename",
     ["./adult.tab", "../adult.tab", "a/adult.tab", r"a\adult.tab", ".", ".."],
@@ -312,6 +426,14 @@ def test_manifest_filename_alias_collisions_are_global():
 
     assert any(error.startswith("filename_not_bare_basename") for error in errors)
     assert any(error.startswith("filename_alias_collision") for error in errors)
+
+
+def test_conflicting_public_and_gated_exact_basenames_are_a_collision():
+    errors = manifest_filename_errors(_public_gated_duplicate_manifest())
+
+    assert any(
+        error.startswith("filename_identity_collision:adult.tab") for error in errors
+    )
 
 
 def test_numeric_and_string_year_keys_resolve_to_the_existing_key():
@@ -402,6 +524,20 @@ def test_register_refuses_without_an_access_route(tmp_path):
         _register(tmp_path / "pkg", doi=None)
 
 
+def test_register_refuses_to_claim_chronicle_fetch_attestation(tmp_path):
+    output_dir = tmp_path / "pkg"
+
+    with pytest.raises(HashOnlyRegistrationError, match="chronicle_fetch"):
+        _register(
+            output_dir,
+            hash_source="chronicle_fetch",
+            attested_by="chronicle",
+            pinned_from=None,
+        )
+
+    assert not output_dir.exists()
+
+
 def test_register_refuses_while_the_bytes_are_present(tmp_path):
     output_dir = tmp_path / "pkg"
     output_dir.mkdir()
@@ -433,6 +569,10 @@ def test_register_refuses_public_to_restricted_while_r2_is_recorded(tmp_path):
                             "hash_source": "chronicle_fetch",
                             "attested_by": "chronicle",
                             "verified_at": "2026-09-02",
+                            "licence_evidence": _public_licence_evidence(
+                                FIXTURE_SHA,
+                                licence_id="OGL-3.0",
+                            ),
                             "storage": {
                                 "r2": {"key": f"raw/x/{FIXTURE_SHA}/adult.tab"}
                             },
@@ -477,6 +617,10 @@ def test_register_requires_evidence_for_public_to_restricted_reclassification(
                             "hash_source": "chronicle_fetch",
                             "attested_by": "chronicle",
                             "verified_at": "2026-09-02",
+                            "licence_evidence": _public_licence_evidence(
+                                FIXTURE_SHA,
+                                licence_id="OGL-3.0",
+                            ),
                         }
                     ]
                 },
@@ -545,6 +689,22 @@ def test_register_refuses_a_manifest_for_a_different_source(tmp_path):
         _register(output_dir, source_id="hmrc")
 
 
+def test_register_refuses_conflicting_exact_basename_identities(tmp_path):
+    output_dir = tmp_path / "pkg"
+    output_dir.mkdir()
+    manifest_path = output_dir / "manifest.yaml"
+    manifest_path.write_text(yaml.safe_dump(_public_gated_duplicate_manifest()))
+    before = manifest_path.read_bytes()
+
+    with pytest.raises(
+        HashOnlyRegistrationError,
+        match="filename_identity_collision:adult.tab",
+    ):
+        _register(output_dir)
+
+    assert manifest_path.read_bytes() == before
+
+
 def test_register_is_idempotent_and_byte_stable(tmp_path):
     output_dir = tmp_path / "pkg"
 
@@ -608,6 +768,99 @@ def test_fetch_refuses_a_hash_only_access_class(tmp_path, monkeypatch):
             output_dir=tmp_path / "pkg",
             access="licensed",
         )
+
+
+def test_fetch_microdata_requires_explicit_access_before_io(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        "chronicle.artifacts._read_artifact",
+        lambda _url: (_ for _ in ()).throw(AssertionError("must not read bytes")),
+    )
+
+    with pytest.raises(ManifestAccessError, match="--access"):
+        fetch_source_artifact(
+            "https://example.test/adult.tab",
+            source_id="publisher",
+            package_id="release",
+            year=2024,
+            output_dir=tmp_path / "pkg",
+            kind="microdata_release",
+            licence="US-GOVERNMENT-WORK-17-USC-105",
+            publisher="Fixture publisher",
+            vintage="2024",
+            expected_sha256=FIXTURE_SHA,
+            licence_evidence=_public_licence_evidence(FIXTURE_SHA),
+        )
+
+    assert not (tmp_path / "pkg").exists()
+
+
+@pytest.mark.parametrize(
+    ("field", "recorded", "requested"),
+    [
+        ("source_id", "recorded-source", "requested-source"),
+        ("package_id", "recorded-package", "requested-package"),
+    ],
+)
+def test_fetch_refuses_wrong_manifest_identity_before_any_io(
+    tmp_path,
+    monkeypatch,
+    field,
+    recorded,
+    requested,
+):
+    output_dir = tmp_path / "pkg"
+    output_dir.mkdir()
+    manifest = {
+        "source_id": "publisher",
+        "package_id": "release",
+        "files": {
+            2024: {
+                "filename": "table.xlsx",
+                "access": "public",
+                "sha256": FIXTURE_SHA,
+            }
+        },
+    }
+    manifest[field] = recorded
+    manifest_path = output_dir / "manifest.yaml"
+    manifest_path.write_text(yaml.safe_dump(manifest))
+    before = manifest_path.read_bytes()
+
+    monkeypatch.setattr(
+        "chronicle.artifacts._read_artifact",
+        lambda _url: (_ for _ in ()).throw(AssertionError("must not read bytes")),
+    )
+    monkeypatch.setattr(
+        "chronicle.artifacts._upload_r2_object",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("must not upload bytes")
+        ),
+    )
+    monkeypatch.setattr(
+        Path,
+        "write_bytes",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("must not write bytes")
+        ),
+    )
+    identity = {"source_id": "publisher", "package_id": "release"}
+    identity[field] = requested
+
+    with pytest.raises(SourceArtifactManifestError, match=field):
+        fetch_source_artifact(
+            "https://example.test/table.xlsx",
+            source_id=identity["source_id"],
+            package_id=identity["package_id"],
+            year=2024,
+            output_dir=output_dir,
+            filename="table.xlsx",
+            access="public",
+            expected_sha256=FIXTURE_SHA,
+            upload_r2=True,
+        )
+
+    assert manifest_path.read_bytes() == before
+    assert not (output_dir / "table.xlsx").exists()
 
 
 def test_fetch_refuses_to_pull_bytes_over_a_hash_only_registration(
@@ -721,6 +974,7 @@ def test_fetch_into_a_microdata_release_manifest_requires_a_licence(
             year=2023,
             output_dir=output_dir,
             filename="codebook.pdf",
+            access="public",
         )
 
 
@@ -807,6 +1061,202 @@ def test_fetch_refuses_non_allowlisted_public_microdata_before_io(
             publisher="Example publisher",
             vintage="2024",
         )
+
+
+def test_fetch_refuses_public_microdata_without_licence_evidence_before_io(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(
+        "chronicle.artifacts._read_artifact",
+        lambda _url: (_ for _ in ()).throw(AssertionError("must not read bytes")),
+    )
+
+    with pytest.raises(ManifestAccessError, match="licence_evidence"):
+        fetch_source_artifact(
+            "https://example.test/adult.tab",
+            source_id="publisher",
+            package_id="release",
+            year=2024,
+            output_dir=tmp_path / "pkg",
+            kind="microdata_release",
+            access="public",
+            licence="US-GOVERNMENT-WORK-17-USC-105",
+            publisher="Fixture publisher",
+            vintage="2024",
+            expected_sha256=FIXTURE_SHA,
+        )
+
+    assert not (tmp_path / "pkg").exists()
+
+
+def test_fetch_refuses_licence_evidence_for_a_different_sha_before_io(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(
+        "chronicle.artifacts._read_artifact",
+        lambda _url: (_ for _ in ()).throw(AssertionError("must not read bytes")),
+    )
+
+    with pytest.raises(
+        ManifestAccessError,
+        match="licence_evidence_sha256_mismatch|covered_sha256|covered SHA-256",
+    ):
+        fetch_source_artifact(
+            "https://example.test/adult.tab",
+            source_id="publisher",
+            package_id="release",
+            year=2024,
+            output_dir=tmp_path / "pkg",
+            kind="microdata_release",
+            access="public",
+            licence="US-GOVERNMENT-WORK-17-USC-105",
+            publisher="Fixture publisher",
+            vintage="2024",
+            expected_sha256=FIXTURE_SHA,
+            licence_evidence=_public_licence_evidence("b" * 64),
+        )
+
+    assert not (tmp_path / "pkg").exists()
+
+
+@pytest.mark.parametrize(
+    ("upload_r2", "staging_dir", "message"),
+    [
+        (False, "staging", "--upload-r2"),
+        (True, None, "--staging-dir"),
+    ],
+)
+def test_public_microdata_requires_transient_r2_staging_before_io(
+    tmp_path,
+    monkeypatch,
+    upload_r2,
+    staging_dir,
+    message,
+):
+    monkeypatch.setattr(
+        "chronicle.artifacts._read_artifact",
+        lambda _url: (_ for _ in ()).throw(AssertionError("must not read bytes")),
+    )
+
+    with pytest.raises(ManifestAccessError, match=message):
+        fetch_source_artifact(
+            "https://example.test/adult.tab",
+            source_id="publisher",
+            package_id="release",
+            year=2024,
+            output_dir=tmp_path / "pkg",
+            kind="microdata_release",
+            access="public",
+            licence="US-GOVERNMENT-WORK-17-USC-105",
+            publisher="Fixture publisher",
+            vintage="2024",
+            expected_sha256=FIXTURE_SHA,
+            licence_evidence=_public_licence_evidence(FIXTURE_SHA),
+            upload_r2=upload_r2,
+            staging_dir=(tmp_path / staging_dir if staging_dir else None),
+        )
+
+
+def test_failed_public_microdata_upload_leaves_no_payload_or_manifest(
+    tmp_path, monkeypatch
+):
+    source = tmp_path / "publisher" / "adult.tab"
+    source.parent.mkdir()
+    source.write_bytes(b"public microdata")
+    checksum = hashlib.sha256(source.read_bytes()).hexdigest()
+    staged_paths: list[Path] = []
+
+    def failed_upload(_location, local_path, **_kwargs):
+        staged_paths.append(local_path)
+        assert local_path.exists()
+        return ArtifactCommandResult(
+            command=("wrangler", "r2", "object", "put"),
+            returncode=1,
+            stdout="",
+            stderr="not authenticated",
+        )
+
+    monkeypatch.setattr("chronicle.artifacts._upload_r2_object", failed_upload)
+    output_dir = tmp_path / "db" / "data" / "publisher" / "release"
+
+    report = fetch_source_artifact(
+        str(source),
+        source_id="publisher",
+        package_id="release",
+        year=2024,
+        output_dir=output_dir,
+        kind="microdata_release",
+        access="public",
+        licence="US-GOVERNMENT-WORK-17-USC-105",
+        publisher="Fixture publisher",
+        vintage="2024",
+        expected_sha256=checksum,
+        licence_evidence=_public_licence_evidence(checksum),
+        upload_r2=True,
+        staging_dir=tmp_path / "staging",
+    )
+
+    assert report.errors == ("r2_upload_failed",)
+    assert staged_paths and all(not path.exists() for path in staged_paths)
+    assert not output_dir.exists()
+
+
+def test_public_microdata_staging_must_be_outside_db_data_before_io(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(
+        "chronicle.artifacts._read_artifact",
+        lambda _url: (_ for _ in ()).throw(AssertionError("must not read bytes")),
+    )
+
+    with pytest.raises(ManifestAccessError, match="outside db/data"):
+        fetch_source_artifact(
+            "https://example.test/adult.tab",
+            source_id="publisher",
+            package_id="release",
+            year=2024,
+            output_dir=tmp_path / "db" / "data" / "publisher" / "release",
+            kind="microdata_release",
+            access="public",
+            licence="US-GOVERNMENT-WORK-17-USC-105",
+            publisher="Fixture publisher",
+            vintage="2024",
+            expected_sha256=FIXTURE_SHA,
+            licence_evidence=_public_licence_evidence(FIXTURE_SHA),
+            upload_r2=True,
+            staging_dir=tmp_path / "db" / "data" / ".staging",
+        )
+
+
+def test_fetch_refuses_conflicting_exact_basename_identities_before_io(
+    tmp_path, monkeypatch
+):
+    output_dir = tmp_path / "pkg"
+    output_dir.mkdir()
+    manifest_path = output_dir / "manifest.yaml"
+    manifest_path.write_text(yaml.safe_dump(_public_gated_duplicate_manifest()))
+    before = manifest_path.read_bytes()
+    monkeypatch.setattr(
+        "chronicle.artifacts._read_artifact",
+        lambda _url: (_ for _ in ()).throw(AssertionError("must not read bytes")),
+    )
+
+    with pytest.raises(
+        SourceArtifactManifestError,
+        match="filename_identity_collision:adult.tab",
+    ):
+        fetch_source_artifact(
+            "https://example.test/other.tab",
+            source_id="dwp",
+            package_id="dwp-frs-2023-24",
+            year=2023,
+            output_dir=output_dir,
+            filename="other.tab",
+            access="public",
+        )
+
+    assert manifest_path.read_bytes() == before
+    assert not (output_dir / "other.tab").exists()
 
 
 def test_expected_pin_mismatch_never_overwrites_existing_bytes(tmp_path):
@@ -938,6 +1388,28 @@ def test_publish_refuses_manifest_wide_filename_alias_collision(tmp_path, monkey
     assert not report.valid
     assert report.entries == ()
     assert "filename_alias_collision:adult.tab" in report.errors[0]
+
+
+def test_publish_refuses_conflicting_exact_basename_identities(tmp_path, monkeypatch):
+    package = tmp_path / "data" / "dwp" / "release"
+    package.mkdir(parents=True)
+    (package / "manifest.yaml").write_text(
+        yaml.safe_dump(_public_gated_duplicate_manifest())
+    )
+    monkeypatch.setattr(
+        "chronicle.artifacts._upload_r2_object",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("conflicting identities must be refused before upload")
+        ),
+    )
+
+    report = publish_source_artifacts(tmp_path / "data")
+
+    assert not report.valid
+    assert report.entries == ()
+    assert any(
+        "filename_identity_collision:adult.tab" in error for error in report.errors
+    )
 
 
 def test_publish_refuses_non_allowlisted_public_microdata_without_reading(
@@ -1180,6 +1652,70 @@ def test_cli_register_artifact_round_trips(tmp_path, capsys):
     assert not (output_dir / "put2223uk.tab").exists()
 
 
+def test_cli_register_artifact_updates_the_named_manifest(tmp_path, capsys):
+    output_dir = tmp_path / "pkg"
+    output_dir.mkdir()
+    named_manifest = output_dir / "release.yaml"
+    named_manifest.write_text(
+        yaml.safe_dump(
+            {
+                "source_id": "hmrc",
+                "package_id": "hmrc-spi-public-use-tape-2022-23",
+                "kind": "microdata_release",
+                "files": {"2022": []},
+            }
+        )
+    )
+
+    exit_code = harness_main(
+        [
+            "register-artifact",
+            "--source-id",
+            "hmrc",
+            "--package-id",
+            "hmrc-spi-public-use-tape-2022-23",
+            "--year",
+            "2022",
+            "--out-dir",
+            str(output_dir),
+            "--manifest",
+            "release.yaml",
+            "--filename",
+            "put2223uk.tab",
+            "--sha256",
+            FIXTURE_SHA,
+            "--size-bytes",
+            "141323762",
+            "--vintage",
+            "2022-23",
+            "--licence",
+            "UK Data Service End User Licence (study SN 9422)",
+            "--access",
+            "restricted",
+            "--doi",
+            "10.5255/UKDA-SN-9422-1",
+            "--verified-at",
+            "2026-09-02",
+            "--hash-source",
+            "consumer_pin",
+            "--attested-by",
+            "PolicyEngine/microcosm",
+            "--pinned-from-repository",
+            "PolicyEngine/microcosm",
+            "--pinned-from-path",
+            "packages/microcosm-build/src/microcosm/build/uk/source_stages.json",
+            "--pinned-from-commit",
+            "1234567890abcdef1234567890abcdef12345678",
+        ]
+    )
+    capsys.readouterr()
+
+    assert exit_code == 0
+    entries = yaml.safe_load(named_manifest.read_text())["files"]["2022"]
+    assert [entry["filename"] for entry in entries] == ["put2223uk.tab"]
+    assert not (output_dir / "manifest.yaml").exists()
+
+
 def test_cli_register_artifact_rejects_public_access(tmp_path):
     with pytest.raises(SystemExit):
         harness_main(
@@ -1214,11 +1750,13 @@ def test_cli_register_artifact_rejects_public_access(tmp_path):
 
 def _licensed_manifest(package: Path, payload: dict) -> Path:
     if payload.get("kind") == "microdata_release":
+        payload.setdefault("publisher", "Fixture publisher")
         for year_spec in (payload.get("files") or {}).values():
             entries = year_spec if isinstance(year_spec, list) else [year_spec]
             for entry in entries:
                 if not isinstance(entry, dict):
                     continue
+                entry.setdefault("size_bytes", 1)
                 entry.setdefault("hash_source", "consumer_attested")
                 entry.setdefault("attested_by", "PolicyEngine/microcosm")
                 entry.setdefault(
@@ -1309,11 +1847,16 @@ def test_fetch_refuses_a_list_entry_in_a_manifest_without_a_kind(tmp_path):
     assert not (package / "adult.tab").exists()
 
 
-def test_fetch_never_drops_an_existing_registration(tmp_path):
+def test_fetch_never_drops_an_existing_registration(tmp_path, monkeypatch):
     output_dir = tmp_path / "pkg"
     _register(output_dir)
     source = tmp_path / "other.csv"
     source.write_bytes(b"a public table in the same package")
+    source_sha256 = hashlib.sha256(source.read_bytes()).hexdigest()
+    monkeypatch.setattr(
+        "chronicle.artifacts._upload_r2_object",
+        _successful_upload,
+    )
 
     fetch_source_artifact(
         str(source),
@@ -1326,6 +1869,13 @@ def test_fetch_never_drops_an_existing_registration(tmp_path):
         access="public",
         publisher="Department for Work and Pensions",
         vintage="2023_24",
+        expected_sha256=source_sha256,
+        upload_r2=True,
+        staging_dir=tmp_path / "staging",
+        licence_evidence=_public_licence_evidence(
+            source_sha256,
+            licence_id="OGL-3.0",
+        ),
     )
 
     manifest = yaml.safe_load((output_dir / "manifest.yaml").read_text())
@@ -1368,14 +1918,19 @@ def test_reregistering_the_current_pin_stays_idempotent_after_a_reissue(tmp_path
 # --------------------------------------------------------------------------
 
 
-def test_fetch_can_declare_a_public_microdata_release(tmp_path):
+def test_fetch_can_declare_a_public_microdata_release(tmp_path, monkeypatch):
     output_dir = tmp_path / "pkg"
     household = tmp_path / "csv_hus.zip"
     household.write_bytes(b"public household pums")
     person = tmp_path / "csv_pus.zip"
     person.write_bytes(b"public person pums")
+    monkeypatch.setattr(
+        "chronicle.artifacts._upload_r2_object",
+        _successful_upload,
+    )
 
     for source in (household, person):
+        source_sha256 = hashlib.sha256(source.read_bytes()).hexdigest()
         fetch_source_artifact(
             str(source),
             source_id="census_acs",
@@ -1387,6 +1942,10 @@ def test_fetch_can_declare_a_public_microdata_release(tmp_path):
             kind="microdata_release",
             publisher="U.S. Census Bureau",
             vintage="2022",
+            expected_sha256=source_sha256,
+            upload_r2=True,
+            staging_dir=tmp_path / "staging",
+            licence_evidence=_public_licence_evidence(source_sha256),
         )
 
     manifest = yaml.safe_load((output_dir / "manifest.yaml").read_text())
@@ -1397,6 +1956,9 @@ def test_fetch_can_declare_a_public_microdata_release(tmp_path):
     assert [entry["filename"] for entry in entries] == ["csv_hus.zip", "csv_pus.zip"]
     assert all(entry["access"] == "public" for entry in entries)
     assert all(entry["licence"] for entry in entries)
+    assert all(entry["licence_evidence"] for entry in entries)
+    assert not (output_dir / "csv_hus.zip").exists()
+    assert not (output_dir / "csv_pus.zip").exists()
 
     report = inventory_source_artifacts(output_dir)
     assert report.valid

@@ -2263,14 +2263,16 @@ def _single_year_spec(spec: Any, year: int) -> dict[str, str]:
     """Return one file spec, refusing the multi-file microdata-release shape.
 
     Only a ``kind: microdata_release`` manifest may list several files under one
-    vintage, and no source package parses one of those, so a list here is a
-    malformed publisher-table manifest rather than something to index into.
+    vintage. No source package parses its microdata records, rows, columns, row
+    values, or cells, so a list here is a malformed publisher-table manifest
+    rather than something to index into.
     """
     if isinstance(spec, list):
         raise ValueError(
             f"Source artifact for year {year} is a list of {len(spec)} entries. "
             "Only a kind: microdata_release manifest may list several files "
-            "under one vintage, and no source package parses one."
+            "under one vintage; no source package parses its microdata records, "
+            "rows, columns, row values, or cells."
         )
     return spec
 

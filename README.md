@@ -407,6 +407,12 @@ uv run chronicle register-artifact \
   --pinned-from-commit 09abf2ad78e9af3c5314a4b303d42a75e30d49c4
 ```
 
+Public microdata is an R2-only exception, not a local package artifact. It
+requires explicit `--access public`, an allowlisted licence, artifact-bound
+licence evidence covering the reviewed SHA-256, `--upload-r2`, and an ignored
+`--staging-dir` outside `db/data`. The transient file is removed after upload;
+no microdata records, rows, columns, row values, or cells enter Chronicle.
+
 To coordinate broad PE source migration without jumping straight to semantic
 target construction, generate an agent batch plan from the PE manifest:
 

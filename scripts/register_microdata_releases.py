@@ -70,6 +70,15 @@ HASH_PROVENANCE = (
     "holds no bytes for this release and did not recompute the checksum."
 )
 
+PUBLIC_MICRODATA_LICENCE_EVIDENCE_URLS: Mapping[str, str] = {
+    "census_cps": "https://www.census.gov/about/policies/copyright.html",
+    "census_acs": "https://www.census.gov/about/policies/copyright.html",
+    "census_sipp": "https://www.census.gov/about/policies/copyright.html",
+    "federal_reserve": (
+        "https://www.federalreserve.gov/aboutthefed/website-linking-policies.htm"
+    ),
+}
+
 
 @dataclass(frozen=True)
 class ArtifactSelector:
@@ -793,24 +802,60 @@ def fetch_command(
         ACCESS_PUBLIC,
         "--licence",
         release.licence,
-        # A public microdata release is archived, but it is still a release:
-        # several files share one vintage and no source package parses it.
+        # A public microdata release is archived, but no microdata records,
+        # rows, columns, row values, or cells enter Chronicle.
         "--kind",
         MICRODATA_RELEASE_KIND,
         "--upload-r2",
+        "--staging-dir",
+        ".chronicle-staging",
         "--r2-bucket",
         r2_bucket,
     ]
-    if item.sha256 and release.pinned_sha_is_publisher_bytes:
-        argv += ["--expected-sha256", item.sha256]
-        if item.size_bytes is not None:
-            argv += ["--expected-size-bytes", str(item.size_bytes)]
+    publisher_sha = (
+        item.sha256 if item.sha256 and release.pinned_sha_is_publisher_bytes else None
+    )
+    if publisher_sha:
+        argv += ["--expected-sha256", publisher_sha]
     elif item.sha256:
         todos.append(
             f"{release.release_id}: Microcosm's pinned sha256 {item.sha256} is "
             "NOT the publisher artifact's checksum — do not use it to verify "
             "this fetch. See the note below."
         )
+    else:
+        todos.append(
+            f"{release.release_id}: obtain a reviewed publisher-artifact "
+            "SHA-256 before fetching; artifact-bound licence evidence cannot "
+            "use an invented checksum."
+        )
+    evidence_url = PUBLIC_MICRODATA_LICENCE_EVIDENCE_URLS.get(release.source_id)
+    if evidence_url is None:
+        todos.append(
+            f"{release.release_id}: record a durable publisher licence "
+            "evidence URL before fetching public microdata."
+        )
+        evidence_url = "TODO_LICENCE_EVIDENCE_URL"
+    scope = (
+        f"{release.publisher} identifies {item.filename or url} as part of "
+        f"{release.table}."
+    )
+    argv += [
+        "--licence-evidence-issuer",
+        release.publisher,
+        "--licence-evidence-id",
+        release.licence,
+        "--licence-evidence-version",
+        "17 U.S.C. §105",
+        "--licence-evidence-scope",
+        scope,
+        "--licence-evidence-url",
+        evidence_url,
+        "--licence-evidence-sha256",
+        publisher_sha or "TODO_REVIEWED_PUBLISHER_SHA256",
+    ]
+    if item.size_bytes is not None and release.pinned_sha_is_publisher_bytes:
+        argv += ["--expected-size-bytes", str(item.size_bytes)]
     if release.notes:
         todos.append(f"{release.release_id}: {release.notes}")
     return shlex.join(argv), todos

@@ -51,9 +51,20 @@
   repository inventory is valid with exactly 19 hash-only registrations.
 - Added the explicit public-object removal evidence path; a public identity is
   never silently reclassified and a still-recorded R2 object always refuses.
+- Closed the post-commit audit gaps: microdata access is explicit; manifest
+  source/package identity, duplicate basenames, and complete registration
+  shape are refused before I/O; hash-only registration cannot claim
+  `chronicle_fetch` and honors a named `--manifest`; reviewed size-only pins
+  survive planning.
+- Added artifact-bound `licence_evidence` (issuer, licence identifier/version,
+  scope statement, durable URL, and covered SHA-256). Public microdata uses an
+  ignored transient staging directory outside `db/data`, requires successful
+  R2 upload, leaves no local payload, and is refused by `publish-raw` if bytes
+  appear beside its manifest.
+- Expanded the synthetic golden to assert the exact five committed packages
+  and 19 entries. The focused registration/generator suite is 123 passed.
 
 ## Next
 
-- Audit the combined diff for #226 regressions and role-path disclosures.
 - Run the full requested verification, write `out.md`, update the PR body, and
   push with `--force-with-lease`. Do not merge.

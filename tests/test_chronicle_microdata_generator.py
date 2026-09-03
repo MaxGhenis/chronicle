@@ -157,6 +157,50 @@ def test_committed_manifests_match_the_reviewed_pin_golden():
         assert entry["pinned_from"]["commit"] == golden["microcosm_commit"]
 
 
+def test_committed_microdata_manifest_and_entry_sets_are_exactly_golden():
+    golden = _golden()
+    expected_by_package: dict[str, list[tuple]] = {}
+    for entry in golden["registrations"]:
+        expected_by_package.setdefault(entry["package_dir"], []).append(
+            (
+                entry["year"],
+                entry["filename"],
+                entry["sha256"],
+                entry["size_bytes"],
+                entry["access"],
+                entry["vintage"],
+            )
+        )
+
+    data_root = REPO_ROOT / "db" / "data"
+    actual_by_package: dict[str, list[tuple]] = {}
+    for manifest_path in data_root.rglob("manifest.yaml"):
+        manifest = yaml.safe_load(manifest_path.read_text()) or {}
+        if manifest.get("kind") != "microdata_release":
+            continue
+        package_dir = manifest_path.parent.relative_to(data_root).as_posix()
+        entries: list[tuple] = []
+        for year, year_spec in manifest["files"].items():
+            specs = year_spec if isinstance(year_spec, list) else [year_spec]
+            entries.extend(
+                (
+                    int(year),
+                    spec["filename"],
+                    spec["sha256"],
+                    spec["size_bytes"],
+                    spec["access"],
+                    spec["vintage"],
+                )
+                for spec in specs
+            )
+        actual_by_package[package_dir] = entries
+
+    assert set(actual_by_package) == set(expected_by_package)
+    assert {
+        package: sorted(entries) for package, entries in actual_by_package.items()
+    } == {package: sorted(entries) for package, entries in expected_by_package.items()}
+
+
 def test_plan_matches_golden_and_every_command_parses(monkeypatch, capsys):
     golden = _golden()
     releases = _catalogue(
@@ -196,3 +240,31 @@ def test_plan_matches_golden_and_every_command_parses(monkeypatch, capsys):
         251500587,
         602847146,
     ]
+
+
+def test_plan_preserves_a_size_only_publisher_pin():
+    release = _catalogue(["census-acs-pums-2024-household"])[0]
+    resolved = generator.ResolvedRelease(
+        release=release,
+        stage={},
+        artifact={
+            "kind": "public_microdata",
+            "role": "household",
+            "filename": "size-only.zip",
+            "url": "https://example.test/size-only.zip",
+            "size_bytes": 123456,
+        },
+    )
+
+    commands, todos = generator.plan(
+        [resolved],
+        root=Path("db/data"),
+        r2_bucket="ledger-raw",
+    )
+
+    assert len(commands) == 1
+    assert "--expected-size-bytes 123456" in commands[0]
+    assert "--expected-sha256" not in commands[0]
+    assert "--licence-evidence-sha256 TODO_REVIEWED_PUBLISHER_SHA256" in commands[0]
+    assert len(todos) == 1
+    assert "obtain a reviewed publisher-artifact SHA-256" in todos[0]

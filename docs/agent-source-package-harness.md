@@ -96,10 +96,12 @@ pass `--skip-hash-only` to publish a tree that deliberately mixes both kinds.
 the absent bytes are the correct state — and reports an error if the bytes
 appear.
 
-A `public` microdata release is different: its bytes are redistributable, so
-it is acquired with `fetch-artifact` like any other public artifact, and it
-does get an R2 key. Pass `--kind microdata_release` so the manifest still
-declares what it is:
+A `public` microdata release is different only when its exact licence is on the
+redistribution allowlist and `licence_evidence` binds that term to the exact
+artifact SHA-256. Its bytes are acquired into an ignored transient staging
+directory outside `db/data`, uploaded directly to R2, and removed; Git custody
+remains manifest-only. `--access` is mandatory for microdata and is never
+defaulted to public:
 
 ```bash
 uv run chronicle fetch-artifact \
@@ -116,8 +118,18 @@ uv run chronicle fetch-artifact \
   --kind microdata_release \
   --expected-sha256 8281008e53de98f0ef81e7a2ee5a8725991dda1ecfd2713ead73246425e515d0 \
   --expected-size-bytes 251500587 \
+  --licence-evidence-issuer "U.S. Census Bureau" \
+  --licence-evidence-id US-GOVERNMENT-WORK-17-USC-105 \
+  --licence-evidence-version "17 U.S.C. §105" \
+  --licence-evidence-scope "U.S. Census Bureau identifies csv_hus.zip as part of ACS 2024 1-Year PUMS." \
+  --licence-evidence-url https://www.census.gov/about/policies/copyright.html \
+  --licence-evidence-sha256 8281008e53de98f0ef81e7a2ee5a8725991dda1ecfd2713ead73246425e515d0 \
+  --staging-dir .chronicle-staging \
   --upload-r2
 ```
+
+`fetch-artifact` refuses a public microdata acquisition without successful R2
+upload and deletes the transient copy whether upload succeeds or fails.
 
 Because several files can share one vintage, a `kind: microdata_release`
 manifest may give `files[year]` as a list of entries rather than a single

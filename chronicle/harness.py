@@ -53,7 +53,8 @@ from chronicle.pe_source_plan import (
 )
 from chronicle.registration import (
     ACCESS_CLASSES,
-    HASH_SOURCES,
+    HASH_SOURCE_CONSUMER_ATTESTED,
+    HASH_SOURCE_CONSUMER_PIN,
     MANIFEST_KINDS,
     ArtifactRegistrationReport,
     ManifestAccessError,
@@ -349,14 +350,16 @@ def fetch_artifact_file(
     table: str | None = None,
     filename: str | None = None,
     manifest_filename: str = DEFAULT_MANIFEST_FILENAME,
-    access: str = "public",
+    access: str | None = None,
     licence: str | None = None,
+    licence_evidence: dict[str, str] | None = None,
     kind: str | None = None,
     publisher: str | None = None,
     vintage: str | None = None,
     expected_sha256: str | None = None,
     expected_size_bytes: int | None = None,
     upload_r2: bool = False,
+    staging_dir: str | Path | None = None,
     record_revision: bool = False,
     r2_bucket: str | None = None,
     r2_prefix: str | None = None,
@@ -382,12 +385,14 @@ def fetch_artifact_file(
         manifest_filename=manifest_filename,
         access=access,
         licence=licence,
+        licence_evidence=licence_evidence,
         kind=kind,
         publisher=publisher,
         vintage=vintage,
         expected_sha256=expected_sha256,
         expected_size_bytes=expected_size_bytes,
         upload_r2=upload_r2,
+        staging_dir=staging_dir,
         record_revision=record_revision,
         r2_bucket=r2_bucket,
         r2_prefix=r2_prefix,
@@ -401,6 +406,7 @@ def register_artifact_file(
     package_id: str,
     year: int,
     output_dir: str | Path,
+    manifest_filename: str = DEFAULT_MANIFEST_FILENAME,
     filename: str,
     sha256: str,
     licence: str,
@@ -431,6 +437,7 @@ def register_artifact_file(
         package_id=package_id,
         year=year,
         output_dir=output_dir,
+        manifest_filename=manifest_filename,
         filename=filename,
         sha256=sha256,
         licence=licence,
@@ -999,10 +1006,10 @@ def main(argv: list[str] | None = None) -> int:
     )
     artifact_parser.add_argument(
         "--access",
-        default="public",
         choices=list(ACCESS_CLASSES),
         help=(
-            "Publisher access class. Only public artifacts may be fetched; "
+            "Publisher access class. Required for microdata releases. Only "
+            "public artifacts may be fetched; "
             "licensed and restricted artifacts are registered hash-only with "
             "`chronicle register-artifact`."
         ),
@@ -1015,13 +1022,38 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     artifact_parser.add_argument(
+        "--licence-evidence-issuer",
+        help="Issuer named by artifact-bound redistribution evidence.",
+    )
+    artifact_parser.add_argument(
+        "--licence-evidence-id",
+        help="Allowlisted licence identifier binding this artifact.",
+    )
+    artifact_parser.add_argument(
+        "--licence-evidence-version",
+        help="Version of the redistribution terms in the evidence.",
+    )
+    artifact_parser.add_argument(
+        "--licence-evidence-scope",
+        help="Evidence statement identifying the covered artifact or release.",
+    )
+    artifact_parser.add_argument(
+        "--licence-evidence-url",
+        help="Durable publisher URL supporting the artifact's licence.",
+    )
+    artifact_parser.add_argument(
+        "--licence-evidence-sha256",
+        help="SHA-256 the artifact-bound licence evidence covers.",
+    )
+    artifact_parser.add_argument(
         "--kind",
         choices=list(MANIFEST_KINDS),
         help=(
             "Manifest kind to declare. Pass microdata_release to archive a "
             "public-use microdata release, which may hold several files under "
-            "one vintage and is never parsed by a source package. Defaults to "
-            "the existing manifest's kind, or publisher_table."
+            "one vintage. No microdata records, rows, columns, row values, or "
+            "cells are parsed by a source package. Defaults to the existing "
+            "manifest's kind, or publisher_table."
         ),
     )
     artifact_parser.add_argument(
@@ -1045,6 +1077,14 @@ def main(argv: list[str] | None = None) -> int:
         "--upload-r2",
         action="store_true",
         help="Upload the artifact to R2 after local checksum capture.",
+    )
+    artifact_parser.add_argument(
+        "--staging-dir",
+        type=Path,
+        help=(
+            "Untracked transient directory outside db/data used only while "
+            "uploading public microdata bytes."
+        ),
     )
     artifact_parser.add_argument(
         "--record-revision",
@@ -1111,6 +1151,11 @@ def main(argv: list[str] | None = None) -> int:
         type=Path,
         required=True,
         help="Directory where manifest.yaml should live. No bytes are written.",
+    )
+    registration_parser.add_argument(
+        "--manifest",
+        default=DEFAULT_MANIFEST_FILENAME,
+        help="Manifest filename inside --out-dir.",
     )
     registration_parser.add_argument(
         "--filename",
@@ -1187,7 +1232,7 @@ def main(argv: list[str] | None = None) -> int:
     registration_parser.add_argument(
         "--hash-source",
         required=True,
-        choices=list(HASH_SOURCES),
+        choices=[HASH_SOURCE_CONSUMER_ATTESTED, HASH_SOURCE_CONSUMER_PIN],
         help="How the checksum was established under the attestation contract.",
     )
     registration_parser.add_argument(
@@ -1654,6 +1699,17 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(report.to_dict(), indent=2, sort_keys=True))
         return 0
     if args.command == "fetch-artifact":
+        licence_evidence = None
+        licence_evidence_values = {
+            "issuer": args.licence_evidence_issuer,
+            "licence_id": args.licence_evidence_id,
+            "licence_version": args.licence_evidence_version,
+            "scope_statement": args.licence_evidence_scope,
+            "evidence_url": args.licence_evidence_url,
+            "covered_sha256": args.licence_evidence_sha256,
+        }
+        if any(value is not None for value in licence_evidence_values.values()):
+            licence_evidence = licence_evidence_values
         try:
             report = fetch_artifact_file(
                 args.url,
@@ -1668,12 +1724,14 @@ def main(argv: list[str] | None = None) -> int:
                 manifest_filename=args.manifest,
                 access=args.access,
                 licence=args.licence,
+                licence_evidence=licence_evidence,
                 kind=args.kind,
                 publisher=args.publisher,
                 vintage=args.vintage,
                 expected_sha256=args.expected_sha256,
                 expected_size_bytes=args.expected_size_bytes,
                 upload_r2=args.upload_r2,
+                staging_dir=args.staging_dir,
                 record_revision=args.record_revision,
                 r2_bucket=args.r2_bucket,
                 r2_prefix=args.r2_prefix,
@@ -1703,6 +1761,7 @@ def main(argv: list[str] | None = None) -> int:
             package_id=args.package_id,
             year=args.year,
             output_dir=args.out_dir,
+            manifest_filename=args.manifest,
             filename=args.filename,
             sha256=args.sha256,
             licence=args.licence,

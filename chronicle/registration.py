@@ -59,7 +59,16 @@ HASH_SOURCES: tuple[str, ...] = (
 )
 
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
-_COMMIT_RE = re.compile(r"^[0-9a-f]{7,40}$")
+_COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
+
+LICENCE_EVIDENCE_FIELDS: tuple[str, ...] = (
+    "issuer",
+    "licence_id",
+    "licence_version",
+    "scope_statement",
+    "evidence_url",
+    "covered_sha256",
+)
 
 
 @dataclass(frozen=True)
@@ -136,6 +145,7 @@ _REGISTRATION_FIELD_ORDER: tuple[str, ...] = (
     "hash_source",
     "attested_by",
     "verified_at",
+    "licence_evidence",
     "attestation_evidence",
     "pinned_from",
     "public_object_removal_evidence",
@@ -268,7 +278,8 @@ def manifest_filename_errors(manifest: Mapping[str, Any] | None) -> tuple[str, .
         return ()
 
     errors: list[str] = []
-    seen: dict[str, tuple[str, Any]] = {}
+    kind, _kind_error = safe_manifest_kind(manifest)
+    seen: dict[str, tuple[str, Any, Mapping[str, Any]]] = {}
     for year, year_spec in files.items():
         entries = year_spec if isinstance(year_spec, list) else (year_spec,)
         for spec in entries:
@@ -292,14 +303,58 @@ def manifest_filename_errors(manifest: Mapping[str, Any] | None) -> tuple[str, .
                     "filename_alias_collision:"
                     f"{canonical}:{previous[1]}:{previous[0]}:{year}:{raw_text}"
                 )
+            elif previous is not None and kind == MICRODATA_RELEASE_KIND:
+                previous_spec = previous[2]
+                previous_sha = _text(previous_spec.get("sha256"))
+                current_sha = _text(spec.get("sha256"))
+                public_path_collision = ACCESS_PUBLIC in {
+                    safe_entry_access(previous_spec),
+                    safe_entry_access(spec),
+                }
+                if previous_sha == current_sha or public_path_collision:
+                    errors.append(
+                        "filename_identity_collision:"
+                        f"{canonical}:{previous[1]}:{previous_sha}:"
+                        f"{year}:{current_sha}"
+                    )
             else:
-                seen.setdefault(canonical, (raw_text, year))
+                seen.setdefault(canonical, (raw_text, year, spec))
     return tuple(_dedupe(errors))
 
 
 def is_redistributable_microdata_licence(licence: Any) -> bool:
     """Whether ``licence`` is one exact allowlisted redistribution term."""
     return _text(licence) in REDISTRIBUTABLE_MICRODATA_LICENCES
+
+
+def microdata_licence_evidence_errors(spec: Any) -> tuple[str, ...]:
+    """Return errors in an artifact-bound redistribution evidence block."""
+    if not isinstance(spec, Mapping):
+        return ("missing_licence_evidence",)
+    evidence = spec.get("licence_evidence")
+    if not isinstance(evidence, Mapping):
+        return ("missing_licence_evidence",)
+
+    errors: list[str] = []
+    for field in LICENCE_EVIDENCE_FIELDS:
+        if not _text(evidence.get(field)):
+            errors.append(f"licence_evidence_missing_{field}")
+
+    licence_id = _text(evidence.get("licence_id"))
+    if licence_id and licence_id != _text(spec.get("licence")):
+        errors.append("licence_evidence_licence_mismatch")
+
+    covered_sha256 = _text(evidence.get("covered_sha256"))
+    if covered_sha256 and not _SHA256_RE.fullmatch(covered_sha256):
+        errors.append("licence_evidence_malformed_covered_sha256")
+    artifact_sha256 = _text(spec.get("sha256"))
+    if covered_sha256 and artifact_sha256 and covered_sha256 != artifact_sha256:
+        errors.append("licence_evidence_sha256_mismatch")
+
+    evidence_url = _text(evidence.get("evidence_url"))
+    if evidence_url and not evidence_url.startswith(("https://", "http://")):
+        errors.append("licence_evidence_url_not_durable")
+    return tuple(_dedupe(errors))
 
 
 def entry_access(spec: Any) -> str:
@@ -331,14 +386,12 @@ def effective_entry_access(spec: Any, *, kind: str) -> str:
     is handled as licensed/hash-only. Publisher-table behavior is unchanged.
     """
     access = safe_entry_access(spec)
-    if (
-        kind == MICRODATA_RELEASE_KIND
-        and access == ACCESS_PUBLIC
-        and not is_redistributable_microdata_licence(
-            spec.get("licence") if isinstance(spec, Mapping) else None
-        )
-    ):
-        return ACCESS_LICENSED
+    if kind == MICRODATA_RELEASE_KIND and access == ACCESS_PUBLIC:
+        licence = spec.get("licence") if isinstance(spec, Mapping) else None
+        if not is_redistributable_microdata_licence(licence):
+            return ACCESS_LICENSED
+        if microdata_licence_evidence_errors(spec):
+            return ACCESS_LICENSED
     return access
 
 
@@ -417,14 +470,40 @@ def validate_file_entry(
         except ManifestAccessError:
             return (*errors, f"unknown_access_class:{declared_access}")
 
-    if kind == MICRODATA_RELEASE_KIND and not _text(spec.get("licence")):
-        errors.append("missing_licence")
+    if kind == MICRODATA_RELEASE_KIND:
+        if not _text(spec.get("filename")):
+            errors.append("missing_filename")
+        sha256 = _text(spec.get("sha256"))
+        if not sha256:
+            errors.append("missing_sha256")
+        elif not _SHA256_RE.fullmatch(sha256):
+            errors.append("malformed_sha256")
+        if spec.get("size_bytes") is None:
+            errors.append("missing_size_bytes")
+        elif not isinstance(spec.get("size_bytes"), int) or spec["size_bytes"] < 0:
+            errors.append("invalid_size_bytes")
+        if not _text(spec.get("vintage")):
+            errors.append("missing_vintage")
+        if not _text(spec.get("licence")):
+            errors.append("missing_licence")
+        if not isinstance(manifest, Mapping) or not _text(manifest.get("source_id")):
+            errors.append("missing_source_id")
+        if not isinstance(manifest, Mapping) or not _text(manifest.get("package_id")):
+            errors.append("missing_package_id")
+        if not isinstance(manifest, Mapping) or not _text(manifest.get("publisher")):
+            errors.append("missing_publisher")
+        if not _access_route(spec, manifest):
+            errors.append("missing_access_route")
     if (
         kind == MICRODATA_RELEASE_KIND
         and access == ACCESS_PUBLIC
         and not is_redistributable_microdata_licence(spec.get("licence"))
     ):
         errors.append("public_microdata_licence_not_allowlisted")
+    if kind == MICRODATA_RELEASE_KIND and access == ACCESS_PUBLIC:
+        errors.extend(microdata_licence_evidence_errors(spec))
+        if local_file_exists:
+            errors.append("bytes_present_beside_microdata_manifest")
     if kind == MICRODATA_RELEASE_KIND:
         errors.extend(_microdata_attestation_errors(spec))
 
@@ -457,15 +536,31 @@ def _microdata_attestation_errors(spec: Mapping[str, Any]) -> list[str]:
         errors.append("missing_attested_by")
     elif hash_source == HASH_SOURCE_CHRONICLE_FETCH and attested_by != "chronicle":
         errors.append("chronicle_fetch_attester_must_be_chronicle")
+    elif (
+        hash_source
+        in {
+            HASH_SOURCE_CONSUMER_ATTESTED,
+            HASH_SOURCE_CONSUMER_PIN,
+        }
+        and attested_by == "chronicle"
+    ):
+        errors.append("consumer_hash_attester_must_not_be_chronicle")
 
     if hash_source == HASH_SOURCE_CONSUMER_ATTESTED and not _text(
         spec.get("attestation_evidence")
     ):
         errors.append("missing_attestation_evidence")
+    if (
+        hash_source != HASH_SOURCE_CONSUMER_ATTESTED
+        and spec.get("attestation_evidence") is not None
+    ):
+        errors.append("unexpected_attestation_evidence")
     if hash_source == HASH_SOURCE_CONSUMER_PIN and not _valid_pinned_from(
         spec.get("pinned_from")
     ):
         errors.append("missing_or_invalid_pinned_from")
+    if hash_source != HASH_SOURCE_CONSUMER_PIN and spec.get("pinned_from") is not None:
+        errors.append("unexpected_pinned_from")
     return errors
 
 
@@ -585,6 +680,7 @@ def register_hash_only_artifact(
     package_id: str,
     year: int,
     output_dir: str | Path,
+    manifest_filename: str = "manifest.yaml",
     filename: str,
     sha256: str,
     licence: str,
@@ -656,9 +752,14 @@ def register_hash_only_artifact(
         raise HashOnlyRegistrationError(
             "A microdata registration must identify its attester; pass --attested-by."
         )
-    if hash_source_value == HASH_SOURCE_CHRONICLE_FETCH and attester != "chronicle":
+    if hash_source_value == HASH_SOURCE_CHRONICLE_FETCH:
         raise HashOnlyRegistrationError(
-            "hash_source='chronicle_fetch' requires attested_by='chronicle'."
+            "register-artifact never reads bytes and cannot attest "
+            "hash_source='chronicle_fetch'; use consumer_attested or consumer_pin."
+        )
+    if attester == "chronicle":
+        raise HashOnlyRegistrationError(
+            "A consumer hash attestation cannot use attested_by='chronicle'."
         )
     if hash_source_value == HASH_SOURCE_CONSUMER_ATTESTED and not _text(
         attestation_evidence
@@ -673,9 +774,26 @@ def register_hash_only_artifact(
             "hash_source='consumer_pin' requires pinned_from repository, path, "
             "and commit evidence."
         )
+    if hash_source_value != HASH_SOURCE_CONSUMER_ATTESTED and _text(
+        attestation_evidence
+    ):
+        raise HashOnlyRegistrationError(
+            "--attestation-evidence applies only to hash_source='consumer_attested'."
+        )
+    if hash_source_value != HASH_SOURCE_CONSUMER_PIN and pinned_from is not None:
+        raise HashOnlyRegistrationError(
+            "pinned_from applies only to hash_source='consumer_pin'."
+        )
 
     output = Path(output_dir)
-    manifest_path = output / "manifest.yaml"
+    try:
+        manifest_name = canonical_artifact_filename(manifest_filename)
+    except ManifestAccessError as exc:
+        raise HashOnlyRegistrationError(
+            "--manifest must name one file inside --out-dir; got "
+            f"{manifest_filename!r}."
+        ) from exc
+    manifest_path = output / manifest_name
     payload = _load_manifest(manifest_path)
     existing_kind = manifest_kind(payload)
     if payload and existing_kind != MICRODATA_RELEASE_KIND:
@@ -752,34 +870,41 @@ def register_hash_only_artifact(
     # a reissue has added a second entry for the same filename. A single pass
     # would raise on the first filename match with a different checksum before
     # it could reach the exact match further down the list.
-    replaced = False
-    for index, existing in enumerate(entries):
-        if not isinstance(existing, Mapping):
-            continue
-        if _text(existing.get("filename")) != artifact_name:
-            continue
-        if _text(existing.get("sha256")) == checksum:
-            storage = existing.get("storage")
-            if isinstance(storage, Mapping) and "r2" in storage:
-                raise HashOnlyRegistrationError(
-                    f"Refusing to reclassify {artifact_name!r} as "
-                    f"{access_class}: its identity still records storage.r2. "
-                    "Remove the public object and its locator with verifiable "
-                    "evidence before registering it hash-only."
-                )
-            if entry_access(existing) == ACCESS_PUBLIC:
-                removal_evidence = _text(supersede_public_object)
-                if not removal_evidence:
-                    raise HashOnlyRegistrationError(
-                        f"Refusing to silently reclassify public identity "
-                        f"{artifact_name!r} as {access_class}. After its public "
-                        "object is verifiably removed, pass "
-                        "--supersede-public-object with the removal evidence."
-                    )
-                entry["public_object_removal_evidence"] = removal_evidence
-            entries[index] = {**dict(existing), **entry}
-            replaced = True
-            break
+    exact_matches = [
+        (index, existing)
+        for index, existing in enumerate(entries)
+        if isinstance(existing, Mapping)
+        and _text(existing.get("filename")) == artifact_name
+        and _text(existing.get("sha256")) == checksum
+    ]
+    for _index, existing in exact_matches:
+        if recorded_r2(existing):
+            raise HashOnlyRegistrationError(
+                f"Refusing to reclassify {artifact_name!r} as "
+                f"{access_class}: its identity still records storage.r2. "
+                "Remove the public object and its locator with verifiable "
+                "evidence before registering it hash-only."
+            )
+    public_matches = [
+        existing
+        for _index, existing in exact_matches
+        if entry_access(existing) == ACCESS_PUBLIC
+    ]
+    if public_matches:
+        removal_evidence = _text(supersede_public_object)
+        if not removal_evidence:
+            raise HashOnlyRegistrationError(
+                f"Refusing to silently reclassify public identity "
+                f"{artifact_name!r} as {access_class}. After its public "
+                "object is verifiably removed, pass --supersede-public-object "
+                "with the removal evidence."
+            )
+        entry["public_object_removal_evidence"] = removal_evidence
+
+    replaced = bool(exact_matches)
+    if exact_matches:
+        target_index, existing = exact_matches[0]
+        entries[target_index] = {**dict(existing), **entry}
     if not replaced:
         superseded = [
             existing
@@ -874,12 +999,22 @@ def _existing_entries(files: Any, year: Any) -> list[Any]:
 
 
 def _load_manifest(manifest_path: Path) -> dict[str, Any]:
-    """Load a manifest mapping, or an empty mapping when absent."""
+    """Load a manifest mapping, refusing malformed or non-mapping YAML."""
     if not manifest_path.exists():
         return {}
-    payload = yaml.safe_load(manifest_path.read_text(encoding="utf-8")) or {}
+    try:
+        payload = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
+    except yaml.YAMLError as exc:
+        raise HashOnlyRegistrationError(
+            f"{manifest_path} is not valid YAML: {exc}"
+        ) from exc
+    if payload is None:
+        return {}
     if not isinstance(payload, dict):
-        raise HashOnlyRegistrationError(f"Manifest must be a mapping: {manifest_path}")
+        raise HashOnlyRegistrationError(
+            f"{manifest_path} must be a YAML mapping; it parses as a "
+            f"{type(payload).__name__}. Chronicle will not overwrite it."
+        )
     return payload
 
 
@@ -912,6 +1047,7 @@ __all__ = [
     "HASH_SOURCE_CHRONICLE_FETCH",
     "HASH_SOURCE_CONSUMER_ATTESTED",
     "HASH_SOURCE_CONSUMER_PIN",
+    "LICENCE_EVIDENCE_FIELDS",
     "DEFAULT_ACCESS",
     "DEFAULT_MANIFEST_KIND",
     "HashOnlyRegistrationError",
@@ -930,6 +1066,7 @@ __all__ = [
     "is_microdata_release",
     "iter_file_specs",
     "manifest_kind",
+    "microdata_licence_evidence_errors",
     "manifest_filename_errors",
     "normalize_access",
     "normalize_hash_source",
