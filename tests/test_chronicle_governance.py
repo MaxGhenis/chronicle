@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 import yaml
 
 from chronicle.epoch import SCHEMA_IDS, schema_id
@@ -12,16 +13,28 @@ from chronicle.epoch import SCHEMA_IDS, schema_id
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_chronicle_governance_files_define_required_review_surface():
+def test_approved_agents_manifest_uses_default_emission_identifier():
+    agents_path = ROOT / ".github" / "chronicle-agents.yml"
+    agents = yaml.safe_load(agents_path.read_text())
+
+    assert agents["schema_version"] == schema_id("approved_agents")
+
+
+@pytest.mark.parametrize(
+    "schema_version",
+    SCHEMA_IDS["approved_agents"].accepted,
+    ids=("ledger", "chronicle"),
+)
+def test_chronicle_governance_files_define_required_review_surface(schema_version):
     agents_path = ROOT / ".github" / "chronicle-agents.yml"
     codeowners_path = ROOT / ".github" / "CODEOWNERS"
     template_path = ROOT / ".github" / "pull_request_template.md"
     agents = yaml.safe_load(agents_path.read_text())
+    agents["schema_version"] = schema_version
     codeowners = codeowners_path.read_text()
     pr_template = template_path.read_text()
 
     assert agents["schema_version"] in SCHEMA_IDS["approved_agents"].accepted
-    assert agents["schema_version"] == schema_id("approved_agents")
     assert agents["owners"]["github_team"] == "PolicyEngine/core-developers"
     assert "@PolicyEngine/core-developers" in codeowners
     assert "/packages/** @PolicyEngine/core-developers" in codeowners

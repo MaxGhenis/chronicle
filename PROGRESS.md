@@ -7,6 +7,8 @@
   and independently reviewed.
 - Relational lineage insertion now collapses cross-epoch aliases before counts
   and association inserts; both emit epochs are regression-tested.
+- Governance emission and acceptance are tested separately; the complete review
+  surface runs against both approved-agent schema identifiers.
 - This lane has no network access; `git fetch origin` could not resolve GitHub.
 - The sandbox does not expose the process list, so `pgrep -fl epoch-dual-domain` could not complete.
 - Approved role: `ledger-contract-maintainer`.
@@ -48,9 +50,11 @@
 - Canonicalized and stably deduplicated source-cell and source-row aliases before
   relational insertion, keeping association ordinals and source-record counts
   consistent; 9 focused database tests pass.
+- Kept the checked-in approved-agents manifest on the Ledger default while
+  exercising every ownership, role, path, deterministic-check, and judge
+  assertion with both Ledger and Chronicle identifiers; 4 focused tests pass.
 
 ## Next
 
-- Exercise governance validation against both accepted approved-agent schema identifiers.
 - Run the requested full verification matrix and record it in `out.md`.
 - Write an uncommitted `PR_BODY_ADDENDUM.md` with the review-fix summary and allowed-path disclosure.
