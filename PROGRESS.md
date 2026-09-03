@@ -5,6 +5,8 @@
 - Branch initialized at `af418dc7e0e65b306a753089b21798c9f07b6b8e` from the local `origin/epoch-dual-domain` ref.
 - Consumer-row content-address verification is implemented, regression-tested,
   and independently reviewed.
+- Relational lineage insertion now collapses cross-epoch aliases before counts
+  and association inserts; both emit epochs are regression-tested.
 - This lane has no network access; `git fetch origin` could not resolve GitHub.
 - The sandbox does not expose the process list, so `pgrep -fl epoch-dual-domain` could not complete.
 - Approved role: `ledger-contract-maintainer`.
@@ -43,10 +45,12 @@
   80-row constrained consumer-artifact build/load smoke.
 - An independent consumer-verification review approved the final implementation
   after adversarial coverage for rehashed legacy payload envelopes.
+- Canonicalized and stably deduplicated source-cell and source-row aliases before
+  relational insertion, keeping association ordinals and source-record counts
+  consistent; 9 focused database tests pass.
 
 ## Next
 
-- Deduplicate cross-epoch source-cell and source-row aliases during database insertion.
 - Exercise governance validation against both accepted approved-agent schema identifiers.
 - Run the requested full verification matrix and record it in `out.md`.
 - Write an uncommitted `PR_BODY_ADDENDUM.md` with the review-fix summary and allowed-path disclosure.

@@ -692,6 +692,16 @@ def _insert_facts(
 ) -> None:
     for fact, constraints in fact_constraints:
         fact_key = build_fact_key(fact, epoch=emit_epoch)
+        source_cell_keys = _lineage_keys_for_epoch(
+            "source_cell",
+            fact.source_cell_keys,
+            emit_epoch,
+        )
+        source_row_keys = _lineage_keys_for_epoch(
+            "source_row",
+            fact.source_row_keys,
+            emit_epoch,
+        )
         if fact.source_record_id is not None:
             connection.execute(
                 """
@@ -714,8 +724,8 @@ def _insert_facts(
                     fact.source.source_table,
                     fact.source.source_file,
                     fact.source.vintage,
-                    len(fact.source_row_keys),
-                    len(fact.source_cell_keys),
+                    len(source_row_keys),
+                    len(source_cell_keys),
                 ),
             )
         _insert_aggregate_fact(connection, fact, fact_key, build_id)
@@ -749,7 +759,7 @@ def _insert_facts(
                     constraint.label,
                 ),
             )
-        for ordinal, source_cell_key in enumerate(fact.source_cell_keys):
+        for ordinal, source_cell_key in enumerate(source_cell_keys):
             connection.execute(
                 """
                 INSERT INTO fact_source_cells (
@@ -761,14 +771,11 @@ def _insert_facts(
                 """,
                 (
                     fact_key,
-                    HASH_DOMAINS["source_cell"].key_for_epoch(
-                        source_cell_key,
-                        emit_epoch,
-                    ),
+                    source_cell_key,
                     ordinal,
                 ),
             )
-        for ordinal, source_row_key in enumerate(fact.source_row_keys):
+        for ordinal, source_row_key in enumerate(source_row_keys):
             connection.execute(
                 """
                 INSERT INTO fact_source_rows (
@@ -780,13 +787,23 @@ def _insert_facts(
                 """,
                 (
                     fact_key,
-                    HASH_DOMAINS["source_row"].key_for_epoch(
-                        source_row_key,
-                        emit_epoch,
-                    ),
+                    source_row_key,
                     ordinal,
                 ),
             )
+
+
+def _lineage_keys_for_epoch(
+    domain_name: str,
+    keys: tuple[str, ...],
+    emit_epoch: Epoch,
+) -> tuple[str, ...]:
+    """Canonicalize lineage aliases and retain their first-seen order."""
+    return tuple(
+        dict.fromkeys(
+            HASH_DOMAINS[domain_name].key_for_epoch(key, emit_epoch) for key in keys
+        )
+    )
 
 
 def _insert_concept_alignments(
