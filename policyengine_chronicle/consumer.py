@@ -16,7 +16,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
-from chronicle.consumer_contract import _hash_key
+from chronicle.consumer_contract import _LEGACY_FACT_KEY_PAYLOAD_FIELD, _hash_key
 from chronicle.core import (
     ALLOWED_ASSERTIONS,
     ALLOWED_PROVENANCE_CLASSES,
@@ -219,34 +219,353 @@ def _assert_finite_numbers(value: Any, *, line_number: int, path: Path) -> None:
             _assert_finite_numbers(item, line_number=line_number, path=path)
 
 
-def _recompute_aggregate_fact_key(row: dict[str, Any]) -> str:
-    """Recompute the aggregate fact key from the row's content."""
-    declared_key = row.get("aggregate_fact_key")
-    epoch = HASH_DOMAINS["aggregate_fact"].infer_key_epoch(declared_key)
-    assertion = row.get("assertion")
-    payload = {
-        "source_release_key": canonicalize_key(
-            "source_release", row.get("source_release_key")
+def _verify_consumer_row_keys(
+    row: dict[str, Any],
+    *,
+    line_number: int,
+    path: Path,
+) -> None:
+    """Verify every identity whose canonical payload is carried by the row."""
+    source = row["source"]
+    observed_measure = row["observed_measure"]
+    universe_constraints = _canonical_universe_constraints(row)
+    concept_alignment = row.get("concept_alignment")
+    canonical_concept = (
+        concept_alignment["canonical_concept"]
+        if concept_alignment is not None
+        else observed_measure["source_concept"]
+    )
+
+    ledger_keys = {
+        "source_release_key": _verify_consumer_row_key(
+            row,
+            field_name="source_release_key",
+            domain_name="source_release",
+            payload={
+                "source_name": source.get("source_name"),
+                "source_table": source.get("source_table"),
+                "source_file": source.get("source_file"),
+                "url": source.get("url"),
+                "vintage": source.get("vintage"),
+                "source_sha256": source.get("source_sha256"),
+                "source_size_bytes": source.get("source_size_bytes"),
+                "raw_r2_uri": source.get("raw_r2_uri"),
+            },
+            line_number=line_number,
+            path=path,
         ),
-        "source_series_key": canonicalize_key(
-            "source_series", row.get("source_series_key")
+        "source_series_key": _verify_consumer_row_key(
+            row,
+            field_name="source_series_key",
+            domain_name="source_series",
+            payload={
+                "source_name": source.get("source_name"),
+                "source_table": source.get("source_table"),
+                "record_set_spec_id": row.get("layout", {}).get("record_set_spec_id"),
+            },
+            line_number=line_number,
+            path=path,
         ),
-        "observed_measure_key": canonicalize_key(
-            "observed_measure", row.get("observed_measure_key")
+        "observed_measure_key": _verify_consumer_row_key(
+            row,
+            field_name="observed_measure_key",
+            domain_name="observed_measure",
+            payload=observed_measure,
+            line_number=line_number,
+            path=path,
         ),
-        "aggregation": row.get("aggregation"),
-        "period": row.get("period"),
-        "geography": row.get("geography"),
-        "entity": row.get("entity"),
-        "dimension_set_key": canonicalize_key(
-            "dimension_set", row.get("dimension_set_key")
+        "dimension_set_key": _verify_consumer_row_key(
+            row,
+            field_name="dimension_set_key",
+            domain_name="dimension_set",
+            payload=row["dimensions"],
+            line_number=line_number,
+            path=path,
         ),
-        "universe_constraint_set_key": canonicalize_key(
-            "universe_constraint_set", row.get("universe_constraint_set_key")
+        "universe_constraint_set_key": _verify_consumer_row_key(
+            row,
+            field_name="universe_constraint_set_key",
+            domain_name="universe_constraint_set",
+            payload=universe_constraints,
+            line_number=line_number,
+            path=path,
         ),
-        "assertion": None if assertion == DEFAULT_ASSERTION else assertion,
     }
-    return _hash_key(hash_domain("aggregate_fact", epoch), payload)
+
+    legacy_fact_payload = _legacy_fact_payload(
+        row,
+        canonical_concept=canonical_concept,
+        concept_alignment=concept_alignment,
+        universe_constraints=universe_constraints,
+        line_number=line_number,
+        path=path,
+    )
+    _verify_consumer_row_key(
+        row,
+        field_name="legacy_fact_key",
+        domain_name="fact",
+        payload=legacy_fact_payload,
+        line_number=line_number,
+        path=path,
+        clean_payload=False,
+    )
+    _verify_consumer_row_key(
+        row,
+        field_name="semantic_fact_key",
+        domain_name="semantic_fact",
+        payload={
+            "canonical_measure": {
+                "concept": canonical_concept,
+                "unit": observed_measure["unit"],
+            },
+            "aggregation": row["aggregation"],
+            "period": row["period"],
+            "geography": row["geography"],
+            "entity": row["entity"],
+            "universe_constraint_set_key": ledger_keys["universe_constraint_set_key"],
+            "assertion": _identity_assertion(row),
+        },
+        line_number=line_number,
+        path=path,
+    )
+    if concept_alignment is not None:
+        _verify_consumer_row_key(
+            concept_alignment,
+            field_name="concept_alignment_key",
+            domain_name="concept_alignment",
+            payload={
+                "observed_measure_key": ledger_keys["observed_measure_key"],
+                "canonical_concept": concept_alignment["canonical_concept"],
+                "relation": concept_alignment["relation"],
+                "authority": concept_alignment["authority"],
+                "legal_vintage": concept_alignment.get("legal_vintage"),
+            },
+            line_number=line_number,
+            path=path,
+            location="concept_alignment/concept_alignment_key",
+        )
+    _verify_consumer_row_key(
+        row,
+        field_name="aggregate_fact_key",
+        domain_name="aggregate_fact",
+        payload={
+            "source_release_key": ledger_keys["source_release_key"],
+            "source_series_key": ledger_keys["source_series_key"],
+            "observed_measure_key": ledger_keys["observed_measure_key"],
+            "aggregation": row["aggregation"],
+            "period": row["period"],
+            "geography": row["geography"],
+            "entity": row["entity"],
+            "dimension_set_key": ledger_keys["dimension_set_key"],
+            "universe_constraint_set_key": ledger_keys["universe_constraint_set_key"],
+            "assertion": _identity_assertion(row),
+        },
+        line_number=line_number,
+        path=path,
+    )
+
+
+def _verify_consumer_row_key(
+    container: Mapping[str, Any],
+    *,
+    field_name: str,
+    domain_name: str,
+    payload: dict[str, Any],
+    line_number: int,
+    path: Path,
+    location: str | None = None,
+    clean_payload: bool = True,
+) -> str:
+    """Verify one declared key and return its Ledger-canonical spelling."""
+    declared_key = container[field_name]
+    epoch = HASH_DOMAINS[domain_name].infer_key_epoch(declared_key)
+    domain = hash_domain(domain_name, epoch)
+    recomputed = (
+        _hash_key(domain, payload)
+        if clean_payload
+        else _hash_uncleaned_key(domain, payload)
+    )
+    if declared_key != recomputed:
+        key_location = location or field_name
+        raise ValueError(
+            f"Row {line_number} of {path} declares {key_location} "
+            f"{declared_key!r} but its content hashes to {recomputed!r}; the "
+            "identity key does not match the row."
+        )
+    return canonicalize_key(domain_name, declared_key)
+
+
+def _canonical_universe_constraints(row: Mapping[str, Any]) -> dict[str, Any]:
+    universe_constraints = row["universe_constraints"]
+    constraints = sorted(
+        universe_constraints.get("constraints", []),
+        key=lambda constraint: json.dumps(
+            constraint,
+            sort_keys=True,
+            separators=(",", ":"),
+        ),
+    )
+    return {
+        "domain": universe_constraints["domain"],
+        "constraints": constraints,
+    }
+
+
+def _legacy_fact_payload(
+    row: Mapping[str, Any],
+    *,
+    canonical_concept: str,
+    concept_alignment: Mapping[str, Any] | None,
+    universe_constraints: Mapping[str, Any],
+    line_number: int,
+    path: Path,
+) -> dict[str, Any]:
+    """Rebuild the legacy fact-v1 identity payload represented by a row."""
+    observed_measure = row["observed_measure"]
+    source = row["source"]
+    alignment = concept_alignment or {}
+    payload = {
+        "period": row["period"],
+        "geography": {
+            "level": row["geography"]["level"],
+            "id": row["geography"]["id"],
+            "vintage": row["geography"].get("vintage"),
+        },
+        "entity": {
+            "name": row["entity"]["name"],
+            "role": row["entity"].get("role"),
+        },
+        "measure": {
+            "concept": canonical_concept,
+            "unit": observed_measure["unit"],
+            "source_concept": alignment.get("source_concept"),
+            "concept_relation": alignment.get("relation"),
+            "concept_authority": alignment.get("authority"),
+            "concept_evidence_url": alignment.get("evidence_url"),
+            "concept_evidence_notes": alignment.get("evidence_notes"),
+            "legal_vintage": alignment.get("legal_vintage"),
+        },
+        "aggregation": {
+            "method": row["aggregation"]["method"],
+            "denominator": row["aggregation"].get("denominator"),
+        },
+        "domain": universe_constraints["domain"],
+        "filters": {
+            key: value
+            for key, value in sorted(row["dimensions"].items())
+            if value is not None
+        },
+        "source": {
+            "source_name": source.get("source_name"),
+            "source_table": source.get("source_table"),
+            "source_file": source.get("source_file"),
+            "vintage": source.get("vintage"),
+        },
+    }
+    constraints = universe_constraints.get("constraints")
+    if constraints:
+        payload["constraints"] = _visible_legacy_constraints(constraints)
+    assertion = _identity_assertion(row)
+    if assertion is not None:
+        payload["assertion"] = assertion
+
+    envelope = row.get("layout", {}).get(_LEGACY_FACT_KEY_PAYLOAD_FIELD)
+    if envelope is None:
+        return payload
+    if not isinstance(envelope, dict):
+        raise _legacy_payload_mismatch(line_number=line_number, path=path)
+
+    projected = dict(envelope)
+    envelope_constraints = projected.get("constraints")
+    if envelope_constraints is not None:
+        if not isinstance(envelope_constraints, list) or any(
+            not isinstance(constraint, dict)
+            or set(constraint)
+            != {"variable", "operator", "value", "unit", "role", "label"}
+            for constraint in envelope_constraints
+        ):
+            raise _legacy_payload_mismatch(line_number=line_number, path=path)
+        projected["constraints"] = _visible_legacy_constraints(envelope_constraints)
+
+    if concept_alignment is None:
+        envelope_measure = projected.get("measure")
+        optional_measure_fields = {
+            "source_concept",
+            "concept_relation",
+            "concept_authority",
+            "concept_evidence_url",
+            "concept_evidence_notes",
+            "legal_vintage",
+        }
+        if not isinstance(envelope_measure, dict) or set(envelope_measure) != {
+            "concept",
+            "unit",
+            *optional_measure_fields,
+        }:
+            raise _legacy_payload_mismatch(line_number=line_number, path=path)
+        alignment_trigger_fields = {
+            "source_concept",
+            "concept_relation",
+            "concept_authority",
+            "legal_vintage",
+        }
+        if any(envelope_measure[field_name] for field_name in alignment_trigger_fields):
+            raise _legacy_payload_mismatch(line_number=line_number, path=path)
+        projected_measure = dict(envelope_measure)
+        for field_name in optional_measure_fields:
+            projected_measure[field_name] = None
+        projected["measure"] = projected_measure
+
+    if json.dumps(projected, sort_keys=True, separators=(",", ":")) != json.dumps(
+        payload,
+        sort_keys=True,
+        separators=(",", ":"),
+    ):
+        raise _legacy_payload_mismatch(line_number=line_number, path=path)
+    return envelope
+
+
+def _visible_legacy_constraints(
+    constraints: list[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    visible = [
+        {
+            "variable": constraint["variable"],
+            "operator": constraint["operator"],
+            "value": constraint["value"],
+            "unit": constraint.get("unit"),
+            "role": constraint["role"],
+            "label": None,
+        }
+        for constraint in constraints
+    ]
+    return sorted(
+        visible,
+        key=lambda constraint: json.dumps(
+            constraint,
+            sort_keys=True,
+            separators=(",", ":"),
+        ),
+    )
+
+
+def _legacy_payload_mismatch(*, line_number: int, path: Path) -> ValueError:
+    return ValueError(
+        f"Row {line_number} of {path} has layout."
+        f"{_LEGACY_FACT_KEY_PAYLOAD_FIELD} content that does not match the "
+        "consumer row."
+    )
+
+
+def _identity_assertion(row: Mapping[str, Any]) -> str | None:
+    assertion = row.get("assertion")
+    return None if assertion == DEFAULT_ASSERTION else assertion
+
+
+def _hash_uncleaned_key(namespace: str, payload: dict[str, Any]) -> str:
+    raw = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24]
+    return f"{namespace}:{digest}"
 
 
 def _load_consumer_rows(
@@ -273,13 +592,11 @@ def _load_consumer_rows(
                 )
             key = row.get("aggregate_fact_key")
             if validate_schema:
-                recomputed = _recompute_aggregate_fact_key(row)
-                if key != recomputed:
-                    raise ValueError(
-                        f"Row {line_number} of {path} declares aggregate_fact_key "
-                        f"{key!r} but its content hashes to {recomputed!r}; the "
-                        "identity key does not match the row."
-                    )
+                _verify_consumer_row_keys(
+                    row,
+                    line_number=line_number,
+                    path=path,
+                )
             canonical_key = canonicalize_key("aggregate_fact", key)
             if canonical_key in seen_keys:
                 raise ValueError(

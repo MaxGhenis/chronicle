@@ -3,7 +3,8 @@
 ## State
 
 - Branch initialized at `af418dc7e0e65b306a753089b21798c9f07b6b8e` from the local `origin/epoch-dual-domain` ref.
-- Review findings are being implemented and regression-tested one coherent change at a time.
+- Consumer-row content-address verification is implemented, regression-tested,
+  and independently reviewed.
 - This lane has no network access; `git fetch origin` could not resolve GitHub.
 - The sandbox does not expose the process list, so `pgrep -fl epoch-dual-domain` could not complete.
 - Approved role: `ledger-contract-maintainer`.
@@ -29,10 +30,22 @@
   `ledger-contract` and `ledger-boundary` judge reviews.
 - The prior lane confirmed no changes under `releases/`, frozen fixture/schema
   directories, or `.github/chronicle-agents.yml`.
+- Replaced aggregate-only consumer verification with per-key recomputation for
+  all nine row-carried identities, honoring each declared prefix epoch and using
+  Ledger spellings for nested identity payloads.
+- Added an 18-case tamper matrix covering every row-carried key under both
+  Ledger and Chronicle prefixes.
+- Preserved exact legacy fact-v1 verification for lossy normalized rows through
+  a conditional audit envelope; labeled/authored-order constraints and evidence-
+  only measure metadata now round-trip without changing existing key digests,
+  frozen schema bytes, or checked-in fixture bytes.
+- Passed 114 focused consumer, consumer-contract, and schema tests plus an
+  80-row constrained consumer-artifact build/load smoke.
+- An independent consumer-verification review approved the final implementation
+  after adversarial coverage for rehashed legacy payload envelopes.
 
 ## Next
 
-- Fix consumer-row verification so every content-addressed key is recomputed under its declared epoch, with nested identities in ledger form.
 - Deduplicate cross-epoch source-cell and source-row aliases during database insertion.
 - Exercise governance validation against both accepted approved-agent schema identifiers.
 - Run the requested full verification matrix and record it in `out.md`.

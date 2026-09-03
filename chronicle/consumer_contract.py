@@ -20,6 +20,7 @@ from chronicle.core import (
     DEFAULT_ASSERTION,
     AggregateConstraint,
     AggregateFact,
+    _canonical_key_payload,
     build_aggregate_constraints,
     build_fact_key,
 )
@@ -27,6 +28,13 @@ from chronicle.epoch import EMIT_EPOCH, HASH_DOMAINS, Epoch, hash_domain, schema
 from chronicle.store import fact_to_mapping
 
 CONSUMER_FACT_SCHEMA_VERSION = schema_id("consumer_fact")
+
+# The frozen consumer-fact schema permits layout audit extensions. This
+# envelope is emitted only when the legacy fact-v1 preimage contains details
+# that the normalized row otherwise omits (constraint labels/authored order or
+# evidence-only measure metadata). It preserves exact legacy verification
+# without changing the frozen schema or any ordinary row bytes.
+_LEGACY_FACT_KEY_PAYLOAD_FIELD = "legacy_fact_key_payload"
 
 
 @dataclass(frozen=True)
@@ -628,6 +636,9 @@ def _consumer_fact_row(
     aggregate_fact_key = build_aggregate_fact_key(fact, epoch=emit_epoch)
     semantic_fact_key = build_semantic_fact_key(fact, epoch=emit_epoch)
     concept_alignment_key = build_concept_alignment_key(fact, epoch=emit_epoch)
+    layout = _clean(asdict(fact.layout)) if fact.layout else {}
+    if _needs_legacy_fact_key_payload(fact, concept_alignment_key):
+        layout[_LEGACY_FACT_KEY_PAYLOAD_FIELD] = _canonical_key_payload(fact)
 
     row: dict[str, Any] = {
         "schema_version": schema_id("consumer_fact", emit_epoch),
@@ -663,7 +674,7 @@ def _consumer_fact_row(
                 "source_row", fact.source_row_keys, emit_epoch
             ),
         },
-        "layout": _clean(asdict(fact.layout)) if fact.layout else {},
+        "layout": layout,
         "label": fact.label,
     }
     if fact.period_coverage is not None:
@@ -722,6 +733,25 @@ def _hash_key(namespace: str, payload: dict[str, Any]) -> str:
     )
     digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24]
     return f"{namespace}:{digest}"
+
+
+def _needs_legacy_fact_key_payload(
+    fact: AggregateFact,
+    concept_alignment_key: str | None,
+) -> bool:
+    """Return whether normalized row fields lose legacy fact-v1 key material."""
+    unrepresented_measure_metadata = concept_alignment_key is None and any(
+        value is not None
+        for value in (
+            fact.measure.source_concept,
+            fact.measure.concept_relation,
+            fact.measure.concept_authority,
+            fact.measure.concept_evidence_url,
+            fact.measure.concept_evidence_notes,
+            fact.measure.legal_vintage,
+        )
+    )
+    return bool(fact.constraints) or unrepresented_measure_metadata
 
 
 def _observed_measure_payload(fact: AggregateFact) -> dict[str, Any]:
@@ -834,6 +864,7 @@ _CONSUMER_REQUIRED_FIELDS = (
 
 
 def _clean_consumer_row(row: dict[str, Any]) -> dict[str, Any]:
+    legacy_fact_key_payload = row["layout"].get(_LEGACY_FACT_KEY_PAYLOAD_FIELD)
     cleaned = _clean(row)
     cleaned["dimensions"] = _clean(row["dimensions"])
     cleaned["lineage"] = {
@@ -842,6 +873,10 @@ def _clean_consumer_row(row: dict[str, Any]) -> dict[str, Any]:
         "source_row_keys": row["lineage"]["source_row_keys"],
     }
     cleaned["layout"] = _clean(row["layout"])
+    if legacy_fact_key_payload is not None:
+        # The legacy hasher includes explicit nulls, so do not recursively clean
+        # this exact preimage along with ordinary display/audit metadata.
+        cleaned["layout"][_LEGACY_FACT_KEY_PAYLOAD_FIELD] = legacy_fact_key_payload
     return cleaned
 
 
