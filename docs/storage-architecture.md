@@ -182,7 +182,10 @@ several source packages keeps one manifest each —
 exactly one of them. `fetch-artifact --manifest <filename>` selects it;
 defaulting to `manifest.yaml` there would write a third manifest neither
 package reads, and the recorded block would never be compared at all. The name
-must be a filename inside `--out-dir`, not a path.
+must be a reserved `manifest*.yaml` filename inside `--out-dir`, not a path.
+New or empty manifests require an explicit `--kind`; an existing kindless
+publisher manifest is accepted only while its repository path and bytes match
+the frozen grandfather list exactly.
 
 ### What a recorded block has to say
 

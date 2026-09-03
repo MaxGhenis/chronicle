@@ -1052,8 +1052,8 @@ def main(argv: list[str] | None = None) -> int:
             "Manifest kind to declare. Pass microdata_release to archive a "
             "public-use microdata release, which may hold several files under "
             "one vintage. No microdata records, rows, columns, row values, or "
-            "cells are parsed by a source package. Defaults to the existing "
-            "manifest's kind, or publisher_table."
+            "cells are parsed by a source package. Defaults to an existing "
+            "manifest's kind; required for a new or empty manifest."
         ),
     )
     artifact_parser.add_argument(

@@ -17,8 +17,11 @@ selectors. This writes the local artifact, captures checksum and retrieval
 metadata in `manifest.yaml`, and can upload the exact bytes to the private raw
 R2 bucket (`ledger-raw` today; overridable with `CHRONICLE_R2_RAW_BUCKET`) when
 Wrangler is authenticated. A publisher directory that feeds several source
-packages keeps one manifest each, so pass `--manifest <filename>` to address
-the right one. Agents can audit the local
+packages keeps one reserved `manifest*.yaml` file each, so pass
+`--manifest <filename>` to address the right one. A new or empty manifest also
+requires `--kind publisher_table` (or `--kind microdata_release` for the
+identity-only contract below); only frozen path-and-content identities may
+remain kindless. Agents can audit the local
 artifact registry with `uv run chronicle inventory-artifacts --root db/data`.
 For already-downloaded manifest artifacts, agents should run
 `uv run chronicle publish-raw --root db/data` to upload checksum-verified bytes to

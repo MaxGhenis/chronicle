@@ -79,10 +79,10 @@
 - Aligned both aggregate source-plan fetch command forms with the strict new
   manifest contract by emitting `--kind publisher_table`; all nine planner
   tests pass.
+- Updated CLI help and executable documentation to require an explicit kind
+  for new/empty manifests and to name the reserved `manifest*.yaml` convention.
 
 ## Next
 
-- Align remaining CLI help and executable documentation with the strict kind
-  and reserved-manifest convention, then run the full requested verification.
-- Write `out.md`, update the PR body, and push with `--force-with-lease`. Do not
-  merge.
+- Run the full requested verification, write `out.md`, update the PR body, and
+  push with `--force-with-lease`. Do not merge.

@@ -356,15 +356,17 @@ bunx wrangler login
 uv run chronicle bootstrap-r2
 
 # Fetch/register a source artifact, write db/data/.../manifest.yaml, and upload
-# the exact bytes to R2 when Wrangler is authenticated. Pass --manifest when the
-# package directory keeps more than one manifest (ira_contributions keeps a
-# traditional and a Roth one):
+# the exact bytes to R2 when Wrangler is authenticated. New manifests require
+# an explicit --kind. Pass --manifest when the package directory keeps more
+# than one reserved manifest*.yaml file (ira_contributions keeps a traditional
+# and a Roth one):
 uv run chronicle fetch-artifact \
   --url https://www.irs.gov/pub/irs-soi/23in12ms.xls \
   --source-id irs_soi \
   --package-id soi-table-1-2 \
   --year 2023 \
   --out-dir db/data/irs_soi/table_1_2 \
+  --kind publisher_table \
   --source-page https://www.irs.gov/statistics/soi-tax-stats-individual-income-tax-returns-complete-report-publication-1304-basic-tables-part-1 \
   --table "Publication 1304 Table 1.2" \
   --upload-r2
