@@ -9,6 +9,12 @@
   and association inserts; both emit epochs are regression-tested.
 - Governance emission and acceptance are tested separately; the complete review
   surface runs against both approved-agent schema identifiers.
+- Implementation and deterministic verification are complete locally. The full
+  suite passes with 822 tests passed and 1 skipped; repository lint, changed-file
+  formatting, and the offline wheel/import smoke pass.
+- Independent final `ledger-contract` and `ledger-boundary` reviews pass.
+- The exact directory-wide format check still reports eight files that are
+  byte-identical to the requested starting head and outside this review diff.
 - This lane has no network access; `git fetch origin` could not resolve GitHub.
 - The sandbox does not expose the process list, so `pgrep -fl epoch-dual-domain` could not complete.
 - Approved role: `ledger-contract-maintainer`.
@@ -53,8 +59,16 @@
 - Kept the checked-in approved-agents manifest on the Ledger default while
   exercising every ownership, role, path, deterministic-check, and judge
   assertion with both Ledger and Chronicle identifiers; 4 focused tests pass.
+- Passed `uv run pytest -q` (822 passed, 1 skipped, 14 warnings),
+  `uv run ruff check .`, the format check over all six changed Python files,
+  an offline wheel build, and a clean-venv epoch import smoke.
+- Confirmed `EMIT_EPOCH = Epoch.LEDGER`, no changes under `releases/` or frozen
+  fixture/schema paths, and unchanged pinned SHA-256 values.
+- Passed independent final `ledger-contract` and `ledger-boundary` reviews.
+- Wrote the complete review-fix and verification report to `out.md`.
 
 ## Next
 
-- Run the requested full verification matrix and record it in `out.md`.
-- Write an uncommitted `PR_BODY_ADDENDUM.md` with the review-fix summary and allowed-path disclosure.
+- Write an uncommitted `PR_BODY_ADDENDUM.md` with the review-fix summary and
+  allowed-path disclosure.
+- Leave the committed branch for the network-enabled dispatching session to push.
