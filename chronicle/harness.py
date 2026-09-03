@@ -53,8 +53,10 @@ from chronicle.pe_source_plan import (
 )
 from chronicle.registration import (
     ACCESS_CLASSES,
+    HASH_SOURCES,
     MANIFEST_KINDS,
     ArtifactRegistrationReport,
+    ManifestAccessError,
     register_hash_only_artifact,
 )
 from chronicle.sources.cells import (
@@ -350,6 +352,10 @@ def fetch_artifact_file(
     access: str = "public",
     licence: str | None = None,
     kind: str | None = None,
+    publisher: str | None = None,
+    vintage: str | None = None,
+    expected_sha256: str | None = None,
+    expected_size_bytes: int | None = None,
     upload_r2: bool = False,
     record_revision: bool = False,
     r2_bucket: str | None = None,
@@ -377,6 +383,10 @@ def fetch_artifact_file(
         access=access,
         licence=licence,
         kind=kind,
+        publisher=publisher,
+        vintage=vintage,
+        expected_sha256=expected_sha256,
+        expected_size_bytes=expected_size_bytes,
         upload_r2=upload_r2,
         record_revision=record_revision,
         r2_bucket=r2_bucket,
@@ -408,6 +418,9 @@ def register_artifact_file(
     fetched_at: str | None = None,
     verified_at: str | None = None,
     hash_source: str | None = None,
+    attested_by: str | None = None,
+    attestation_evidence: str | None = None,
+    pinned_from: dict[str, str] | None = None,
     notes: str | None = None,
     allow_reissue: bool = False,
 ) -> ArtifactRegistrationReport:
@@ -434,6 +447,9 @@ def register_artifact_file(
         fetched_at=fetched_at,
         verified_at=verified_at,
         hash_source=hash_source,
+        attested_by=attested_by,
+        attestation_evidence=attestation_evidence,
+        pinned_from=pinned_from,
         notes=notes,
         allow_reissue=allow_reissue,
     )
@@ -1007,6 +1023,23 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     artifact_parser.add_argument(
+        "--publisher",
+        help="Publishing body recorded for a microdata release.",
+    )
+    artifact_parser.add_argument(
+        "--vintage",
+        help="Publisher vintage label recorded on a microdata file entry.",
+    )
+    artifact_parser.add_argument(
+        "--expected-sha256",
+        help="Reviewed SHA-256 the fetched bytes must match before any write.",
+    )
+    artifact_parser.add_argument(
+        "--expected-size-bytes",
+        type=int,
+        help="Reviewed byte size the fetched bytes must match before any write.",
+    )
+    artifact_parser.add_argument(
         "--upload-r2",
         action="store_true",
         help="Upload the artifact to R2 after local checksum capture.",
@@ -1150,7 +1183,30 @@ def main(argv: list[str] | None = None) -> int:
     )
     registration_parser.add_argument(
         "--hash-source",
-        help="Where the checksum came from, such as a consumer source manifest.",
+        required=True,
+        choices=list(HASH_SOURCES),
+        help="How the checksum was established under the attestation contract.",
+    )
+    registration_parser.add_argument(
+        "--attested-by",
+        required=True,
+        help="Principal attesting the checksum or reviewed pin.",
+    )
+    registration_parser.add_argument(
+        "--attestation-evidence",
+        help="Consumer evidence URL or record for consumer_attested hashes.",
+    )
+    registration_parser.add_argument(
+        "--pinned-from-repository",
+        help="Consumer repository for a consumer_pin.",
+    )
+    registration_parser.add_argument(
+        "--pinned-from-path",
+        help="Reviewed manifest path for a consumer_pin.",
+    )
+    registration_parser.add_argument(
+        "--pinned-from-commit",
+        help="Reviewed commit containing a consumer_pin.",
     )
     registration_parser.add_argument(
         "--notes",
@@ -1602,18 +1658,35 @@ def main(argv: list[str] | None = None) -> int:
                 access=args.access,
                 licence=args.licence,
                 kind=args.kind,
+                publisher=args.publisher,
+                vintage=args.vintage,
+                expected_sha256=args.expected_sha256,
+                expected_size_bytes=args.expected_size_bytes,
                 upload_r2=args.upload_r2,
                 record_revision=args.record_revision,
                 r2_bucket=args.r2_bucket,
                 r2_prefix=args.r2_prefix,
                 wrangler_command=args.wrangler_command,
             )
-        except SourceArtifactManifestError as error:
+        except (SourceArtifactManifestError, ManifestAccessError) as error:
             print(f"error: {error}", file=sys.stderr)
             return 1
         print(json.dumps(report.to_dict(), indent=2, sort_keys=True))
         return 0 if report.valid else 1
     if args.command == "register-artifact":
+        pinned_from = None
+        if any(
+            (
+                args.pinned_from_repository,
+                args.pinned_from_path,
+                args.pinned_from_commit,
+            )
+        ):
+            pinned_from = {
+                "repository": args.pinned_from_repository,
+                "path": args.pinned_from_path,
+                "commit": args.pinned_from_commit,
+            }
         registration = register_artifact_file(
             source_id=args.source_id,
             package_id=args.package_id,
@@ -1636,6 +1709,9 @@ def main(argv: list[str] | None = None) -> int:
             fetched_at=args.fetched_at,
             verified_at=args.verified_at,
             hash_source=args.hash_source,
+            attested_by=args.attested_by,
+            attestation_evidence=args.attestation_evidence,
+            pinned_from=pinned_from,
             notes=args.notes,
             allow_reissue=args.allow_reissue,
         )

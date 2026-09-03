@@ -27,12 +27,22 @@
 - Ran the rebased artifact and registration tests: 136 passed and nine exposed
   one integration defect in `inventory_source_artifacts` (the strict manifest
   read did not bind the payload used by the kind checks). Corrected the binding.
+- Read the accepted raw-microdata ADR from cached immutable ref `92a44bf`, the
+  approved-role configuration, and both cached Microcosm refs. GitHub comment
+  retrieval was attempted but DNS is unavailable; the assignment's quoted
+  round-1 findings and convention ruling are the review transcript in use.
+- Hardened filenames, semantic year keys, strict pre-I/O manifest validation,
+  public-to-gated reclassification, expected fetch pins, shape-preserving
+  upserts, public-microdata licence custody, and checksum attestations.
+- Moved the licensed/restricted refusal to the source package's lowest byte
+  reader, before packaged bytes, cache bytes, cache fetches, or build parsing.
+- Added focused regressions for the boundary escapes. The registration suite is
+  94 passed with only the deliberately stale committed-manifest inventory test
+  outstanding; the five new source-reader path checks pass.
 
 ## Next
 
-- Read the PR gate comments, ADR, governance role paths, and current Microcosm
-  pins from immutable refs.
-- Implement and regression-test findings A1-A9, B10-B12, and C13 in coherent
-  commits, updating this file after each step.
+- Align the generator, fixture-backed golden tests, and five release manifests
+  to the 19 immutable Microcosm `origin/main` pins.
 - Run the full requested verification, write `out.md`, update the PR body, and
   push with `--force-with-lease`. Do not merge.

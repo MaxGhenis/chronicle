@@ -17,6 +17,7 @@ from chronicle.consumer_contract import (
     validate_consumer_fact_contract,
 )
 from chronicle.core import validate_facts
+from chronicle.registration import ManifestAccessError
 from chronicle.source_package import (
     SOURCE_ARTIFACT_CACHE_ENV,
     SOURCE_ARTIFACT_FETCH_ENV,
@@ -92,6 +93,11 @@ def _zip_with_workbook(workbook_content: bytes, *, note: str) -> bytes:
 class _MissingArtifactPath:
     def read_bytes(self) -> bytes:
         raise FileNotFoundError("not packaged")
+
+
+class _ForbiddenArtifactPath:
+    def read_bytes(self) -> bytes:
+        raise AssertionError("licensed bytes must not be read from the package")
 
 
 @pytest.mark.parametrize(
@@ -674,6 +680,83 @@ def test_source_artifact_loader_fetches_missing_artifact_when_enabled(
 
     assert _read_source_artifact_content(_MissingArtifactPath(), spec) == content
     assert _source_artifact_cache_path(spec).read_bytes() == content
+
+
+@pytest.mark.parametrize("access", ["licensed", "restricted"])
+def test_source_artifact_loader_refuses_gated_package_bytes(access):
+    spec = {
+        "filename": "gated.csv",
+        "source_url": "https://example.test/gated.csv",
+        "access": access,
+    }
+
+    with pytest.raises(ManifestAccessError, match=f"access='{access}'"):
+        _read_source_artifact_content(_ForbiddenArtifactPath(), spec)
+
+
+def test_source_artifact_loader_refuses_gated_cache_bytes(tmp_path, monkeypatch):
+    spec = {
+        "filename": "gated.csv",
+        "source_url": "https://example.test/gated.csv",
+        "sha256": "a" * 64,
+        "access": "licensed",
+    }
+    monkeypatch.setenv(SOURCE_ARTIFACT_CACHE_ENV, str(tmp_path / "cache"))
+    cache_path = _source_artifact_cache_path(spec)
+    cache_path.parent.mkdir(parents=True)
+    cache_path.write_bytes(b"bytes that must remain unread")
+
+    with pytest.raises(ManifestAccessError, match="access='licensed'"):
+        _read_source_artifact_content(_MissingArtifactPath(), spec)
+
+
+def test_source_artifact_loader_refuses_gated_cache_fetch(tmp_path, monkeypatch):
+    spec = {
+        "filename": "gated.csv",
+        "source_url": "https://example.test/gated.csv",
+        "access": "restricted",
+    }
+    monkeypatch.setenv(SOURCE_ARTIFACT_CACHE_ENV, str(tmp_path / "cache"))
+    monkeypatch.setenv(SOURCE_ARTIFACT_FETCH_ENV, "1")
+    monkeypatch.setattr(
+        "chronicle.source_package._fetch_source_artifact_content",
+        lambda _url: (_ for _ in ()).throw(
+            AssertionError("restricted bytes must not be fetched")
+        ),
+    )
+
+    with pytest.raises(ManifestAccessError, match="access='restricted'"):
+        _read_source_artifact_content(_MissingArtifactPath(), spec)
+
+
+def test_source_package_refuses_mapping_shaped_licensed_manifest(monkeypatch):
+    spec = SourceArtifactSpec(
+        source_name="publisher",
+        source_table="Licensed aggregate export",
+        resource_package="db",
+        resource_directory="data",
+        manifest="manifest.yaml",
+        vintage="2023",
+        extracted_at="2026-09-03",
+        extraction_method="none",
+        parser="delimited_text_full_rows",
+        artifact_year=2023,
+    )
+    monkeypatch.setattr(
+        SourceArtifactSpec,
+        "manifest_payload",
+        lambda _self: {
+            "files": {
+                2023: {
+                    "filename": "licensed.csv",
+                    "access": "licensed",
+                }
+            }
+        },
+    )
+
+    with pytest.raises(ManifestAccessError, match="access='licensed'"):
+        spec._artifact_content(2023)
 
 
 def test_source_package_path_builds_valid_soi_table_1_4_facts():

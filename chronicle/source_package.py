@@ -33,8 +33,11 @@ from chronicle.core import (
 )
 from chronicle.env import env_flag, env_value
 from chronicle.registration import (
+    ManifestAccessError,
     MicrodataReleaseNotParseableError,
+    is_hash_only,
     is_microdata_release,
+    normalize_access,
 )
 from chronicle.sources.cells import (
     SourceArtifactMetadata,
@@ -851,7 +854,8 @@ class SourceArtifactSpec:
         """Refuse to parse a manifest that registers a microdata release.
 
         Microdata registration is manifest-level identity: no source package
-        parses a release, and no microdata row, cell, or fact enters Chronicle
+        parses a release, and no microdata records, rows, columns, row values,
+        or cells enter Chronicle
         (``docs/adr-chronicle-raw-microdata-identity.md``).
         """
         manifest = self.manifest_payload()
@@ -859,8 +863,8 @@ class SourceArtifactSpec:
             raise MicrodataReleaseNotParseableError(
                 f"{self.resource_directory}/{self.manifest} registers a "
                 "microdata release. Registration is identity only: no source "
-                "package parses a microdata release and no microdata rows, "
-                "cells, or facts enter Chronicle."
+                "package parses a microdata release and no microdata records, "
+                "rows, columns, row values, or cells enter Chronicle."
             )
 
     def _artifact_content(
@@ -2276,6 +2280,13 @@ def _read_source_artifact_content(
     spec: dict[str, Any],
 ) -> bytes:
     """Read a source artifact from package data, cache, or explicit fetch."""
+    access = normalize_access(spec.get("access"))
+    if is_hash_only(access):
+        raise ManifestAccessError(
+            "Source-package byte reads refuse "
+            f"access={access!r} for {spec.get('filename')!r}; licensed and "
+            "restricted artifacts are hash-only registrations."
+        )
     try:
         return artifact_path.read_bytes()
     except FileNotFoundError:

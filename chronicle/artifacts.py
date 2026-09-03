@@ -28,15 +28,20 @@ from chronicle.database import (
 from chronicle.env import env_value
 from chronicle.registration import (
     ACCESS_PUBLIC,
+    HASH_SOURCE_CHRONICLE_FETCH,
     MICRODATA_RELEASE_KIND,
+    PUBLISHER_TABLE_KIND,
     manifest_kind as normalize_manifest_kind,
     ListSpecRejected,
     ManifestAccessError,
+    canonical_artifact_filename,
+    effective_entry_access,
     is_hash_only,
     iter_file_specs,
+    manifest_filename_errors,
     normalize_access,
     recorded_r2,
-    safe_entry_access,
+    resolve_year_key,
     safe_manifest_kind,
     validate_file_entry,
 )
@@ -129,6 +134,10 @@ class RecordedR2LocatorError(SourceArtifactManifestError):
     entry claim R2 holds", and preserving or publishing under it would ship
     whichever field the reader happened to consult.
     """
+
+
+class ArtifactIntegrityError(SourceArtifactManifestError):
+    """Fetched bytes disagree with an explicitly reviewed checksum or size."""
 
 
 # New UK and New Zealand uploads are namespaced by country. US objects predate
@@ -570,6 +579,10 @@ def fetch_source_artifact(
     access: str = ACCESS_PUBLIC,
     licence: str | None = None,
     kind: str | None = None,
+    publisher: str | None = None,
+    vintage: str | None = None,
+    expected_sha256: str | None = None,
+    expected_size_bytes: int | None = None,
     upload_r2: bool = False,
     record_revision: bool = False,
     r2_bucket: str | None = None,
@@ -598,52 +611,35 @@ def fetch_source_artifact(
     r2_bucket = r2_bucket or default_r2_raw_bucket()
     output = Path(output_dir)
     manifest_path = _manifest_path(output, manifest_filename)
-    access_class = normalize_access(access)
-    if is_hash_only(access_class):
-        raise ManifestAccessError(
-            f"fetch-artifact stores bytes and refuses access={access_class!r}. "
-            "Register a licensed or restricted artifact by identity with "
-            "`chronicle register-artifact`."
-        )
-    resolved_r2_prefix = resolve_r2_prefix(
-        prefix=r2_prefix,
-        default_prefix=DEFAULT_R2_PREFIX,
-        source_id=source_id,
-        package_path=output,
-    )
     # Read and validate the entry being written before anything is fetched: a
     # manifest Chronicle cannot read, or a recorded block that names two
     # different objects, is a refusal that need not touch the publisher.
     existing_manifest = _read_manifest(manifest_path)
-    licence_text = licence.strip() if isinstance(licence, str) else None
-    # A public microdata release is archived like any other public artifact,
-    # but its manifest still declares the release kind so a source package is
-    # refused and several files may share one vintage.
-    manifest_kind_value = (
-        normalize_manifest_kind({'kind': kind})
-        if kind is not None
-        else safe_manifest_kind(existing_manifest)[0]
-    )
-    # The byte boundary is checked first: overwriting a hash-only registration
-    # with bytes is the more serious refusal, and its message is the one the
-    # caller needs, not a prompt to supply a licence.
-    _assert_no_hash_only_entry(existing_manifest, manifest_path, year, filename)
-    if manifest_kind_value == MICRODATA_RELEASE_KIND and not licence_text:
-        raise ManifestAccessError(
-            f"{manifest_path} registers a microdata release, so every entry "
-            "must record its publisher licence; pass --licence."
-        )
-    recorded_identity = _recorded_identity(
-        _manifest_file_spec(existing_manifest, year),
+    manifest_kind_value = _manifest_kind_for_fetch(
+        existing_manifest,
         manifest_path=manifest_path,
-        year=year,
+        requested_kind=kind,
+    )
+    _validate_existing_manifest_before_fetch(
+        existing_manifest,
+        manifest_path=manifest_path,
+        kind=manifest_kind_value,
     )
 
-    fetched_at = datetime.now(UTC).replace(microsecond=0).isoformat()
-    content, inferred_filename = _read_artifact(source_url)
-    artifact_filename = filename or inferred_filename
-    if not artifact_filename:
-        raise ValueError("Could not infer artifact filename; pass --filename.")
+    inferred_before_fetch = _filename_from_url(source_url)
+    requested_filename = filename if filename is not None else inferred_before_fetch
+    if not requested_filename:
+        raise ManifestAccessError(
+            "Could not infer an artifact basename from --url; pass --filename."
+        )
+    artifact_filename = canonical_artifact_filename(requested_filename)
+    _validate_fetch_slot(
+        existing_manifest,
+        manifest_path=manifest_path,
+        kind=manifest_kind_value,
+        year=year,
+        filename=artifact_filename,
+    )
     _assert_no_hash_only_entry(
         existing_manifest,
         manifest_path,
@@ -651,8 +647,80 @@ def fetch_source_artifact(
         artifact_filename,
     )
 
+    if expected_sha256 is not None and not _SHA256_KEY_SEGMENT.fullmatch(
+        expected_sha256
+    ):
+        raise ArtifactIntegrityError(
+            "--expected-sha256 must be a lowercase 64-character SHA-256; got "
+            f"{expected_sha256!r}."
+        )
+    if expected_size_bytes is not None and expected_size_bytes < 0:
+        raise ArtifactIntegrityError(
+            f"--expected-size-bytes must be non-negative; got {expected_size_bytes!r}."
+        )
+
+    access_class = normalize_access(access)
+    licence_text = licence.strip() if isinstance(licence, str) else None
+    if (
+        manifest_kind_value == MICRODATA_RELEASE_KIND
+        and access_class == ACCESS_PUBLIC
+        and not licence_text
+    ):
+        raise ManifestAccessError(
+            f"{manifest_path} registers a microdata release, so every entry "
+            "must record its publisher licence; pass --licence."
+        )
+    effective_access = effective_entry_access(
+        {"access": access_class, "licence": licence_text},
+        kind=manifest_kind_value,
+    )
+    if is_hash_only(effective_access):
+        reason = (
+            f"access={access_class!r}"
+            if access_class != ACCESS_PUBLIC
+            else f"non-allowlisted public microdata licence {licence_text!r}"
+        )
+        raise ManifestAccessError(
+            f"fetch-artifact stores bytes and refuses {reason}. Register the "
+            "artifact hash-only with `chronicle register-artifact`."
+        )
+    if manifest_kind_value == MICRODATA_RELEASE_KIND:
+        if not publisher or not publisher.strip():
+            raise ManifestAccessError(
+                "A microdata fetch must record --publisher before bytes are read."
+            )
+        if not vintage or not vintage.strip():
+            raise ManifestAccessError(
+                "A microdata fetch must record --vintage before bytes are read."
+            )
+
+    resolved_r2_prefix = resolve_r2_prefix(
+        prefix=r2_prefix,
+        default_prefix=DEFAULT_R2_PREFIX,
+        source_id=source_id,
+        package_path=output,
+    )
+    recorded_identity = _recorded_identity(
+        _manifest_file_spec(existing_manifest, year, artifact_filename),
+        manifest_path=manifest_path,
+        year=year,
+    )
+
+    fetched_at = datetime.now(UTC).replace(microsecond=0).isoformat()
+    content, _inferred_filename = _read_artifact(source_url)
+
     sha256 = hashlib.sha256(content).hexdigest()
     size_bytes = len(content)
+    if expected_sha256 is not None and sha256 != expected_sha256:
+        raise ArtifactIntegrityError(
+            f"Fetched artifact checksum mismatch for {artifact_filename}: "
+            f"expected {expected_sha256}, got {sha256}."
+        )
+    if expected_size_bytes is not None and size_bytes != expected_size_bytes:
+        raise ArtifactIntegrityError(
+            f"Fetched artifact size mismatch for {artifact_filename}: expected "
+            f"{expected_size_bytes}, got {size_bytes}."
+        )
 
     # Guard before the cached artifact is touched. A rejected fetch must leave
     # the recorded bytes and their manifest entry exactly as they were.
@@ -711,6 +779,8 @@ def fetch_source_artifact(
         access=access_class,
         licence=licence_text,
         kind=manifest_kind_value,
+        publisher=publisher,
+        vintage=vintage,
         r2_location=(r2_location if upload_r2 and r2_upload and r2_upload.ok else None),
         record_revision=record_revision,
     )
@@ -898,6 +968,19 @@ def publish_source_artifacts(
         if not isinstance(files, dict):
             errors.append(f"Manifest files must be a mapping: {manifest_path}")
             continue
+        filename_errors = manifest_filename_errors(manifest)
+        if filename_errors:
+            errors.append(
+                f"Unsafe artifact filenames in {manifest_path}: "
+                f"{', '.join(filename_errors)}"
+            )
+            continue
+        try:
+            for year in files:
+                resolve_year_key(files, year)
+        except ManifestAccessError as exc:
+            errors.append(f"Invalid year keys in {manifest_path}: {exc}")
+            continue
 
         try:
             resolved_r2_prefix = resolve_r2_prefix(
@@ -910,9 +993,11 @@ def publish_source_artifacts(
             errors.append(f"Could not resolve R2 prefix for {manifest_path}: {exc}")
             continue
 
-        kind, kind_error = safe_manifest_kind(manifest)
-        if kind_error:
-            errors.append(f"{kind_error}: {manifest_path}")
+        try:
+            kind = normalize_manifest_kind(manifest)
+        except ManifestAccessError as exc:
+            errors.append(f"Invalid manifest kind in {manifest_path}: {exc}")
+            continue
         updated = False
         for year, spec in files.items():
             for file_spec in iter_file_specs(spec, kind=kind):
@@ -1024,9 +1109,20 @@ def inventory_source_artifacts(
         if not isinstance(files, dict):
             errors.append(f"Manifest files must be a mapping: {manifest_path}")
             continue
-        kind, kind_error = safe_manifest_kind(manifest)
-        if kind_error:
-            errors.append(f"{kind_error}: {manifest_path}")
+        filename_errors = manifest_filename_errors(manifest)
+        if filename_errors:
+            errors.append(
+                f"Unsafe artifact filenames in {manifest_path}: "
+                f"{', '.join(filename_errors)}"
+            )
+            continue
+        try:
+            for year in files:
+                resolve_year_key(files, year)
+            kind = normalize_manifest_kind(manifest)
+        except ManifestAccessError as exc:
+            errors.append(f"Invalid manifest {manifest_path}: {exc}")
+            continue
         for year, spec in files.items():
             for file_spec in iter_file_specs(spec, kind=kind):
                 entries.append(
@@ -1214,7 +1310,7 @@ def build_r2_key(
         _clean_key_part(package_id),
         str(year),
         sha256,
-        Path(filename).name,
+        canonical_artifact_filename(filename),
     )
 
 
@@ -1340,13 +1436,142 @@ def _read_manifest(manifest_path: Path) -> dict[str, Any]:
     return payload
 
 
-def _manifest_file_spec(payload: dict[str, Any], year: Any) -> dict[str, Any]:
-    """Return one manifest ``files`` entry, or an empty mapping."""
+def _manifest_file_spec(
+    payload: dict[str, Any],
+    year: Any,
+    filename: str | None = None,
+) -> dict[str, Any]:
+    """Return one manifest entry for a semantic year and optional basename."""
     files = payload.get("files")
     if not isinstance(files, dict):
         return {}
-    spec = files.get(year)
-    return spec if isinstance(spec, dict) else {}
+    year_key = resolve_year_key(files, year)
+    spec = files.get(year_key)
+    if isinstance(spec, dict):
+        if filename is None or spec.get("filename") == filename:
+            return spec
+        return {}
+    if isinstance(spec, list) and filename is not None:
+        for entry in spec:
+            if isinstance(entry, dict) and entry.get("filename") == filename:
+                return entry
+    return {}
+
+
+def _manifest_kind_for_fetch(
+    manifest: dict[str, Any],
+    *,
+    manifest_path: Path,
+    requested_kind: str | None,
+) -> str:
+    """Resolve fetch kind and refuse a reclassification before artifact I/O."""
+    try:
+        existing_kind = normalize_manifest_kind(manifest)
+        requested = (
+            normalize_manifest_kind({"kind": requested_kind})
+            if requested_kind is not None
+            else existing_kind
+        )
+    except ManifestAccessError as exc:
+        raise SourceArtifactManifestError(f"{manifest_path}: {exc}") from exc
+    if manifest and requested != existing_kind:
+        raise SourceArtifactManifestError(
+            f"{manifest_path} is kind={existing_kind!r}; --kind "
+            f"{requested!r} would reclassify the existing manifest."
+        )
+    return requested
+
+
+def _validate_existing_manifest_before_fetch(
+    manifest: dict[str, Any],
+    *,
+    manifest_path: Path,
+    kind: str,
+) -> None:
+    """Strictly validate an existing manifest before publisher bytes are read."""
+    filename_errors = manifest_filename_errors(manifest)
+    if filename_errors:
+        raise SourceArtifactManifestError(
+            f"{manifest_path} has unsafe artifact filenames: "
+            f"{', '.join(filename_errors)}."
+        )
+    files = manifest.get("files")
+    if files is None:
+        return
+    if not isinstance(files, dict):
+        raise MalformedManifestError(
+            f"{manifest_path} files must be a mapping; it is a {type(files).__name__}."
+        )
+    try:
+        for year in files:
+            resolve_year_key(files, year)
+    except ManifestAccessError as exc:
+        raise SourceArtifactManifestError(f"{manifest_path}: {exc}") from exc
+
+    for year, year_spec in files.items():
+        for spec in iter_file_specs(year_spec, kind=kind):
+            if isinstance(spec, ListSpecRejected):
+                raise SourceArtifactManifestError(
+                    f"{manifest_path} entry {year!r} is a list but "
+                    "kind='publisher_table' requires one mapping."
+                )
+            if not isinstance(spec, dict):
+                raise MalformedManifestError(
+                    f"{manifest_path} entry {year!r} must be a mapping; it is a "
+                    f"{type(spec).__name__}."
+                )
+            filename = spec.get("filename")
+            local_exists = (
+                bool(filename)
+                and (
+                    manifest_path.parent / canonical_artifact_filename(filename)
+                ).exists()
+            )
+            entry_errors = validate_file_entry(
+                spec,
+                kind=kind,
+                manifest=manifest,
+                local_file_exists=local_exists,
+            )
+            if entry_errors:
+                raise SourceArtifactManifestError(
+                    f"{manifest_path} entry {year!r} is invalid: "
+                    f"{', '.join(entry_errors)}."
+                )
+            _validated_recorded_r2(
+                spec,
+                manifest_path=manifest_path,
+                year=year,
+            )
+
+
+def _validate_fetch_slot(
+    manifest: dict[str, Any],
+    *,
+    manifest_path: Path,
+    kind: str,
+    year: Any,
+    filename: str,
+) -> None:
+    """Refuse a destructive publisher-table replacement before artifact I/O."""
+    files = manifest.get("files")
+    if not isinstance(files, dict):
+        return
+    year_key = resolve_year_key(files, year)
+    existing = files.get(year_key)
+    if kind != PUBLISHER_TABLE_KIND or existing is None:
+        return
+    if not isinstance(existing, dict):
+        raise SourceArtifactManifestError(
+            f"{manifest_path} entry {year_key!r} must remain a mapping."
+        )
+    existing_filename = canonical_artifact_filename(existing.get("filename"))
+    if existing_filename != filename:
+        raise SourceArtifactRevisionError(
+            f"{manifest_path} entry {year_key!r} already identifies "
+            f"{existing_filename!r}; refusing to replace it with {filename!r}. "
+            "Use a separate vintage or package."
+        )
 
 
 def _recorded_storage(spec: Any) -> dict[str, Any]:
@@ -1667,25 +1892,99 @@ def _upsert_manifest(
     access: str,
     licence: str | None,
     kind: str,
+    publisher: str | None,
+    vintage: str | None,
     r2_location: ArtifactStorageLocation | None,
     record_revision: bool = False,
 ) -> None:
     payload = _read_manifest(manifest_path)
+    resolved_kind = _manifest_kind_for_fetch(
+        payload,
+        manifest_path=manifest_path,
+        requested_kind=kind,
+    )
+    _validate_existing_manifest_before_fetch(
+        payload,
+        manifest_path=manifest_path,
+        kind=resolved_kind,
+    )
+    for field, value in (("source_id", source_id), ("package_id", package_id)):
+        recorded = payload.get(field)
+        if recorded is not None and recorded != value:
+            raise SourceArtifactManifestError(
+                f"{manifest_path} declares {field}={recorded!r}; refusing to "
+                f"write {field}={value!r}."
+            )
     payload.setdefault("source_id", source_id)
     payload.setdefault("package_id", package_id)
     payload.setdefault("dataset", dataset)
     payload.setdefault("source_page", source_page)
     payload.setdefault("table", table)
-    payload.setdefault("files", {})
+    if publisher:
+        payload.setdefault("publisher", publisher)
+    payload["kind"] = resolved_kind
+    files = payload.setdefault("files", {})
+    if not isinstance(files, dict):
+        raise MalformedManifestError(
+            f"{manifest_path} files must be a mapping; it is a {type(files).__name__}."
+        )
+    try:
+        year_key = resolve_year_key(files, year)
+    except ManifestAccessError as exc:
+        raise SourceArtifactManifestError(f"{manifest_path}: {exc}") from exc
+    existing = files.get(year_key)
+    entries = list(existing) if isinstance(existing, list) else _as_entry_list(existing)
+    exact_index = next(
+        (
+            index
+            for index, entry in enumerate(entries)
+            if isinstance(entry, dict)
+            and entry.get("filename") == filename
+            and entry.get("sha256") == sha256
+        ),
+        None,
+    )
+    filename_index = next(
+        (
+            index
+            for index, entry in enumerate(entries)
+            if isinstance(entry, dict) and entry.get("filename") == filename
+        ),
+        None,
+    )
+    target_index = exact_index if exact_index is not None else filename_index
+    recorded_spec = (
+        entries[target_index]
+        if target_index is not None and isinstance(entries[target_index], dict)
+        else {}
+    )
+    if resolved_kind == PUBLISHER_TABLE_KIND and existing is not None:
+        if isinstance(existing, list):
+            raise SourceArtifactManifestError(
+                f"{manifest_path} entry {year_key!r} is a list; a "
+                "publisher_table year must remain a mapping."
+            )
+        existing_filename = canonical_artifact_filename(existing.get("filename"))
+        if existing_filename != filename:
+            raise SourceArtifactRevisionError(
+                f"{manifest_path} entry {year_key!r} already identifies "
+                f"{existing_filename!r}; refusing to replace it with "
+                f"{filename!r}. Use a separate vintage or package."
+            )
     # Access is written explicitly on every entry this command touches, so a
     # manifest never relies on the inferred ``public`` default once rewritten.
-    file_entry: dict[str, Any] = {
-        "filename": filename,
-        "source_url": source_url,
-        "access": access,
-    }
+    file_entry: dict[str, Any] = dict(recorded_spec)
+    file_entry.update(
+        {
+            "filename": filename,
+            "source_url": source_url,
+            "access": access,
+        }
+    )
     if licence:
         file_entry["licence"] = licence
+    if vintage:
+        file_entry["vintage"] = vintage
     file_entry.update(
         {
             "sha256": sha256,
@@ -1693,20 +1992,14 @@ def _upsert_manifest(
             "fetched_at": fetched_at,
         }
     )
-    existing = (
-        payload["files"].get(year) if isinstance(payload["files"], dict) else None
-    )
-    if isinstance(existing, list):
-        recorded_spec = next(
-            (
-                entry
-                for entry in existing
-                if isinstance(entry, dict) and entry.get("filename") == filename
-            ),
-            {},
+    if resolved_kind == MICRODATA_RELEASE_KIND:
+        file_entry.update(
+            {
+                "hash_source": HASH_SOURCE_CHRONICLE_FETCH,
+                "attested_by": "chronicle",
+                "verified_at": fetched_at,
+            }
         )
-    else:
-        recorded_spec = existing if isinstance(existing, dict) else {}
     recorded_storage = _recorded_storage(recorded_spec)
     identity = _recorded_identity(recorded_spec, manifest_path=manifest_path, year=year)
     new_r2 = r2_location.to_dict() if r2_location is not None else None
@@ -1747,22 +2040,21 @@ def _upsert_manifest(
     # revision over a never-published entry supersedes nothing.
     if storage:
         file_entry["storage"] = storage
-    if kind == MICRODATA_RELEASE_KIND:
-        payload["kind"] = kind
-    entries = list(existing) if isinstance(existing, list) else _as_entry_list(existing)
-    # A registration is a durable statement, so a fetch replaces only the entry
-    # for its own filename and never silently drops another one. Overwriting a
-    # hash-only registration is refused outright by _assert_no_hash_only_entry.
-    kept = [
-        entry
-        for entry in entries
-        if not (isinstance(entry, dict) and entry.get("filename") == filename)
-    ]
-    if not kept and not isinstance(existing, list) and kind != MICRODATA_RELEASE_KIND:
-        # A single-file publisher table keeps the historical mapping shape.
-        payload["files"][year] = file_entry
+    if resolved_kind == PUBLISHER_TABLE_KIND:
+        files[year_key] = file_entry
+    elif isinstance(existing, list):
+        if target_index is None:
+            entries.append(file_entry)
+        else:
+            entries[target_index] = file_entry
+        files[year_key] = entries
+    elif existing is None:
+        files[year_key] = [file_entry]
+    elif target_index is not None:
+        # Preserve a legacy one-entry microdata mapping in place.
+        files[year_key] = file_entry
     else:
-        payload["files"][year] = [*kept, file_entry]
+        files[year_key] = [existing, file_entry]
     manifest_path.write_text(
         yaml.safe_dump(payload, sort_keys=False, allow_unicode=True),
         encoding="utf-8",
@@ -1816,15 +2108,22 @@ def _assert_no_hash_only_entry(
     """
     if not filename:
         return
+    requested = canonical_artifact_filename(filename)
+    kind = normalize_manifest_kind(manifest)
     for entry_year, spec in _iter_manifest_entries(manifest):
         if not isinstance(spec, dict):
             continue
-        if spec.get("filename") != filename:
+        try:
+            registered = canonical_artifact_filename(spec.get("filename"))
+        except ManifestAccessError:
+            # Strict manifest preflight reports the malformed spelling.
             continue
-        access = safe_entry_access(spec)
+        if registered != requested:
+            continue
+        access = effective_entry_access(spec, kind=kind)
         if is_hash_only(access):
             raise ManifestAccessError(
-                f"{manifest_path} registers {filename!r} for {entry_year} as "
+                f"{manifest_path} registers {requested!r} for {entry_year} as "
                 f"access={access!r}. Its bytes must not enter a Chronicle "
                 "store; keep the hash-only registration."
             )
@@ -1887,8 +2186,30 @@ def _publish_raw_manifest_entry(
     if not isinstance(spec, dict):
         spec = {}
         errors.append("malformed_file_spec")
-    filename = str(spec.get("filename") or "")
-    access = safe_entry_access(spec)
+    raw_filename = spec.get("filename")
+    filename = ""
+    if raw_filename:
+        try:
+            filename = canonical_artifact_filename(raw_filename)
+        except ManifestAccessError:
+            return (
+                RawArtifactPublishEntry(
+                    manifest_path=str(manifest_path),
+                    source_id=source_id,
+                    package_id=package_id,
+                    year=str(year),
+                    filename=str(raw_filename),
+                    local_path=str(manifest_path.parent),
+                    sha256=spec.get("sha256"),
+                    size_bytes=spec.get("size_bytes"),
+                    r2_location=None,
+                    upload=None,
+                    errors=("filename_not_bare_basename",),
+                ),
+                None,
+            )
+    kind_value = kind or safe_manifest_kind(manifest)[0]
+    access = effective_entry_access(spec, kind=kind_value)
     if is_hash_only(access):
         # Refuse before touching bytes: no Chronicle store holds a licensed or
         # restricted artifact, so there is nothing here to upload. The entry is
@@ -1897,7 +2218,7 @@ def _publish_raw_manifest_entry(
         hash_only_errors = list(
             validate_file_entry(
                 spec,
-                kind=kind or safe_manifest_kind(manifest)[0],
+                kind=kind_value,
                 manifest=manifest,
                 local_file_exists=(manifest_path.parent / filename).exists()
                 if filename
@@ -1926,7 +2247,7 @@ def _publish_raw_manifest_entry(
     errors.extend(
         validate_file_entry(
             spec,
-            kind=kind or safe_manifest_kind(manifest)[0],
+            kind=kind_value,
             manifest=manifest,
             local_file_exists=(manifest_path.parent / filename).exists()
             if filename
@@ -1982,7 +2303,7 @@ def _publish_raw_manifest_entry(
         return refuse(f"recorded_r2_locator_invalid:{error}")
     if recorded_r2 is not None and (recorded_r2.sha256, recorded_r2.filename) != (
         sha256_actual or "",
-        Path(filename).name,
+        filename,
     ):
         # The recorded object is addressed by different bytes, so it is not
         # this file's history. Uploading anyway would either publish under a
@@ -1994,7 +2315,7 @@ def _publish_raw_manifest_entry(
             f"recorded_sha256={recorded_r2.sha256}:"
             f"recorded_filename={recorded_r2.filename}:"
             f"local_sha256={sha256_actual}:"
-            f"local_filename={Path(filename).name}"
+            f"local_filename={filename}"
         )
 
     location = ArtifactStorageLocation(
@@ -2091,15 +2412,40 @@ def _inventory_entry(
     if not isinstance(spec, dict):
         spec = {}
         errors.append("malformed_file_spec")
-    filename = str(spec.get("filename") or "")
+    raw_filename = spec.get("filename")
+    filename = ""
+    if raw_filename:
+        try:
+            filename = canonical_artifact_filename(raw_filename)
+        except ManifestAccessError:
+            return ArtifactInventoryEntry(
+                manifest_path=str(manifest_path),
+                year=str(year),
+                filename=str(raw_filename),
+                local_path=str(manifest_path.parent),
+                exists=False,
+                sha256_expected=spec.get("sha256"),
+                sha256_actual=None,
+                size_bytes=spec.get("size_bytes"),
+                source_url=spec.get("source_url"),
+                r2=None,
+                errors=("filename_not_bare_basename",),
+                access=effective_entry_access(
+                    spec,
+                    kind=kind or safe_manifest_kind(manifest)[0],
+                ),
+                licence=spec.get("licence"),
+                hash_only=True,
+            )
     artifact_path = manifest_path.parent / filename
     exists = bool(filename) and artifact_path.exists()
-    access = safe_entry_access(spec)
+    kind_value = kind or safe_manifest_kind(manifest)[0]
+    access = effective_entry_access(spec, kind=kind_value)
     hash_only = is_hash_only(access)
     errors.extend(
         validate_file_entry(
             original_spec,
-            kind=kind or safe_manifest_kind(manifest)[0],
+            kind=kind_value,
             manifest=manifest,
             local_file_exists=exists,
         )

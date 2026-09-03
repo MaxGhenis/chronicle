@@ -48,7 +48,55 @@ MICRODATA_RELEASE_KIND = "microdata_release"
 MANIFEST_KINDS: tuple[str, ...] = (PUBLISHER_TABLE_KIND, MICRODATA_RELEASE_KIND)
 DEFAULT_MANIFEST_KIND = PUBLISHER_TABLE_KIND
 
+HASH_SOURCE_CHRONICLE_FETCH = "chronicle_fetch"
+HASH_SOURCE_CONSUMER_ATTESTED = "consumer_attested"
+HASH_SOURCE_CONSUMER_PIN = "consumer_pin"
+#: The closed set of ways a microdata checksum may enter Chronicle.
+HASH_SOURCES: tuple[str, ...] = (
+    HASH_SOURCE_CHRONICLE_FETCH,
+    HASH_SOURCE_CONSUMER_ATTESTED,
+    HASH_SOURCE_CONSUMER_PIN,
+)
+
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+_COMMIT_RE = re.compile(r"^[0-9a-f]{7,40}$")
+
+
+@dataclass(frozen=True)
+class RedistributableLicence:
+    """One exact public-byte licence identifier and its authority."""
+
+    name: str
+    basis: str
+    evidence_url: str
+
+
+# Exact identifiers keep the custody decision reviewable. A descriptive string
+# that merely mentions one of these terms is not allowlisted.
+REDISTRIBUTABLE_MICRODATA_LICENCES: Mapping[str, RedistributableLicence] = {
+    "US-GOVERNMENT-WORK-17-USC-105": RedistributableLicence(
+        name="U.S. Government work",
+        basis="17 U.S.C. §105",
+        evidence_url="https://www.copyright.gov/title17/92chap1.html#105",
+    ),
+    "OGL-3.0": RedistributableLicence(
+        name="Open Government Licence v3.0",
+        basis="UK Open Government Licence, version 3.0",
+        evidence_url=(
+            "https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/"
+        ),
+    ),
+    "CC0-1.0": RedistributableLicence(
+        name="CC0 1.0 Universal",
+        basis="Creative Commons CC0 1.0 legal code",
+        evidence_url="https://creativecommons.org/publicdomain/zero/1.0/legalcode",
+    ),
+    "CC-BY-4.0": RedistributableLicence(
+        name="Creative Commons Attribution 4.0 International",
+        basis="Creative Commons CC BY 4.0 legal code",
+        evidence_url="https://creativecommons.org/licenses/by/4.0/legalcode",
+    ),
+}
 
 # Registration entry key order, so emitted manifests are byte-stable.
 _REGISTRATION_FIELD_ORDER: tuple[str, ...] = (
@@ -63,8 +111,11 @@ _REGISTRATION_FIELD_ORDER: tuple[str, ...] = (
     "doi",
     "study",
     "fetched_at",
-    "verified_at",
     "hash_source",
+    "attested_by",
+    "verified_at",
+    "attestation_evidence",
+    "pinned_from",
     "notes",
 )
 
@@ -81,7 +132,8 @@ class MicrodataReleaseNotParseableError(ValueError):
     """Raised when a source package points at a registered microdata release.
 
     Registration is manifest-level: no source package parses a microdata
-    release, and no microdata row, cell, or fact enters Chronicle.
+    release, and no microdata records, rows, columns, row values, or cells
+    enter Chronicle.
     """
 
 
@@ -133,6 +185,100 @@ def normalize_access(access: str | None) -> str:
     return value
 
 
+def normalize_hash_source(hash_source: str | None) -> str:
+    """Return a hash-source value from the closed attestation vocabulary."""
+    value = _text(hash_source)
+    if value not in HASH_SOURCES:
+        raise ManifestAccessError(
+            f"Unknown hash_source {value!r}; expected one of {list(HASH_SOURCES)}."
+        )
+    return value
+
+
+def canonical_artifact_filename(filename: Any) -> str:
+    """Return a bare artifact basename, refusing every path spelling.
+
+    Both slash styles are rejected explicitly. Using ``Path.name`` alone on
+    POSIX would accept a Windows separator, while silently taking the basename
+    would let ``./adult.tab`` evade an existing ``adult.tab`` registration.
+    """
+    value = _text(filename)
+    if not value or value in {".", ".."} or "/" in value or "\\" in value:
+        raise ManifestAccessError(
+            "Artifact filename must be a bare basename with no path separators "
+            f"or dot segments; got {filename!r}."
+        )
+    return value
+
+
+def resolve_year_key(files: Mapping[Any, Any], year: Any) -> Any:
+    """Resolve an integer/string year to the one existing manifest key.
+
+    YAML may load an unquoted year as ``2023`` and a quoted year as ``"2023"``.
+    They identify one vintage. If a malformed manifest already carries both,
+    refuse rather than choosing one and leaving parallel state behind.
+    """
+    numeric_year: int | None = None
+    if isinstance(year, int) and not isinstance(year, bool):
+        numeric_year = year
+    elif isinstance(year, str) and re.fullmatch(r"0|[1-9][0-9]*", year):
+        numeric_year = int(year)
+    if numeric_year is None:
+        return year
+
+    candidates = (numeric_year, str(numeric_year))
+    present = [candidate for candidate in candidates if candidate in files]
+    if len(present) > 1:
+        raise ManifestAccessError(
+            f"Manifest files contains parallel year keys {numeric_year!r} and "
+            f"{str(numeric_year)!r}; Chronicle cannot choose between them."
+        )
+    return present[0] if present else year
+
+
+def manifest_filename_errors(manifest: Mapping[str, Any] | None) -> tuple[str, ...]:
+    """Return filename and alias-collision errors across a whole manifest."""
+    if not isinstance(manifest, Mapping):
+        return ()
+    files = manifest.get("files")
+    if not isinstance(files, Mapping):
+        return ()
+
+    errors: list[str] = []
+    seen: dict[str, tuple[str, Any]] = {}
+    for year, year_spec in files.items():
+        entries = year_spec if isinstance(year_spec, list) else (year_spec,)
+        for spec in entries:
+            if not isinstance(spec, Mapping) or "filename" not in spec:
+                continue
+            raw = spec.get("filename")
+            try:
+                canonical = canonical_artifact_filename(raw)
+            except ManifestAccessError:
+                errors.append(f"filename_not_bare_basename:{year}:{raw}")
+                # Still derive the spelling solely for collision reporting; it
+                # is never used to address a file.
+                text = _text(raw)
+                if not text:
+                    continue
+                canonical = text.replace("\\", "/").rsplit("/", 1)[-1]
+            previous = seen.get(canonical)
+            raw_text = str(raw)
+            if previous is not None and previous[0] != raw_text:
+                errors.append(
+                    "filename_alias_collision:"
+                    f"{canonical}:{previous[1]}:{previous[0]}:{year}:{raw_text}"
+                )
+            else:
+                seen.setdefault(canonical, (raw_text, year))
+    return tuple(_dedupe(errors))
+
+
+def is_redistributable_microdata_licence(licence: Any) -> bool:
+    """Whether ``licence`` is one exact allowlisted redistribution term."""
+    return _text(licence) in REDISTRIBUTABLE_MICRODATA_LICENCES
+
+
 def entry_access(spec: Any) -> str:
     """Return the access class a manifest file entry declares or inherits."""
     if not isinstance(spec, Mapping):
@@ -155,6 +301,24 @@ def safe_entry_access(spec: Any) -> str:
         return ACCESS_RESTRICTED
 
 
+def effective_entry_access(spec: Any, *, kind: str) -> str:
+    """Return the custody class after the microdata licence allowlist.
+
+    A microdata entry described as public without an exact allowlisted licence
+    is handled as licensed/hash-only. Publisher-table behavior is unchanged.
+    """
+    access = safe_entry_access(spec)
+    if (
+        kind == MICRODATA_RELEASE_KIND
+        and access == ACCESS_PUBLIC
+        and not is_redistributable_microdata_licence(
+            spec.get("licence") if isinstance(spec, Mapping) else None
+        )
+    ):
+        return ACCESS_LICENSED
+    return access
+
+
 def stores_bytes(access: str) -> bool:
     """Whether Chronicle may hold this access class's bytes."""
     return normalize_access(access) == ACCESS_PUBLIC
@@ -174,7 +338,10 @@ def registration_id(
     filename: str,
 ) -> str:
     """Return the registration identity tuple as a stable string."""
-    return f"{source_id}/{package_id}/{year}/{sha256}/{filename}"
+    return (
+        f"{source_id}/{package_id}/{year}/{sha256}/"
+        f"{canonical_artifact_filename(filename)}"
+    )
 
 
 def iter_file_specs(spec: Any, *, kind: str) -> tuple[Any, ...]:
@@ -211,6 +378,11 @@ def validate_file_entry(
         return ()
 
     errors: list[str] = []
+    if "filename" in spec:
+        try:
+            canonical_artifact_filename(spec.get("filename"))
+        except ManifestAccessError:
+            errors.append("filename_not_bare_basename")
     declared_access = spec.get("access")
     if declared_access is None:
         if kind == MICRODATA_RELEASE_KIND:
@@ -224,8 +396,17 @@ def validate_file_entry(
 
     if kind == MICRODATA_RELEASE_KIND and not _text(spec.get("licence")):
         errors.append("missing_licence")
+    if (
+        kind == MICRODATA_RELEASE_KIND
+        and access == ACCESS_PUBLIC
+        and not is_redistributable_microdata_licence(spec.get("licence"))
+    ):
+        errors.append("public_microdata_licence_not_allowlisted")
+    if kind == MICRODATA_RELEASE_KIND:
+        errors.extend(_microdata_attestation_errors(spec))
 
-    if is_hash_only(access):
+    effective_access = effective_entry_access(spec, kind=kind)
+    if is_hash_only(effective_access):
         errors.extend(
             _hash_only_entry_errors(
                 spec,
@@ -234,6 +415,45 @@ def validate_file_entry(
             )
         )
     return tuple(_dedupe(errors))
+
+
+def _microdata_attestation_errors(spec: Mapping[str, Any]) -> list[str]:
+    """Return the closed hash-attestation contract errors for one entry."""
+    errors: list[str] = []
+    hash_source = _text(spec.get("hash_source"))
+    if hash_source is None:
+        errors.append("missing_hash_source")
+    elif hash_source not in HASH_SOURCES:
+        errors.append(f"unknown_hash_source:{hash_source}")
+
+    if not _text(spec.get("verified_at")):
+        errors.append("missing_verified_at")
+
+    attested_by = _text(spec.get("attested_by"))
+    if not attested_by:
+        errors.append("missing_attested_by")
+    elif hash_source == HASH_SOURCE_CHRONICLE_FETCH and attested_by != "chronicle":
+        errors.append("chronicle_fetch_attester_must_be_chronicle")
+
+    if hash_source == HASH_SOURCE_CONSUMER_ATTESTED and not _text(
+        spec.get("attestation_evidence")
+    ):
+        errors.append("missing_attestation_evidence")
+    if hash_source == HASH_SOURCE_CONSUMER_PIN and not _valid_pinned_from(
+        spec.get("pinned_from")
+    ):
+        errors.append("missing_or_invalid_pinned_from")
+    return errors
+
+
+def _valid_pinned_from(value: Any) -> bool:
+    """Whether a consumer-pin pointer names repository, path, and commit."""
+    if not isinstance(value, Mapping):
+        return False
+    repository = _text(value.get("repository"))
+    path = _text(value.get("path"))
+    commit = _text(value.get("commit"))
+    return bool(repository and path and commit and _COMMIT_RE.fullmatch(commit))
 
 
 def _hash_only_entry_errors(
@@ -255,8 +475,8 @@ def _hash_only_entry_errors(
         errors.append("missing_vintage")
     if not _access_route(spec, manifest):
         errors.append("missing_access_route")
-    if not (_text(spec.get("verified_at")) or _text(spec.get("fetched_at"))):
-        errors.append("missing_verification_timestamp")
+    if not _text(spec.get("verified_at")):
+        errors.append("missing_verified_at")
     if local_file_exists:
         errors.append("bytes_present_for_hash_only_entry")
     if recorded_r2(spec):
@@ -359,6 +579,9 @@ def register_hash_only_artifact(
     fetched_at: str | None = None,
     verified_at: str | None = None,
     hash_source: str | None = None,
+    attested_by: str | None = None,
+    attestation_evidence: str | None = None,
+    pinned_from: Mapping[str, str] | None = None,
     notes: str | None = None,
     allow_reissue: bool = False,
 ) -> ArtifactRegistrationReport:
@@ -389,26 +612,45 @@ def register_hash_only_artifact(
         raise HashOnlyRegistrationError(
             f"A {access_class} registration must record the artifact vintage."
         )
-    artifact_name = _text(filename)
-    if not artifact_name or Path(artifact_name).name != artifact_name:
+    try:
+        artifact_name = canonical_artifact_filename(filename)
+    except ManifestAccessError as exc:
         raise HashOnlyRegistrationError(
             f"Registration filename must be a bare filename; got {filename!r}."
-        )
-    if not (_text(verified_at) or _text(fetched_at)):
+        ) from exc
+    if not _text(verified_at):
         raise HashOnlyRegistrationError(
             "A hash-only registration must record when the checksum was "
             "verified; pass --verified-at."
         )
-
-    output = Path(output_dir)
-    local_path = output / artifact_name
-    if local_path.exists():
+    try:
+        hash_source_value = normalize_hash_source(hash_source)
+    except ManifestAccessError as exc:
+        raise HashOnlyRegistrationError(str(exc)) from exc
+    attester = _text(attested_by)
+    if not attester:
         raise HashOnlyRegistrationError(
-            f"Refusing to register {artifact_name!r} hash-only while its bytes "
-            f"are present at {local_path}. A {access_class} artifact's bytes "
-            "must not live in a Chronicle store."
+            "A microdata registration must identify its attester; pass --attested-by."
+        )
+    if hash_source_value == HASH_SOURCE_CHRONICLE_FETCH and attester != "chronicle":
+        raise HashOnlyRegistrationError(
+            "hash_source='chronicle_fetch' requires attested_by='chronicle'."
+        )
+    if hash_source_value == HASH_SOURCE_CONSUMER_ATTESTED and not _text(
+        attestation_evidence
+    ):
+        raise HashOnlyRegistrationError(
+            "hash_source='consumer_attested' requires --attestation-evidence."
+        )
+    if hash_source_value == HASH_SOURCE_CONSUMER_PIN and not _valid_pinned_from(
+        pinned_from
+    ):
+        raise HashOnlyRegistrationError(
+            "hash_source='consumer_pin' requires pinned_from repository, path, "
+            "and commit evidence."
         )
 
+    output = Path(output_dir)
     manifest_path = output / "manifest.yaml"
     payload = _load_manifest(manifest_path)
     existing_kind = manifest_kind(payload)
@@ -416,6 +658,12 @@ def register_hash_only_artifact(
         raise HashOnlyRegistrationError(
             f"{manifest_path} is a {existing_kind} manifest; hash-only "
             "registrations belong in a kind: microdata_release manifest."
+        )
+    filename_errors = manifest_filename_errors(payload)
+    if filename_errors:
+        raise HashOnlyRegistrationError(
+            f"{manifest_path} has unsafe artifact filenames: "
+            f"{', '.join(filename_errors)}."
         )
 
     entry = _registration_entry(
@@ -431,7 +679,10 @@ def register_hash_only_artifact(
         study=study,
         fetched_at=fetched_at,
         verified_at=verified_at,
-        hash_source=hash_source,
+        hash_source=hash_source_value,
+        attested_by=attester,
+        attestation_evidence=attestation_evidence,
+        pinned_from=dict(pinned_from) if pinned_from is not None else None,
         notes=notes,
     )
     route_context = dict(payload)
@@ -455,9 +706,24 @@ def register_hash_only_artifact(
         payload.setdefault("source_page", source_page)
     if table:
         payload.setdefault("table", table)
-    payload.setdefault("files", {})
+    files = payload.setdefault("files", {})
+    if not isinstance(files, dict):
+        raise HashOnlyRegistrationError(
+            f"{manifest_path} files must be a mapping, not {type(files).__name__}."
+        )
+    try:
+        year_key = resolve_year_key(files, year)
+    except ManifestAccessError as exc:
+        raise HashOnlyRegistrationError(str(exc)) from exc
 
-    entries = _existing_entries(payload["files"], year)
+    entries = _existing_entries(files, year_key)
+    local_path = output / artifact_name
+    if local_path.exists():
+        raise HashOnlyRegistrationError(
+            f"Refusing to register {artifact_name!r} hash-only while its bytes "
+            f"are present at {local_path}. A {access_class} artifact's bytes "
+            "must not live in a Chronicle store."
+        )
     # Two passes, so re-registering an existing pin stays idempotent even after
     # a reissue has added a second entry for the same filename. A single pass
     # would raise on the first filename match with a different checksum before
@@ -469,7 +735,15 @@ def register_hash_only_artifact(
         if _text(existing.get("filename")) != artifact_name:
             continue
         if _text(existing.get("sha256")) == checksum:
-            entries[index] = entry
+            storage = existing.get("storage")
+            if isinstance(storage, Mapping) and "r2" in storage:
+                raise HashOnlyRegistrationError(
+                    f"Refusing to reclassify {artifact_name!r} as "
+                    f"{access_class}: its identity still records storage.r2. "
+                    "Remove the public object and its locator with verifiable "
+                    "evidence before registering it hash-only."
+                )
+            entries[index] = {**dict(existing), **entry}
             replaced = True
             break
     if not replaced:
@@ -489,7 +763,7 @@ def register_hash_only_artifact(
         # A reissue sits alongside the pin it supersedes.
         entries.append(entry)
 
-    payload["files"][year] = sorted(entries, key=_entry_sort_key)
+    files[year_key] = entries
     output.mkdir(parents=True, exist_ok=True)
     manifest_path.write_text(
         yaml.safe_dump(payload, sort_keys=False, allow_unicode=True),
@@ -600,6 +874,10 @@ __all__ = [
     "ACCESS_PUBLIC",
     "ACCESS_RESTRICTED",
     "ArtifactRegistrationReport",
+    "HASH_SOURCES",
+    "HASH_SOURCE_CHRONICLE_FETCH",
+    "HASH_SOURCE_CONSUMER_ATTESTED",
+    "HASH_SOURCE_CONSUMER_PIN",
     "DEFAULT_ACCESS",
     "DEFAULT_MANIFEST_KIND",
     "HashOnlyRegistrationError",
@@ -609,15 +887,22 @@ __all__ = [
     "ManifestAccessError",
     "MicrodataReleaseNotParseableError",
     "PUBLISHER_TABLE_KIND",
+    "REDISTRIBUTABLE_MICRODATA_LICENCES",
+    "RedistributableLicence",
+    "canonical_artifact_filename",
+    "effective_entry_access",
     "entry_access",
     "is_hash_only",
     "is_microdata_release",
     "iter_file_specs",
     "manifest_kind",
+    "manifest_filename_errors",
     "normalize_access",
+    "normalize_hash_source",
     "recorded_r2",
     "register_hash_only_artifact",
     "registration_id",
+    "resolve_year_key",
     "safe_entry_access",
     "safe_manifest_kind",
     "stores_bytes",
