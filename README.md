@@ -448,13 +448,10 @@ input under IRC section 62 rather than an exact statutory term.
 This lets Chronicle share vocabulary with Axiom legal terms without importing Axiom
 runtime code.
 
-To validate source-to-canonical concept alignments against an installed Axiom
-concept CLI outside the full suite:
+To inspect source-to-canonical concept alignment metadata outside the full suite:
 
 ```bash
-uv run chronicle validate-concept-alignments --input /tmp/chronicle-soi-facts.jsonl \
-  --axiom-cli axiom \
-  --axiom-root ../rules-us
+uv run chronicle validate-concept-alignments --input /tmp/chronicle-soi-facts.jsonl
 ```
 
 The command emits JSON with the alignments checked, validation errors, and
@@ -463,6 +460,12 @@ warns that external concept validation was skipped. `build-suite` accepts the
 same `--axiom-cli` and `--axiom-root` flags, plus
 `--require-axiom-validation` when skipped concept checks should fail agent
 acceptance.
+
+External validation requires a compatible implementation of the
+[documented command protocol](docs/schemas/concept-alignment-report.md#what-counts-as-a-successful-axiom-check).
+That protocol has not been verified against an actual Axiom CLI release. Do not
+assume that passing `--axiom-cli axiom` enables concept validation. The protocol
+tests use fixture executables and do not establish real Axiom compatibility.
 
 ### 4. Run Chronicle Explorer
 
