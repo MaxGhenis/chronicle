@@ -82,7 +82,7 @@ def test_build_source_suite_writes_artifacts_and_reports(tmp_path):
     assert summary["counts"] == {
         "artifact_count": 1,
         "agent_acceptance_error_count": 0,
-        "concept_alignment_count": 1,
+        "concept_alignment_count": 20,
         "constraint_count": 144,
         "consumer_fact_count": 80,
         "fact_count": 80,
@@ -168,7 +168,7 @@ def test_build_source_suite_supports_soi_table_1_4(tmp_path):
     assert summary["counts"] == {
         "artifact_count": 1,
         "agent_acceptance_error_count": 0,
-        "concept_alignment_count": 8,
+        "concept_alignment_count": 160,
         "constraint_count": 1044,
         "consumer_fact_count": 580,
         "fact_count": 580,
@@ -771,7 +771,7 @@ def test_build_source_suite_accepts_required_axiom_validation(tmp_path):
     summary = json.loads((output_dir / "reports" / "build_summary.json").read_text())
 
     assert report.valid
-    assert summary["reports"]["concept_alignments"]["checked_count"] == 1
+    assert summary["reports"]["concept_alignments"]["checked_count"] == 20
     assert summary["reports"]["agent_acceptance"]["warnings"] == []
     assert summary["reports"]["agent_acceptance"]["checks"][
         "required_concept_alignments_validated"
