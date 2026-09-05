@@ -23,6 +23,7 @@ approved_agents:
     purpose: Change Chronicle schemas, identity, provenance, or consumer contracts.
     allowed_paths:
       - chronicle/core.py
+      - chronicle/concepts.py
       - chronicle/consumer_contract.py
       - policyengine_chronicle/**
       - docs/schemas/**
