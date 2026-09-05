@@ -41,19 +41,38 @@ when **all** of the following hold:
 
 - the process exited `0`;
 - stdout parses as a JSON object (not a scalar or list);
-- its `concept_id`, if present, matches the concept that was requested;
+- its `concept_id` key, if present at all (including an explicit
+  `null`), matches the concept that was requested — an *absent* key is
+  the only case treated as "the CLI doesn't echo this field" and skips
+  the check; a present `null` is compared like any other value and
+  fails to match a non-empty requested concept id;
 - its `valid` field is the literal boolean `true` (not a truthy
   non-boolean such as `"true"` or `1`);
+- its `errors` field, if present and non-`null`, is a JSON list — a
+  present non-list `errors` value (a string, object, or number) is
+  rejected outright, regardless of `valid`; an absent or explicit
+  `null` `errors` field is treated as "no errors reported", preserving
+  compatibility with CLIs that omit it;
 - it does not simultaneously report `valid: true` and a non-empty
   `errors` list.
 
 Any other combination — nonzero exit with `valid: true`, a missing or
-non-boolean `valid` field, a mismatched `concept_id`, non-object JSON,
-or a contradictory `valid`/`errors` pair — is treated as an invalid
-concept check, never as success. A process that fails to start or
-exceeds the bounded timeout (`axiom_timeout`, default 30s) is reported
-as an `axiom_cli_timeout` / `axiom_cli_unavailable` warning and checking
+non-boolean `valid` field, a non-list `errors` field, a mismatched or
+explicitly-null `concept_id`, non-object JSON, or a contradictory
+`valid`/`errors` pair — is treated as an invalid concept check, never
+as success. A process that fails to start or exceeds the bounded
+timeout (`axiom_timeout`, default 30s) is reported as an
+`axiom_cli_timeout` / `axiom_cli_unavailable` warning and checking
 stops for that call; it is never reported as a passing check.
+
+`axiom_timeout` is validated before any alignment is collected or any
+subprocess is launched: it must be a finite, positive, non-boolean
+`int` or `float`. `None`, `NaN`, `+inf`/`-inf`, zero, negative numbers,
+non-numeric values, and `bool` (which is a subtype of `int` in Python,
+so `True`/`False` are excluded explicitly) all raise `ValueError`
+immediately — a bad timeout is a caller configuration error, not
+something that can silently degrade into "never times out" or "times
+out instantly".
 
 ## Remaining real-interface gap
 
