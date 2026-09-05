@@ -391,3 +391,28 @@ def test_consumer_rejects_artifact_members_outside_its_directory(tmp_path, sourc
     member.symlink_to(outside)
     with pytest.raises(ValueError, match="escapes"):
         load_documentation_artifact(output)
+
+
+def test_consumer_refuses_float_page_index_before_member_access(tmp_path, source, pdf):
+    claim = claim_for(source, pdf)
+    output = tmp_path / "artifact"
+    write_documentation_artifact(output, [claim], pdfs={source.artifact.sha256: pdf})
+    claim["evidence"]["pdf_page_index"] = 0.0
+    rewrite_claims(output, [claim])
+    with pytest.raises(ValueError, match="page_index"):
+        load_documentation_artifact(output)
+
+
+def test_json_equivalent_profile_number_preserves_excerpt_identity(
+    tmp_path, source, pdf
+):
+    claim = claim_for(source, pdf)
+    output = tmp_path / "artifact"
+    write_documentation_artifact(output, [claim], pdfs={source.artifact.sha256: pdf})
+    original_key = claim["claim_key"]
+    # JSON Schema accepts these as the same number. A consumer reserializing
+    # the profile must not change the PDF, span, text or excerpt identity.
+    claim["evidence"]["extractor"]["settings"]["space_width"] = 200
+    rewrite_claims(output, [claim])
+    loaded = load_documentation_artifact(output)
+    assert loaded.claims[0]["claim_key"] == original_key

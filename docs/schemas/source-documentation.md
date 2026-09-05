@@ -73,6 +73,11 @@ OCR or normalization. `automated_exact_text` describes the actual verification;
 it does not claim that a human inspected the page. Scanned/image-only pages
 without text cannot produce a nonempty claim through this API.
 
+Wheel consumers must explicitly resolve `pypdf==6.11.0` when using this optional
+API. The package's broader dependency range does not select this extraction
+profile outside the repository lock. Existing aggregate consumers do not need
+to adopt the documentation API or its extraction environment.
+
 ## Identity and annotations
 
 The key is SHA-256 of canonical JSON containing the original PDF SHA-256,
@@ -81,6 +86,9 @@ the zero-based PDF page index, exact page-text SHA-256, extractor profile and
 half-open byte span. Changing the PDF, page, span, extraction profile, text or
 claim kind changes the key. This intentionally rekeys an excerpt when its
 extraction environment changes, even if its display looks identical.
+The fixed extractor profile uses its canonical producer representation in the
+key: equivalent JSON numbers such as `200` and `200.0` do not rekey the excerpt.
+Page indexes and byte offsets must be actual integers in the Python API.
 
 Publisher/source descriptive metadata, the printed page label, item ID,
 heading, language, survey vintage, interview mode and display text do not enter

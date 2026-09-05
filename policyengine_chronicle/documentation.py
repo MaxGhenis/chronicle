@@ -61,6 +61,8 @@ def load_documentation_artifact(path: str | Path) -> DocumentationArtifact:
         sources[digest] = row["source"]
         keys.add(row["claim_key"])
         index = row["evidence"]["pdf_page_index"]
+        if type(index) is not int:
+            raise ValueError("PDF page_index must be a nonnegative integer")
         pdf_bytes = _read_member(root, f"sources/{digest}.pdf")
         page_bytes = _read_member(root, f"pages/{digest}/{index}.utf8")
         validate_documentation_claim(row, pdf_bytes, page_text_bytes=page_bytes)

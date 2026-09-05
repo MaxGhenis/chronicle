@@ -109,10 +109,15 @@ def extract_documentation_page(
 
 
 def _claim_key(claim: Mapping[str, Any]) -> str:
+    evidence = dict(claim["evidence"])
+    # The closed schema permits only this profile. Encode its canonical form
+    # so JSON-equivalent settings (200 versus 200.0) retain existing keys.
+    # Schema validation still rejects any different extraction profile.
+    evidence["extractor"] = EXTRACTOR
     identity = {
         "pdf_sha256": claim["source"]["artifact"]["sha256"],
         "claim_kind": claim["claim_kind"],
-        "evidence": claim["evidence"],
+        "evidence": evidence,
         "literal_text": claim["literal_text"],
     }
     return f"{CLAIM_SCHEMA_VERSION}:{_sha(_json_bytes(identity))}"
