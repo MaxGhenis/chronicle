@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import subprocess
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -107,6 +108,28 @@ def collect_concept_alignments(
 DEFAULT_AXIOM_VALIDATE_TIMEOUT_SECONDS = 30.0
 
 
+def _validate_axiom_timeout(value: Any) -> float:
+    """Reject any axiom_timeout override that could never bound a subprocess call.
+
+    Must be a finite, positive, real number — never ``None``, ``NaN``,
+    infinite, zero/negative, or a ``bool`` (a ``bool`` is technically an
+    ``int`` in Python, so it is excluded explicitly).
+    """
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(
+            f"axiom_timeout must be a finite, positive number; got {value!r}."
+        )
+    if math.isnan(value) or math.isinf(value):
+        raise ValueError(
+            f"axiom_timeout must be a finite, positive number; got {value!r}."
+        )
+    if value <= 0:
+        raise ValueError(
+            f"axiom_timeout must be a finite, positive number; got {value!r}."
+        )
+    return float(value)
+
+
 def validate_concept_alignments(
     facts: list[AggregateFact],
     *,
@@ -115,6 +138,7 @@ def validate_concept_alignments(
     axiom_timeout: float = DEFAULT_AXIOM_VALIDATE_TIMEOUT_SECONDS,
 ) -> ConceptAlignmentReport:
     """Validate Chronicle concept alignments against optional Axiom CLI metadata."""
+    axiom_timeout = _validate_axiom_timeout(axiom_timeout)
     alignments = collect_concept_alignments(facts)
     errors = list(_alignment_metadata_errors(alignments))
     warnings: list[ConceptAlignmentIssue] = []
@@ -287,13 +311,16 @@ def _resolve_axiom_result(
     returncode: int,
 ) -> dict[str, Any]:
     """Apply strict boolean/exit-status checks to a parsed Axiom CLI response."""
-    response_concept_id = payload.get("concept_id")
-    if response_concept_id is not None and response_concept_id != concept_id:
-        return _invalid_axiom_result(
-            "axiom_cli_concept_mismatch",
-            f"Axiom CLI response concept_id {response_concept_id!r} does not "
-            f"match the requested concept {concept_id!r}.",
-        )
+    if "concept_id" in payload:
+        # A present key — even an explicit `null` — is an echo attempt, and
+        # must match; an absent key means the CLI never echoes it (compat).
+        response_concept_id = payload["concept_id"]
+        if response_concept_id != concept_id:
+            return _invalid_axiom_result(
+                "axiom_cli_concept_mismatch",
+                f"Axiom CLI response concept_id {response_concept_id!r} does not "
+                f"match the requested concept {concept_id!r}.",
+            )
 
     valid_field = payload.get("valid")
     if valid_field is not True and valid_field is not False:
@@ -303,7 +330,14 @@ def _resolve_axiom_result(
         )
 
     errors_field = payload.get("errors")
-    has_reported_errors = isinstance(errors_field, list) and bool(errors_field)
+    if errors_field is not None and not isinstance(errors_field, list):
+        # Present and non-null must be a list; absent/null keeps the
+        # existing no-errors-reported compatibility path.
+        return _invalid_axiom_result(
+            "invalid_axiom_cli_output",
+            "Axiom CLI 'errors' field must be a list.",
+        )
+    has_reported_errors = bool(errors_field)
 
     if valid_field and has_reported_errors:
         return _invalid_axiom_result(

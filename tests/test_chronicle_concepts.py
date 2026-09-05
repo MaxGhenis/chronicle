@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 import textwrap
 
+import pytest
+
 from chronicle.concepts import (
     collect_concept_alignments,
     validate_concept_alignments,
@@ -348,6 +350,135 @@ def test_validate_concept_alignments_rejects_mismatched_concept_id(tmp_path):
     assert not report.valid
     assert report.checked_count == 1
     assert [error.code for error in report.errors] == ["axiom_concept_invalid"]
+
+
+def test_validate_concept_alignments_rejects_non_list_errors_field(tmp_path):
+    for index, malformed_errors in enumerate(
+        ["source unavailable", {"message": "bad concept"}, 1]
+    ):
+        axiom_cli = _write_scripted_axiom_cli(
+            tmp_path,
+            stdout_payload={
+                "concept_id": AXIOM_CREDIT_CONCEPT,
+                "valid": True,
+                "errors": malformed_errors,
+            },
+            exit_code=0,
+            name=f"axiom-malformed-errors-{index}",
+        )
+
+        report = validate_concept_alignments(
+            [_credit_fact()],
+            axiom_command=[str(axiom_cli)],
+            axiom_roots=[tmp_path / "rules-us"],
+        )
+
+        assert not report.valid
+        assert report.checked_count == 1
+        assert [error.code for error in report.errors] == ["axiom_concept_invalid"]
+
+
+def test_validate_concept_alignments_accepts_null_or_omitted_errors_field(tmp_path):
+    for index, payload in enumerate(
+        [
+            {"concept_id": AXIOM_CREDIT_CONCEPT, "valid": True, "errors": None},
+            {"concept_id": AXIOM_CREDIT_CONCEPT, "valid": True},
+        ]
+    ):
+        axiom_cli = _write_scripted_axiom_cli(
+            tmp_path,
+            stdout_payload=payload,
+            exit_code=0,
+            name=f"axiom-null-errors-{index}",
+        )
+
+        report = validate_concept_alignments(
+            [_credit_fact()],
+            axiom_command=[str(axiom_cli)],
+            axiom_roots=[tmp_path / "rules-us"],
+        )
+
+        assert report.valid
+        assert report.checked_count == 1
+        assert report.errors == ()
+
+
+def test_validate_concept_alignments_rejects_explicit_null_concept_id(tmp_path):
+    axiom_cli = _write_scripted_axiom_cli(
+        tmp_path,
+        stdout_payload={
+            "concept_id": None,
+            "valid": True,
+            "errors": [],
+        },
+        exit_code=0,
+    )
+
+    report = validate_concept_alignments(
+        [_credit_fact()],
+        axiom_command=[str(axiom_cli)],
+        axiom_roots=[tmp_path / "rules-us"],
+    )
+
+    assert not report.valid
+    assert report.checked_count == 1
+    assert [error.code for error in report.errors] == ["axiom_concept_invalid"]
+
+
+def test_validate_concept_alignments_accepts_absent_concept_id_echo(tmp_path):
+    axiom_cli = _write_scripted_axiom_cli(
+        tmp_path,
+        stdout_payload={"valid": True, "errors": []},
+        exit_code=0,
+    )
+
+    report = validate_concept_alignments(
+        [_credit_fact()],
+        axiom_command=[str(axiom_cli)],
+        axiom_roots=[tmp_path / "rules-us"],
+    )
+
+    assert report.valid
+    assert report.checked_count == 1
+    assert report.errors == ()
+
+
+@pytest.mark.parametrize(
+    "bad_timeout",
+    [None, float("nan"), float("inf"), float("-inf"), 0, -1, -1.0, True, False, "5"],
+)
+def test_validate_concept_alignments_rejects_invalid_axiom_timeout(
+    bad_timeout, tmp_path
+):
+    axiom_cli = _write_fake_axiom_cli(tmp_path)
+
+    with pytest.raises(ValueError):
+        validate_concept_alignments(
+            [_credit_fact()],
+            axiom_command=[str(axiom_cli)],
+            axiom_roots=[tmp_path / "rules-us"],
+            axiom_timeout=bad_timeout,
+        )
+
+
+@pytest.mark.parametrize("bad_timeout", [None, float("nan"), 0, True])
+def test_axiom_timeout_validated_even_without_axiom_command(bad_timeout):
+    with pytest.raises(ValueError):
+        validate_concept_alignments([], axiom_timeout=bad_timeout)
+
+
+def test_validate_concept_alignments_accepts_integer_axiom_timeout(tmp_path):
+    axiom_cli = _write_fake_axiom_cli(tmp_path)
+
+    report = validate_concept_alignments(
+        [_credit_fact()],
+        axiom_command=[str(axiom_cli)],
+        axiom_roots=[tmp_path / "rules-us"],
+        axiom_timeout=5,
+    )
+
+    assert report.valid
+    assert report.checked_count == 1
 
 
 def test_validate_concept_alignments_timeout_is_not_a_success(tmp_path):
