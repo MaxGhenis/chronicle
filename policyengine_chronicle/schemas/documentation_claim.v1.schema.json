@@ -1,0 +1,254 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "chronicle.documentation_claim.v1",
+  "title": "Source documentation claim v1",
+  "$comment": "Publisher excerpt with exact extracted text. Caller annotations are not publisher assertions. No facts, microdata, model interpretations, registration, or epoch aliases.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "kind",
+    "claim_key",
+    "claim_kind",
+    "assertion",
+    "source",
+    "evidence",
+    "literal_text",
+    "verification",
+    "annotations"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "chronicle.documentation_claim.v1"
+    },
+    "kind": {
+      "const": "source_documentation"
+    },
+    "claim_key": {
+      "type": "string",
+      "pattern": "^chronicle\\.documentation_claim\\.v1:[0-9a-f]{64}$"
+    },
+    "claim_kind": {
+      "enum": [
+        "question_text",
+        "routing",
+        "respondent_instruction",
+        "definition",
+        "universe",
+        "code_definition",
+        "methodology_statement"
+      ]
+    },
+    "assertion": {
+      "const": "publisher_documentation"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact",
+        "publisher",
+        "document_role",
+        "kind",
+        "custody_status"
+      ],
+      "properties": {
+        "artifact": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "source_name",
+            "source_table",
+            "source_file",
+            "url",
+            "vintage",
+            "sha256",
+            "size_bytes",
+            "extracted_at",
+            "extraction_method",
+            "raw_r2_bucket",
+            "raw_r2_key",
+            "raw_r2_uri"
+          ],
+          "properties": {
+            "source_name": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "\\S"
+            },
+            "source_table": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "\\S"
+            },
+            "source_file": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "\\S"
+            },
+            "url": {
+              "type": "string",
+              "pattern": "^https?://[^\\s]+$"
+            },
+            "vintage": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "\\S"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "size_bytes": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "extracted_at": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "\\S"
+            },
+            "extraction_method": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "\\S"
+            },
+            "raw_r2_bucket": {
+              "type": "null"
+            },
+            "raw_r2_key": {
+              "type": "null"
+            },
+            "raw_r2_uri": {
+              "type": "null"
+            }
+          }
+        },
+        "publisher": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "document_role": {
+          "enum": [
+            "questionnaire",
+            "subject_definitions",
+            "respondent_help",
+            "codebook",
+            "methodology_paper"
+          ]
+        },
+        "kind": {
+          "const": "source_documentation"
+        },
+        "custody_status": {
+          "const": "local_unregistered"
+        }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pdf_page_index",
+        "page_text_sha256",
+        "byte_start",
+        "byte_end",
+        "extractor"
+      ],
+      "properties": {
+        "pdf_page_index": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "page_text_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "byte_start": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "byte_end": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "extractor": {
+          "const": {
+            "library": "pypdf",
+            "version": "6.11.0",
+            "method": "PageObject.extract_text",
+            "settings": {
+              "extraction_mode": "plain",
+              "orientations": [
+                0,
+                90,
+                180,
+                270
+              ],
+              "space_width": 200,
+              "reader_strict": true
+            }
+          }
+        }
+      }
+    },
+    "literal_text": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\S"
+    },
+    "verification": {
+      "const": "automated_exact_text"
+    },
+    "annotations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "instrument_mode"
+      ],
+      "properties": {
+        "instrument_mode": {
+          "enum": [
+            "unknown",
+            "paper",
+            "web",
+            "telephone",
+            "in_person",
+            "all_modes"
+          ]
+        },
+        "printed_page_label": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "item_id": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "heading": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "language": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "survey_vintage": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "display_text": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        }
+      }
+    }
+  }
+}

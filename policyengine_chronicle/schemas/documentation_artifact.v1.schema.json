@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "chronicle.documentation_artifact.v1",
+  "title": "Local source documentation artifact v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "kind",
+    "custody_status",
+    "claim_schema_sha256",
+    "claims_sha256",
+    "claim_count"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "chronicle.documentation_artifact.v1"
+    },
+    "kind": {
+      "const": "source_documentation"
+    },
+    "custody_status": {
+      "const": "local_unregistered"
+    },
+    "claim_schema_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "claims_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "claim_count": {
+      "type": "integer",
+      "minimum": 1
+    }
+  }
+}
