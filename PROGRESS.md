@@ -1,51 +1,50 @@
-# Lane C5 progress
+# Concept-validation integrity correction — progress
 
-## State
+## Scope
+Bounded fix to `chronicle/concepts.py` for two demonstrated issues, per
+`/Users/maxghenis/architecture-reviews/microcosm-20260904/chronicle-axiom-root-correction.md`:
 
-- Branch: `be-2025-vintages` from `origin/main` at `5c15bfd`.
-- Worktree inputs are staged under `.lane-raw/` and must remain uncommitted.
-- Lane C5 is complete, validated, independently reviewed, and ready for handoff.
-- The requested staged C2 report is absent, but root `LANE_C2_REPORT.md` is byte-identical
-  to the sibling lane's staged copy (SHA-256 `4590e0dc...50f06e7`) and is the pattern used.
+1. `collect_concept_alignments` dedupes on `(source_concept, canonical_concept,
+   relation, legal_vintage)` via `dict.setdefault`, silently dropping distinct
+   fact keys / source record IDs / authorities / evidence when two facts share
+   those four fields but differ elsewhere.
+2. `_run_axiom_validate` ignores the subprocess exit code and accepts a truthy
+   non-boolean `valid` field, so a nonzero exit with `"valid": true` (or a
+   non-boolean truthy value) is reported as a successful concept check.
+
+Base: `origin/main` @ `743742c27c4c86c95769e1a602aa7f7ddc7018d1` (verified —
+branch is up to date with this commit, working tree was clean at start).
+
+Allowed files: `chronicle/concepts.py`, `tests/test_chronicle_concepts.py`,
+one short doc under `docs/schemas/`, plus this PROGRESS.md and (conditionally)
+`.github/chronicle-agents.yml` allowed_paths for `ledger-contract-maintainer`.
+No other files touched. No push/merge/deploy. No history/db/schema mutation.
+
+## State: in progress
 
 ## Done
-
-- Read the repository Chronicle boundary rules in `AGENTS.md`.
-- Read `.lane-raw/SOURCES.md` and confirmed all five named publisher artifacts are present.
-- Confirmed the worktree is otherwise clean apart from `.lane-raw/` and the shared `.venv` link.
-- Verified all five staged artifact SHA-256 pins exactly.
-- Mapped FPB workbook cells: 990 facts across T01/T06/T07/T11/T17/T24, with
-  2022–2025 observations and 2026–2031 `source_projection` facts.
-- Confirmed PDF boundary evidence: printed page 19 calls 2026 the first projection year;
-  annex table units appear on printed pages 45, 48, 49, 53, 58, and 65.
-- Chosen Eurostat layout: two vintage-specific source-package aliases share new manifest
-  entries, preserving the prior package YAMLs, raw bytes, and fact outputs unchanged.
-- Reproduced the Statbel curator logic: 18 NUTS1 × sex × age-band cells totaling 11,825,551.
-- Added the hash-pinned FPB workbook and publication PDF plus the
-  `fpb-economic-outlook-2026-2031-june-2026` package alias.
-- Built 990 line-specific publisher facts (99 per year): 396 observations for
-  2022–2025 and 594 `source_projection` facts for 2026–2031.
-- Passed FPB `validate-package` and `build-suite`: 990 facts, full cell lineage,
-  zero acceptance errors, and pinned 2025 cells 320578 / 77771 / 5602 million euro.
-- Re-ran the Statbel 2026 curator logic on the 2025 ZIP and added the hash-pinned
-  raw capture plus its deterministic 18-row curated CSV.
-- Passed Statbel 2025 `validate-package` and `build-suite`: 18 facts totaling
-  11,825,551, 66 constraints, full lineage, and zero acceptance errors.
-- Added the Eurostat `gov_10a_taxag` 2025 and `spr_exp_func` 2024 manifest
-  entries plus vintage-specific package aliases, without modifying either
-  prior artifact or prior package specification.
-- Passed both new Eurostat package validations and suite builds: 12 tax facts
-  and 9 ESSPROS facts, full lineage, and zero acceptance errors.
-- Extended Belgium and Eurostat regressions for FPB table counts/cells and
-  assertion boundary, vintage non-overlap, prior-output digests, Statbel pins,
-  and the declared 0.25% Statbel/FPB population comparison tolerance.
-- Passed 43 focused tests and the full merged-bundle regression: 157,177 facts,
-  148 packages, zero aggregate-key duplicates, and expected goldens throughout.
-- Recorded pins, counts, boundary evidence, curator commands, validation tails,
-  and consumer fact families in `LANE_C5_REPORT.md`.
-- Passed independent `ledger-source-fidelity` and `ledger-boundary` reviews with
-  no required corrections.
+- [x] Verified worktree/branch/base match the assignment exactly.
+- [x] Read AGENTS.md, .github/chronicle-agents.yml, chronicle/concepts.py,
+      tests/test_chronicle_concepts.py, chronicle/core.py (build_fact_key /
+      _canonical_key_payload), chronicle/harness.py CLI call sites, and the
+      root-correction report.
+- [x] Confirmed baseline: `uv run pytest tests/test_chronicle_concepts.py -q`
+      → 6 passed on the unmodified checkout.
 
 ## Next
-
-- None; ready for handoff. No push was performed.
+- [ ] Write failing tests for issue 1 (dedup/evidence-loss) and issue 2
+      (exit-status / non-boolean valid / mismatched concept_id / timeout).
+- [ ] Confirm red.
+- [ ] Fix `collect_concept_alignments` to preserve all distinct complete
+      `ConceptAlignment` assertions in stable order, collapsing only exact
+      duplicates; keep the fixture whose only difference is fact value
+      deduped (identical fact identity/evidence).
+- [ ] Fix `_run_axiom_validate` to require exit 0 AND strict boolean
+      `valid: true`, add a bounded timeout with clear unavailable reporting,
+      and reject mismatched/malformed `concept_id`.
+- [ ] Confirm green; run full relevant regression suite.
+- [ ] Add short doc under `docs/schemas/` on report semantics + remaining
+      real-Axiom-interface gap (no invented protocol claims).
+- [ ] Governance: add `chronicle/concepts.py` to `ledger-contract-maintainer`
+      allowed_paths in `.github/chronicle-agents.yml` if required.
+- [ ] Lint/format, final diff review, freeze commit, write author report.
