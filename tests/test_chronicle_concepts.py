@@ -514,9 +514,7 @@ def test_zero_exit_cannot_override_explicit_invalid_concept(tmp_path):
     command = _write_scripted_axiom_cli(
         tmp_path, stdout_payload={"valid": False, "errors": []}, exit_code=0
     )
-    report = validate_concept_alignments(
-        [_credit_fact()], axiom_command=[str(command)]
-    )
+    report = validate_concept_alignments([_credit_fact()], axiom_command=[str(command)])
     assert report.checked_count == 1
     assert not report.valid
     assert [error.code for error in report.errors] == ["axiom_concept_invalid"]
