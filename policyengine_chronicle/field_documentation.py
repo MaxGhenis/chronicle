@@ -143,6 +143,14 @@ def load_field_documentation(
     if subject["anchor"]["scope"] != "subject":
         raise ValueError("Field anchor must identify its subject")
     anchor = resolve(subject["anchor"])
+    expected_anchor_kind = (
+        "definition" if subject["kind"] == "dictionary_field" else "question_text"
+    )
+    if anchor["claim_kind"] != expected_anchor_kind:
+        raise ValueError(
+            f"Subject anchor claim kind must be {expected_anchor_kind} "
+            f"for {subject['kind']}"
+        )
     facets: list[ResolvedFieldFacet] = []
     seen: set[str] = set()
     for facet in record["facets"]:

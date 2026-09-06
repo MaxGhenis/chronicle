@@ -50,7 +50,9 @@ claim = documentation_claim(
 )
 write_documentation_artifact("local-docs", [claim],
                              pdfs={metadata.sha256: pdf_bytes})
-verified = load_documentation_artifact("local-docs")
+verified = load_documentation_artifact(
+    "local-docs", expected_manifest_sha256=reviewed_manifest_sha256,
+)
 ```
 
 The producer checks every claim before creating output and refuses to overwrite
@@ -63,6 +65,17 @@ original PDFs, re-extracts each referenced page, compares every page byte and
 its hash, and checks the half-open UTF-8 byte span against `literal_text`.
 Matching only a stored page-text or transport hash is insufficient. Duplicate
 claim keys and contradictory metadata for the same PDF are rejected.
+Both the manifest and every JSONL claim reject duplicate object keys, including
+nested keys, and the non-JSON constants `NaN`, `Infinity` and `-Infinity` before
+schema validation. Matching transport hashes do not relax this parsing rule.
+
+`expected_manifest_sha256` is optional for the documentation reader. When
+supplied, it binds the exact manifest bytes the reader parses; a mismatch fails
+before parsing. Without it, the reader still performs every schema, transport,
+PDF and excerpt check, but it has no caller-approved manifest identity. A claim
+key excludes annotations such as item ID and instrument mode, so it cannot pin
+those annotations by itself. Use a separately reviewed manifest digest when a
+consumer relies on them; field-attachment joins require that digest.
 
 Extraction uses the existing lock's **pypdf 6.11.0** with strict PDF reading,
 plain extraction, orientations `(0, 90, 180, 270)` and space width `200.0`.

@@ -24,14 +24,10 @@ from policyengine_chronicle.consumer import load_consumer_artifact, load_consume
 from policyengine_chronicle.documentation import load_documentation_artifact
 
 
-@pytest.fixture
-def pdf():
-    """Invented, two-page PDF: actual pypdf extraction, not mocked text."""
+def make_pdf(pages):
+    """Build invented PDF pages for actual extraction, without mocked text."""
     writer = PdfWriter()
-    for lines in (
-        (b"Caf\xe9 survey", b"Monthly rent excludes agency subsidies."),
-        (b"Second page", b"Monthly rent excludes agency subsidies."),
-    ):
+    for lines in pages:
         page = writer.add_blank_page(width=400, height=300)
         font = DictionaryObject(
             {
@@ -56,6 +52,16 @@ def pdf():
     output = BytesIO()
     writer.write(output)
     return output.getvalue()
+
+
+@pytest.fixture
+def pdf():
+    return make_pdf(
+        (
+            (b"Caf\xe9 survey", b"Monthly rent excludes agency subsidies."),
+            (b"Second page", b"Monthly rent excludes agency subsidies."),
+        )
+    )
 
 
 @pytest.fixture
@@ -417,3 +423,54 @@ def test_json_equivalent_profile_number_preserves_excerpt_identity(
     rewrite_claims(output, [claim])
     loaded = load_documentation_artifact(output)
     assert loaded.claims[0]["claim_key"] == original_key
+
+
+@pytest.mark.parametrize("target", ["manifest", "claim", "annotations"])
+@pytest.mark.parametrize("mutation", ["duplicate", "NaN", "Infinity", "-Infinity"])
+def test_documentation_json_is_strict_even_with_correct_transport_and_manifest_pins(
+    tmp_path, source, pdf, target, mutation
+):
+    claim = claim_for(source, pdf, annotations={"item_id": "RENT"})
+    output = tmp_path / "artifact"
+    write_documentation_artifact(output, [claim], pdfs={source.artifact.sha256: pdf})
+    manifest_path = output / "manifest.json"
+    manifest = json.loads(manifest_path.read_bytes())
+    original = json.dumps(manifest if target == "manifest" else claim, sort_keys=True)
+    if mutation == "duplicate":
+        if target == "annotations":
+            changed = original.replace(
+                '"item_id": "RENT"', '"item_id": "OTHER", "item_id": "RENT"'
+            )
+        else:
+            key = "kind" if target == "manifest" else "claim_kind"
+            changed = '{"' + key + '":"earlier conflicting value",' + original[1:]
+    elif target == "annotations":
+        changed = original.replace('"item_id": "RENT"', '"item_id": ' + mutation)
+    else:
+        changed = original[:-1] + ',"unexpected_constant":' + mutation + "}"
+    assert changed != original
+    if target == "manifest":
+        manifest_path.write_text(changed)
+    else:
+        content = (changed + "\n").encode()
+        (output / "documentation_claims.jsonl").write_bytes(content)
+        manifest["claims_sha256"] = hashlib.sha256(content).hexdigest()
+        manifest_path.write_text(json.dumps(manifest))
+    manifest_sha = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+    with pytest.raises(
+        ValueError, match="Duplicate" if mutation == "duplicate" else "Non-JSON"
+    ):
+        load_documentation_artifact(output, expected_manifest_sha256=manifest_sha)
+
+
+def test_optional_manifest_pin_binds_the_exact_manifest_bytes(tmp_path, source, pdf):
+    output = tmp_path / "artifact"
+    claim = claim_for(source, pdf)
+    write_documentation_artifact(output, [claim], pdfs={source.artifact.sha256: pdf})
+    manifest = (output / "manifest.json").read_bytes()
+    assert load_documentation_artifact(output).claims == (claim,)
+    assert load_documentation_artifact(
+        output, expected_manifest_sha256=hashlib.sha256(manifest).hexdigest()
+    ).claims == (claim,)
+    with pytest.raises(ValueError, match="manifest hash"):
+        load_documentation_artifact(output, expected_manifest_sha256="0" * 64)

@@ -34,6 +34,14 @@ reuses that result for every alignment sharing it. This avoids spawning
 one process per fact while still counting and reporting every alignment
 individually.
 
+For example, two facts with different record IDs or evidence retain two
+alignments even when they name the same canonical concept. If the configured
+protocol returns a check result, `alignment_count` and `checked_count` are both
+`2`, with one subprocess invocation. In a metadata-only call with no command,
+`alignment_count` remains `2` and `checked_count` is `0`. The `alignments` objects
+in `to_dict()` preserve each assertion's fact key, source record, authority and
+evidence fields; fields whose value is `None` are omitted.
+
 ## What counts as a successful Axiom check
 
 A response from the configured Axiom command is accepted as valid only
@@ -91,4 +99,4 @@ correctly handles well- and ill-formed responses to its own assumed
 protocol; it does not demonstrate semantic equivalence to any real
 Axiom concept check, and no such claim should be made from it. Wiring
 this module to a real Axiom interface — whatever protocol that
-interface actually exposes — is separate, unstarted work.
+interface actually exposes — remains separate from this report API.

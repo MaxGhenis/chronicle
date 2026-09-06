@@ -1,4 +1,6 @@
 import importlib
+from importlib.resources import files
+import json
 
 import pytest
 
@@ -107,3 +109,31 @@ def test__given_chronicle_help__then_cli_does_not_eager_load_legacy_clients(
     output = capsys.readouterr().out
     assert "Usage: chronicle <command> [options]" in output
     assert "validate-facts" in output
+
+
+def test_documentation_readers_and_packaged_schemas_are_importable():
+    from jsonschema import Draft202012Validator
+    from policyengine_chronicle.documentation import (
+        DocumentationArtifact,
+        load_documentation_artifact,
+    )
+    from policyengine_chronicle.field_documentation import (
+        FieldDocumentation,
+        load_field_documentation,
+    )
+
+    assert callable(load_documentation_artifact) and callable(load_field_documentation)
+    assert DocumentationArtifact.__module__ == "policyengine_chronicle.documentation"
+    assert FieldDocumentation.__module__ == "policyengine_chronicle.field_documentation"
+    for name in (
+        "documentation_claim",
+        "documentation_artifact",
+        "survey_field_attachment",
+    ):
+        schema = json.loads(
+            files("policyengine_chronicle.schemas")
+            .joinpath(name + ".v1.schema.json")
+            .read_bytes()
+        )
+        assert schema["$id"] == "chronicle." + name + ".v1"
+        Draft202012Validator.check_schema(schema)

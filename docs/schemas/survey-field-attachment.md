@@ -25,8 +25,9 @@ manifest, then uses the existing documentation reader to reopen original PDFs,
 re-extract pages and verify the exact text spans. The schema ships in the wheel.
 
 The optional `expected_manifest_sha256` keyword on `load_documentation_artifact`
-checks the manifest bytes that reader actually uses. Existing unpinned calls
-retain their previous behavior. A claim key excludes caller annotations, so a
+checks the manifest bytes that reader actually uses. Calls without that pin
+still verify the artifact but do not bind a caller-approved manifest identity.
+A claim key excludes caller annotations, so a
 claim key alone is insufficient for item/mode/vintage joins. An edited annotation
 changes the documentation artifact pin even when the claim key stays the same.
 The attachment's own mandatory digest binds its curator annotations and joins.
@@ -36,13 +37,23 @@ The attachment's own mandatory digest binds its curator annotations and joins.
 The subject identifies a `dictionary_field` in a codebook or an `instrument_item`
 in a questionnaire, using original PDF SHA-256, item ID and document vintage.
 Its anchor must resolve to a claim with matching source identity, item annotation,
-vintage and document role. Document vintage is the literal source metadata value;
+vintage and document role. A dictionary-field anchor must have claim kind
+`definition`; an instrument-item anchor must have claim kind `question_text`.
+A code legend or instruction carrying the same item annotation cannot establish
+that anchor by itself. These checks validate the curator's declared claim kind;
+they do not prove that the excerpt was classified correctly. If the required
+definition or question excerpt is unavailable, the reader cannot accept that
+subject anchor. Do not relabel another excerpt merely to satisfy this contract.
+Document vintage is the literal source metadata value;
 it is not automatically an interview, tax, income reference or model year.
 
 Every supported facet cites one or more exact claims. A `subject` citation must
 match the same field/item, PDF and vintage as the anchor. A `context` citation can
 point to general codes, routing, subject definitions or historical methodology,
 but must carry a curator rationale and its own expected item and document vintage.
+An attachment may cite multiple independently pinned documentation manifests.
+Each claim resolves within its cited manifest, and a context item's ID and
+vintage must match that claim even when they differ from the subject's.
 It is not an assertion that another item's question belongs to this field.
 Question text, dictionary labels and allocation-flag facets require subject
 citations. A future field-to-instrument mapping needs a separately reviewed

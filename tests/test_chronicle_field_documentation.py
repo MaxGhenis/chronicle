@@ -16,6 +16,7 @@ from policyengine_chronicle.documentation import load_documentation_artifact
 from policyengine_chronicle.field_documentation import load_field_documentation
 from policyengine_chronicle.consumer import load_consumer_rows
 from tests.test_chronicle_source_documentation import (  # noqa: F401
+    make_pdf,
     pdf,
     rewrite_claims,
     source,
@@ -34,6 +35,7 @@ def bundle(tmp_path, source, pdf):  # noqa: F811 - imported pytest fixtures
         (0, "definition", "RENT"),
         (1, "definition", "OTHER"),
         (1, "code_definition", None),
+        (0, "code_definition", "RENT"),
     ]:
         text = extract_documentation_page(source, pdf, page_index=page_index)
         claims.append(
@@ -326,3 +328,201 @@ def test_non_json_numeric_constant_is_refused_before_schema(tmp_path):
         load_field_documentation(
             path, expected_sha256=sha(content), documentation_artifacts={}
         )
+
+
+@pytest.fixture
+def instrument_bundle(tmp_path, source):  # noqa: F811 - imported pytest fixture
+    pdf_bytes = make_pdf(
+        ((b"Invented questionnaire", b"18a. What is your monthly rent?"),)
+    )
+    source = replace(
+        source,
+        artifact=replace(
+            source.artifact, sha256=sha(pdf_bytes), size_bytes=len(pdf_bytes)
+        ),
+    )
+    text = extract_documentation_page(source, pdf_bytes, page_index=0)
+    claims = [
+        documentation_claim(
+            source,
+            pdf_bytes,
+            page_index=0,
+            byte_start=0,
+            byte_end=len(text.encode()),
+            literal_text=text,
+            claim_kind=kind,
+            annotations={"item_id": "18a"},
+        )
+        for kind in ("question_text", "respondent_instruction")
+    ]
+    artifact = tmp_path / "instrument"
+    write_documentation_artifact(
+        artifact, claims, pdfs={source.artifact.sha256: pdf_bytes}
+    )
+    manifest_sha = sha((artifact / "manifest.json").read_bytes())
+    references = [
+        {
+            "artifact_manifest_sha256": manifest_sha,
+            "claim_key": claim["claim_key"],
+            "scope": "subject",
+            "item_id": "18a",
+            "document_vintage": "2024",
+        }
+        for claim in claims
+    ]
+    record = {
+        "schema_version": "chronicle.survey_field_attachment.v1",
+        "kind": "survey_field_attachment",
+        "assertion": "curator_metadata",
+        "asserted_by": "Invented test curator",
+        "subject": {
+            "kind": "instrument_item",
+            "documentation_pdf_sha256": sha(pdf_bytes),
+            "item_id": "18a",
+            "document_vintage": "2024",
+            "anchor": references[0],
+        },
+        "release_binding": {
+            "status": "unresolved",
+            "reason": "No registration tested.",
+        },
+        "facets": [
+            {
+                "name": "question_text",
+                "status": "supported",
+                "assertion": "curator_locator",
+                "evidence": [references[0]],
+            }
+        ],
+    }
+    return record, {manifest_sha: artifact}, references, claims
+
+
+def test_instrument_item_resolves_question_text(tmp_path, instrument_bundle):
+    record, paths, _, claims = instrument_bundle
+    loaded = read(tmp_path, record, paths)
+    assert loaded.anchor == claims[0]
+    assert loaded.facets[0].claims == (claims[0],)
+    assert "What is your monthly rent?" in loaded.facets[0].claims[0]["literal_text"]
+    assert loaded.record["assertion"] == "curator_metadata"
+
+
+def test_instrument_item_refuses_dictionary_label(tmp_path, instrument_bundle):
+    record, paths, _, _ = instrument_bundle
+    record["facets"][0]["name"] = "dictionary_label"
+    with pytest.raises(ValueError, match="claim kind"):
+        read(tmp_path, record, paths)
+
+
+@pytest.mark.parametrize("subject_kind", ["dictionary_field", "instrument_item"])
+def test_anchor_requires_subject_identifying_claim_kind(
+    tmp_path, bundle, instrument_bundle, subject_kind
+):
+    if subject_kind == "dictionary_field":
+        record, paths, ref, _ = bundle
+        record["subject"]["anchor"] = ref(3)
+    else:
+        record, paths, references, _ = instrument_bundle
+        record["subject"]["anchor"] = references[1]
+    # Even an otherwise valid claim with this exact item annotation and document
+    # role cannot establish the required definition/question anchor by itself.
+    record["facets"] = [
+        {
+            "name": "roster_reference",
+            "status": "unknown",
+            "reason": "Not established by this invented excerpt.",
+        }
+    ]
+    with pytest.raises(ValueError, match="anchor claim kind"):
+        read(tmp_path, record, paths)
+
+
+@pytest.mark.parametrize(
+    "key,value", [("item_id", "OTHER"), ("document_vintage", "2099")]
+)
+def test_context_reference_matches_its_own_item_and_vintage(
+    tmp_path, bundle, key, value
+):
+    record, paths, _, _ = bundle
+    record["facets"][1]["evidence"][0][key] = value
+    with pytest.raises(ValueError, match="Documentation reference .* mismatch"):
+        read(tmp_path, record, paths)
+
+
+@pytest.fixture
+def two_manifest_bundle(tmp_path, bundle, source):  # noqa: F811 - imported pytest fixture
+    record, paths, _, claims = bundle
+    pdf_bytes = make_pdf(
+        ((b"Invented 2023 codebook", b"Code A means a reported amount."),)
+    )
+    source = replace(
+        source,
+        document_role="codebook",
+        artifact=replace(
+            source.artifact,
+            sha256=sha(pdf_bytes),
+            size_bytes=len(pdf_bytes),
+            vintage="2023",
+            source_file="invented-codes.pdf",
+        ),
+    )
+    text = extract_documentation_page(source, pdf_bytes, page_index=0)
+    claim = documentation_claim(
+        source,
+        pdf_bytes,
+        page_index=0,
+        byte_start=0,
+        byte_end=len(text.encode()),
+        literal_text=text,
+        claim_kind="code_definition",
+        annotations={},
+    )
+    artifact = tmp_path / "other-documentation"
+    write_documentation_artifact(artifact, [claim], pdfs={sha(pdf_bytes): pdf_bytes})
+    manifest_sha = sha((artifact / "manifest.json").read_bytes())
+    paths[manifest_sha] = artifact
+    record["facets"][1]["evidence"].append(
+        {
+            "artifact_manifest_sha256": manifest_sha,
+            "claim_key": claim["claim_key"],
+            "scope": "context",
+            "item_id": None,
+            "document_vintage": "2023",
+            "rationale": "A separately dated general legend; no asserted field-to-code mapping.",
+        }
+    )
+    return record, paths, claims, claim
+
+
+def test_subject_and_context_evidence_resolve_across_two_pinned_manifests(
+    tmp_path, two_manifest_bundle
+):
+    record, paths, first_claims, second_claim = two_manifest_bundle
+    loaded = read(tmp_path, record, paths)
+    assert loaded.anchor == first_claims[0]
+    assert loaded.facets[1].claims == (first_claims[2], second_claim)
+    assert loaded.facets[1].annotation["evidence"][1]["scope"] == "context"
+    assert loaded.facets[1].claims[1]["source"]["artifact"]["vintage"] == "2023"
+    assert loaded.record["subject"]["document_vintage"] == "2024"
+
+
+@pytest.mark.parametrize(
+    "mutation", ["missing", "substitution", "wrong_manifest_claim"]
+)
+def test_second_manifest_cannot_be_missing_substituted_or_cross_joined(
+    tmp_path, two_manifest_bundle, mutation
+):
+    record, paths, first_claims, _ = two_manifest_bundle
+    reference = record["facets"][1]["evidence"][1]
+    digest = reference["artifact_manifest_sha256"]
+    if mutation == "missing":
+        del paths[digest]
+        reason = "Missing pinned documentation artifact"
+    elif mutation == "substitution":
+        paths[digest] = next(path for key, path in paths.items() if key != digest)
+        reason = "manifest hash"
+    else:
+        reference["claim_key"] = first_claims[0]["claim_key"]
+        reason = "Claim not present in pinned documentation artifact"
+    with pytest.raises(ValueError, match=reason):
+        read(tmp_path, record, paths)

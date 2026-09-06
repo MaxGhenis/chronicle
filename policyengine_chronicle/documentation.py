@@ -31,6 +31,25 @@ def _read_member(root: Path, relative: str) -> bytes:
     return path.read_bytes()
 
 
+def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"Duplicate documentation JSON key: {key}")
+        result[key] = value
+    return result
+
+
+def _reject_constant(value: str) -> None:
+    raise ValueError(f"Non-JSON documentation constant: {value}")
+
+
+def _parse_json(content: bytes) -> Any:
+    return json.loads(
+        content, object_pairs_hook=_unique_object, parse_constant=_reject_constant
+    )
+
+
 def load_documentation_artifact(
     path: str | Path, *, expected_manifest_sha256: str | None = None
 ) -> DocumentationArtifact:
@@ -47,14 +66,14 @@ def load_documentation_artifact(
         and _sha(manifest_bytes) != expected_manifest_sha256
     ):
         raise ValueError("Documentation artifact manifest hash mismatch")
-    manifest = json.loads(manifest_bytes)
+    manifest = _parse_json(manifest_bytes)
     _validate_schema(manifest, "documentation_artifact")
     if manifest["claim_schema_sha256"] != _sha(schema_bytes("documentation_claim")):
         raise ValueError("Documentation claim schema hash mismatch")
     content = _read_member(root, "documentation_claims.jsonl")
     if _sha(content) != manifest["claims_sha256"]:
         raise ValueError("Documentation claims transport hash mismatch")
-    rows = [json.loads(line) for line in content.splitlines()]
+    rows = [_parse_json(line) for line in content.splitlines()]
     if len(rows) != manifest["claim_count"]:
         raise ValueError("Documentation claim count mismatch")
     keys: set[str] = set()
