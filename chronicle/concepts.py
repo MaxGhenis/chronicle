@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import subprocess
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -77,33 +78,56 @@ class ConceptAlignmentReport:
 def collect_concept_alignments(
     facts: list[AggregateFact],
 ) -> tuple[ConceptAlignment, ...]:
-    """Collect unique source-to-canonical concept alignments from facts."""
-    alignments: dict[tuple[str, str, str, str | None], ConceptAlignment] = {}
+    """Collect unique source-to-canonical concept alignments from facts.
+
+    Two facts collapse into one alignment only when every asserted field
+    matches exactly (same fact identity, source record, authority, and
+    evidence) — not merely the same source/canonical/relation/vintage
+    tuple, which would otherwise hide distinct assertions' evidence.
+    """
+    alignments: dict[ConceptAlignment, None] = {}
     for fact in facts:
         measure = fact.measure
         if not measure.source_concept or not measure.concept_relation:
             continue
-        key = (
-            measure.source_concept,
-            measure.concept,
-            measure.concept_relation,
-            measure.legal_vintage,
+        alignment = ConceptAlignment(
+            canonical_concept=measure.concept,
+            source_concept=measure.source_concept,
+            relation=measure.concept_relation,
+            fact_key=build_fact_key(fact),
+            source_record_id=fact.source_record_id,
+            authority=measure.concept_authority,
+            evidence_url=measure.concept_evidence_url,
+            evidence_notes=measure.concept_evidence_notes,
+            legal_vintage=measure.legal_vintage,
         )
-        alignments.setdefault(
-            key,
-            ConceptAlignment(
-                canonical_concept=measure.concept,
-                source_concept=measure.source_concept,
-                relation=measure.concept_relation,
-                fact_key=build_fact_key(fact),
-                source_record_id=fact.source_record_id,
-                authority=measure.concept_authority,
-                evidence_url=measure.concept_evidence_url,
-                evidence_notes=measure.concept_evidence_notes,
-                legal_vintage=measure.legal_vintage,
-            ),
+        alignments.setdefault(alignment, None)
+    return tuple(alignments.keys())
+
+
+DEFAULT_AXIOM_VALIDATE_TIMEOUT_SECONDS = 30.0
+
+
+def _validate_axiom_timeout(value: Any) -> float:
+    """Reject any axiom_timeout override that could never bound a subprocess call.
+
+    Must be a finite, positive, real number — never ``None``, ``NaN``,
+    infinite, zero/negative, or a ``bool`` (a ``bool`` is technically an
+    ``int`` in Python, so it is excluded explicitly).
+    """
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(
+            f"axiom_timeout must be a finite, positive number; got {value!r}."
         )
-    return tuple(alignments.values())
+    if math.isnan(value) or math.isinf(value):
+        raise ValueError(
+            f"axiom_timeout must be a finite, positive number; got {value!r}."
+        )
+    if value <= 0:
+        raise ValueError(
+            f"axiom_timeout must be a finite, positive number; got {value!r}."
+        )
+    return float(value)
 
 
 def validate_concept_alignments(
@@ -111,8 +135,10 @@ def validate_concept_alignments(
     *,
     axiom_command: Sequence[str] | None = None,
     axiom_roots: Sequence[str | Path] = (),
+    axiom_timeout: float = DEFAULT_AXIOM_VALIDATE_TIMEOUT_SECONDS,
 ) -> ConceptAlignmentReport:
     """Validate Chronicle concept alignments against optional Axiom CLI metadata."""
+    axiom_timeout = _validate_axiom_timeout(axiom_timeout)
     alignments = collect_concept_alignments(facts)
     errors = list(_alignment_metadata_errors(alignments))
     warnings: list[ConceptAlignmentIssue] = []
@@ -142,23 +168,29 @@ def validate_concept_alignments(
             warnings=tuple(warnings),
         )
 
+    result_cache: dict[str, dict[str, Any]] = {}
     for alignment in alignments:
-        result = _run_axiom_validate(
-            axiom_command,
-            alignment.canonical_concept,
-            axiom_roots=axiom_roots,
-        )
+        result = result_cache.get(alignment.canonical_concept)
         if result is None:
-            warnings.append(
-                ConceptAlignmentIssue(
-                    code="axiom_cli_unavailable",
-                    message="Axiom CLI validation skipped because command failed to run.",
-                    canonical_concept=alignment.canonical_concept,
-                    source_concept=alignment.source_concept,
-                    fact_key=alignment.fact_key,
+            try:
+                result = _run_axiom_validate(
+                    axiom_command,
+                    alignment.canonical_concept,
+                    axiom_roots=axiom_roots,
+                    timeout=axiom_timeout,
                 )
-            )
-            break
+            except _AxiomValidateUnavailable as unavailable:
+                warnings.append(
+                    ConceptAlignmentIssue(
+                        code=unavailable.code,
+                        message=unavailable.message,
+                        canonical_concept=alignment.canonical_concept,
+                        source_concept=alignment.source_concept,
+                        fact_key=alignment.fact_key,
+                    )
+                )
+                break
+            result_cache[alignment.canonical_concept] = result
         checked_count += 1
         if not result.get("valid"):
             message = _axiom_error_message(result)
@@ -201,12 +233,29 @@ def _alignment_metadata_errors(
     return tuple(errors)
 
 
+class _AxiomValidateUnavailable(Exception):
+    """Raised when the Axiom CLI could not be invoked or timed out."""
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
+        self.message = message
+
+
 def _run_axiom_validate(
     axiom_command: Sequence[str],
     concept_id: str,
     *,
     axiom_roots: Sequence[str | Path],
-) -> dict[str, Any] | None:
+    timeout: float = DEFAULT_AXIOM_VALIDATE_TIMEOUT_SECONDS,
+) -> dict[str, Any]:
+    """Run the Axiom CLI's concept-validate protocol for one concept.
+
+    Returns a dict report (a synthesized invalid report if the CLI's
+    response is malformed, contradictory, or for the wrong concept) or
+    raises ``_AxiomValidateUnavailable`` if the CLI could not be run at
+    all. Never treats an unavailable/timed-out run as a valid concept.
+    """
     command = [
         *axiom_command,
         "concepts",
@@ -222,33 +271,86 @@ def _run_axiom_validate(
             check=False,
             capture_output=True,
             text=True,
+            timeout=timeout,
         )
-    except OSError:
-        return None
+    except subprocess.TimeoutExpired:
+        raise _AxiomValidateUnavailable(
+            code="axiom_cli_timeout",
+            message=f"Axiom CLI validation timed out after {timeout:g}s.",
+        ) from None
+    except OSError as error:
+        raise _AxiomValidateUnavailable(
+            code="axiom_cli_unavailable",
+            message=f"Axiom CLI validation skipped because command failed to run: {error}",
+        ) from None
     try:
         payload = json.loads(completed.stdout)
     except json.JSONDecodeError:
-        return {
-            "valid": False,
-            "errors": [
-                {
-                    "code": "invalid_axiom_cli_output",
-                    "message": completed.stderr.strip()
-                    or "Axiom CLI did not emit JSON.",
-                }
-            ],
-        }
-    if isinstance(payload, dict):
-        return payload
+        return _invalid_axiom_result(
+            "invalid_axiom_cli_output",
+            completed.stderr.strip() or "Axiom CLI did not emit JSON.",
+        )
+    if not isinstance(payload, dict):
+        return _invalid_axiom_result(
+            "invalid_axiom_cli_output",
+            "Axiom CLI emitted non-object JSON.",
+        )
+    return _resolve_axiom_result(payload, concept_id, completed.returncode)
+
+
+def _invalid_axiom_result(code: str, message: str) -> dict[str, Any]:
     return {
         "valid": False,
-        "errors": [
-            {
-                "code": "invalid_axiom_cli_output",
-                "message": "Axiom CLI emitted non-object JSON.",
-            }
-        ],
+        "errors": [{"code": code, "message": message}],
     }
+
+
+def _resolve_axiom_result(
+    payload: dict[str, Any],
+    concept_id: str,
+    returncode: int,
+) -> dict[str, Any]:
+    """Apply strict boolean/exit-status checks to a parsed Axiom CLI response."""
+    if "concept_id" in payload:
+        # A present key — even an explicit `null` — is an echo attempt, and
+        # must match; an absent key means the CLI never echoes it (compat).
+        response_concept_id = payload["concept_id"]
+        if response_concept_id != concept_id:
+            return _invalid_axiom_result(
+                "axiom_cli_concept_mismatch",
+                f"Axiom CLI response concept_id {response_concept_id!r} does not "
+                f"match the requested concept {concept_id!r}.",
+            )
+
+    valid_field = payload.get("valid")
+    if valid_field is not True and valid_field is not False:
+        return _invalid_axiom_result(
+            "invalid_axiom_cli_output",
+            "Axiom CLI 'valid' field must be a boolean.",
+        )
+
+    errors_field = payload.get("errors")
+    if errors_field is not None and not isinstance(errors_field, list):
+        # Present and non-null must be a list; absent/null keeps the
+        # existing no-errors-reported compatibility path.
+        return _invalid_axiom_result(
+            "invalid_axiom_cli_output",
+            "Axiom CLI 'errors' field must be a list.",
+        )
+    has_reported_errors = bool(errors_field)
+
+    if valid_field and has_reported_errors:
+        return _invalid_axiom_result(
+            "axiom_cli_contradictory_response",
+            "Axiom CLI reported valid=true alongside validation errors.",
+        )
+    if valid_field and returncode != 0:
+        return _invalid_axiom_result(
+            "axiom_cli_exit_mismatch",
+            f"Axiom CLI exited {returncode} but reported valid=true; "
+            "treating the concept as invalid.",
+        )
+    return payload
 
 
 def _axiom_error_message(result: dict[str, Any]) -> str:

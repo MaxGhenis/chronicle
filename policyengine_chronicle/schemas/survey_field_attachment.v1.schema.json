@@ -1,0 +1,346 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "chronicle.survey_field_attachment.v1",
+  "$comment": "Curator documentation attachments. No raw microdata, aggregate facts, registration verification, concept equivalence, uncertainty, transformations or fit admission.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "chronicle.survey_field_attachment.v1"
+    },
+    "kind": {
+      "const": "survey_field_attachment"
+    },
+    "assertion": {
+      "const": "curator_metadata"
+    },
+    "asserted_by": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\S"
+    },
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "dictionary_field",
+            "instrument_item"
+          ]
+        },
+        "documentation_pdf_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "item_id": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "document_vintage": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "anchor": {
+          "$ref": "#/$defs/evidence"
+        }
+      },
+      "required": [
+        "kind",
+        "documentation_pdf_sha256",
+        "item_id",
+        "document_vintage",
+        "anchor"
+      ]
+    },
+    "release_binding": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "status": {
+              "const": "unresolved"
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "\\S"
+            }
+          },
+          "required": [
+            "status",
+            "reason"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "status": {
+              "const": "unverified_reference"
+            },
+            "registration": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "source_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "\\S"
+                },
+                "package_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "\\S"
+                },
+                "year": {
+                  "type": "integer"
+                },
+                "sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "filename": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "\\S"
+                }
+              },
+              "required": [
+                "source_id",
+                "package_id",
+                "year",
+                "sha256",
+                "filename"
+              ]
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "\\S"
+            }
+          },
+          "required": [
+            "status",
+            "registration",
+            "reason"
+          ]
+        }
+      ]
+    },
+    "facets": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/facet"
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "kind",
+    "assertion",
+    "asserted_by",
+    "subject",
+    "release_binding",
+    "facets"
+  ],
+  "$defs": {
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "artifact_manifest_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "claim_key": {
+          "type": "string",
+          "pattern": "^chronicle\\.documentation_claim\\.v1:[0-9a-f]{64}$"
+        },
+        "scope": {
+          "enum": [
+            "subject",
+            "context"
+          ]
+        },
+        "item_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "\\S"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "document_vintage": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "rationale": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        }
+      },
+      "required": [
+        "artifact_manifest_sha256",
+        "claim_key",
+        "scope",
+        "item_id",
+        "document_vintage"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "scope": {
+                "const": "context"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "rationale"
+            ]
+          }
+        }
+      ]
+    },
+    "facet": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "enum": [
+            "dictionary_label",
+            "question_text",
+            "respondent_instruction",
+            "routing",
+            "definition",
+            "universe",
+            "allocation_flag",
+            "allocation_codes",
+            "record_grain",
+            "measurement_period",
+            "roster_reference",
+            "suppression",
+            "methodology"
+          ]
+        },
+        "status": {
+          "enum": [
+            "supported",
+            "unknown",
+            "not_located",
+            "not_applicable"
+          ]
+        },
+        "assertion": {
+          "enum": [
+            "curator_locator",
+            "curator_normalization"
+          ]
+        },
+        "value": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/evidence"
+          }
+        }
+      },
+      "required": [
+        "name",
+        "status"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "supported"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "assertion",
+              "evidence"
+            ],
+            "not": {
+              "required": [
+                "reason"
+              ]
+            }
+          },
+          "else": {
+            "required": [
+              "reason"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "assertion"
+                  ]
+                },
+                {
+                  "required": [
+                    "value"
+                  ]
+                },
+                {
+                  "required": [
+                    "evidence"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "assertion"
+            ],
+            "properties": {
+              "assertion": {
+                "const": "curator_normalization"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "value"
+            ]
+          },
+          "else": {
+            "not": {
+              "required": [
+                "value"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

@@ -878,6 +878,8 @@ class SourceArtifactSpec:
         )
         with manifest_path.open("r", encoding="utf-8") as file:
             manifest = yaml.safe_load(file)
+        if manifest.get("kind") in {"source_documentation", "survey_field_attachment"}:
+            raise ValueError(f"{manifest['kind']} requires the documentation API")
         spec = _year_mapping(manifest["files"], self.artifact_year or year)
         artifact_path = files(self.resource_package).joinpath(
             self.resource_directory,
