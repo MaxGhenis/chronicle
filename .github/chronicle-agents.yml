@@ -28,6 +28,7 @@ approved_agents:
       - docs/schemas/**
       - tests/test_chronicle_consumer_contract.py
       - tests/test_chronicle_core.py
+      - tests/test_chronicle_axiom_registry.py
       - tests/test_policyengine_chronicle_imports.py
     required_deterministic_checks:
       - schema validation
