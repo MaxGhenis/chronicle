@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 from pathlib import Path
 
 import pytest
@@ -552,7 +553,9 @@ def _rewrite_facts_file(out_dir, rows):
 def test_artifact_load_rejects_row_missing_required_field(tmp_path):
     facts_path, profile_path = _write_artifact_inputs(tmp_path)
     out_dir = tmp_path / "artifact"
-    build_consumer_artifact(out_dir, facts_path=facts_path, profile_paths=[profile_path])
+    build_consumer_artifact(
+        out_dir, facts_path=facts_path, profile_paths=[profile_path]
+    )
 
     rows = _rows()
     del rows[0]["observed_measure"]["unit"]
@@ -565,7 +568,9 @@ def test_artifact_load_rejects_row_missing_required_field(tmp_path):
 def test_artifact_load_rejects_unknown_extra_field(tmp_path):
     facts_path, profile_path = _write_artifact_inputs(tmp_path)
     out_dir = tmp_path / "artifact"
-    build_consumer_artifact(out_dir, facts_path=facts_path, profile_paths=[profile_path])
+    build_consumer_artifact(
+        out_dir, facts_path=facts_path, profile_paths=[profile_path]
+    )
 
     rows = _rows()
     rows[0]["unexpected_field"] = "surprise"
@@ -578,7 +583,9 @@ def test_artifact_load_rejects_unknown_extra_field(tmp_path):
 def test_artifact_load_rejects_unknown_schema_sha256(tmp_path):
     facts_path, profile_path = _write_artifact_inputs(tmp_path)
     out_dir = tmp_path / "artifact"
-    build_consumer_artifact(out_dir, facts_path=facts_path, profile_paths=[profile_path])
+    build_consumer_artifact(
+        out_dir, facts_path=facts_path, profile_paths=[profile_path]
+    )
 
     manifest_path = out_dir / "manifest.json"
     manifest = json.loads(manifest_path.read_text())
@@ -592,7 +599,9 @@ def test_artifact_load_rejects_unknown_schema_sha256(tmp_path):
 def test_artifact_load_rejects_tampered_profile(tmp_path):
     facts_path, profile_path = _write_artifact_inputs(tmp_path)
     out_dir = tmp_path / "artifact"
-    build_consumer_artifact(out_dir, facts_path=facts_path, profile_paths=[profile_path])
+    build_consumer_artifact(
+        out_dir, facts_path=facts_path, profile_paths=[profile_path]
+    )
 
     profile_file = out_dir / "profiles" / "test_profile.json"
     tampered = profile_file.read_bytes().replace(b"Test profile", b"Xest profile", 1)
@@ -606,7 +615,9 @@ def test_artifact_load_rejects_tampered_profile(tmp_path):
 def test_artifact_load_accepts_legacy_profile_hash_only_via_explicit_path(tmp_path):
     facts_path, profile_path = _write_artifact_inputs(tmp_path)
     out_dir = tmp_path / "artifact"
-    build_consumer_artifact(out_dir, facts_path=facts_path, profile_paths=[profile_path])
+    build_consumer_artifact(
+        out_dir, facts_path=facts_path, profile_paths=[profile_path]
+    )
 
     profile_file = out_dir / "profiles" / "test_profile.json"
     profile_bytes = profile_file.read_bytes()
@@ -642,3 +653,190 @@ def test_artifact_build_rejects_duplicate_aggregate_fact_key(tmp_path):
             facts_path=facts_path,
             profile_paths=[profile_path],
         )
+
+
+# ---------------------------------------------------------------------------
+# 2026-07-10 independent verification counterexamples (SOL review).
+# ---------------------------------------------------------------------------
+
+
+def test_sol_schema_invalid_build_and_duplicate_load_fail_closed(tmp_path):
+    facts_path, profile_path = _write_artifact_inputs(tmp_path)
+    invalid_rows = _rows()
+    del invalid_rows[0]["observed_measure"]["unit"]
+    facts_path.write_text(
+        "".join(json.dumps(row, sort_keys=True) + "\n" for row in invalid_rows)
+    )
+
+    with pytest.raises(ValueError, match="unit"):
+        build_consumer_artifact(
+            tmp_path / "invalid-artifact",
+            facts_path=facts_path,
+            profile_paths=[profile_path],
+        )
+
+    facts_path, profile_path = _write_artifact_inputs(tmp_path)
+    out_dir = tmp_path / "valid-artifact"
+    build_consumer_artifact(
+        out_dir, facts_path=facts_path, profile_paths=[profile_path]
+    )
+    duplicate_rows = _rows()
+    duplicate_rows.append(json.loads(json.dumps(duplicate_rows[0])))
+    _rewrite_facts_file(out_dir, duplicate_rows)
+
+    with pytest.raises(ValueError, match="repeats aggregate_fact_key"):
+        load_consumer_artifact(out_dir)
+
+
+def test_sol_profile_hash_legacy_boundary_is_manifest_versioned(tmp_path):
+    facts_path, profile_path = _write_artifact_inputs(tmp_path)
+    out_dir = tmp_path / "artifact"
+    build_consumer_artifact(
+        out_dir, facts_path=facts_path, profile_paths=[profile_path]
+    )
+
+    profile_file = out_dir / "profiles" / "test_profile.json"
+    profile_bytes = profile_file.read_bytes()
+    assert profile_bytes.endswith(b"\n")
+    legacy_hash = hashlib.sha256(profile_bytes[:-1]).hexdigest()
+    exact_hash = hashlib.sha256(profile_bytes).hexdigest()
+    manifest_path = out_dir / "manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+
+    manifest["profiles"]["test_profile"]["sha256"] = legacy_hash
+    manifest_path.write_text(json.dumps(manifest, sort_keys=True, indent=2) + "\n")
+    with pytest.raises(ValueError, match="does not match the manifest"):
+        load_consumer_artifact(out_dir)
+
+    del manifest["consumer_fact_schema_sha256"]
+    manifest_path.write_text(json.dumps(manifest, sort_keys=True, indent=2) + "\n")
+    artifact = load_consumer_artifact(out_dir)
+    assert artifact.profile_hash_semantics == {"test_profile": "legacy_profile_hash"}
+
+    manifest["consumer_fact_schema_sha256"] = CONSUMER_FACT_SCHEMA_SHA256
+    manifest["profiles"]["test_profile"]["sha256"] = exact_hash
+    manifest_path.write_text(json.dumps(manifest, sort_keys=True, indent=2) + "\n")
+    artifact = load_consumer_artifact(out_dir)
+    assert artifact.profile_hash_semantics == {"test_profile": "exact"}
+
+
+def test_sol_dimensions_selector_is_order_insensitive_but_exact_set():
+    payload = _uk_firms_crosstab_profile_payload()
+    payload["targets"] = [payload["targets"][0]]
+    selector = payload["targets"][0]["ledger_selector"]
+    selector["dimensions"] = list(reversed(selector["dimensions"]))
+    profile = target_profile_from_mapping(payload)
+
+    report = resolve_profile_targets(
+        profile,
+        _uk_firms_crosstab_rows(),
+        {"type": "calendar_year", "value": 2025},
+    )
+    assert sorted(row.value for row in report.resolved) == [800, 1200]
+
+    for wrong_dimensions in (
+        ["uk.firm.sic_code"],
+        [
+            "uk.firm.sic_code",
+            "uk.firm.turnover_band",
+            "uk.firm.employment_band",
+        ],
+    ):
+        wrong_payload = json.loads(json.dumps(payload))
+        wrong_payload["targets"][0]["ledger_selector"]["dimensions"] = wrong_dimensions
+        with pytest.raises(ValueError, match="matched no consumer fact rows"):
+            resolve_profile_targets(
+                target_profile_from_mapping(wrong_payload),
+                _uk_firms_crosstab_rows(),
+                {"type": "calendar_year", "value": 2025},
+            )
+
+
+def test_sol_counterexample_stale_identity_keys_and_false_counts_are_accepted(tmp_path):
+    """Characterize integrity metadata the loader currently does not derive."""
+
+    facts_path, profile_path = _write_artifact_inputs(tmp_path)
+    out_dir = tmp_path / "artifact"
+    build_consumer_artifact(
+        out_dir, facts_path=facts_path, profile_paths=[profile_path]
+    )
+
+    rows = _rows()
+    stale = rows[0]
+    stale["aggregate_fact_key"] = "ledger.aggregate_fact.v2:" + "0" * 24
+    stale["semantic_fact_key"] = "ledger.semantic_fact.v2:" + "0" * 24
+    stale["legacy_fact_key"] = "ledger.fact.v1:" + "0" * 24
+    stale["source_release_key"] = "ledger.source_release.v2:" + "0" * 24
+    stale["source_series_key"] = "ledger.source_series.v2:" + "0" * 24
+    stale["observed_measure_key"] = "ledger.observed_measure.v2:" + "0" * 24
+    stale["dimension_set_key"] = "ledger.dimension_set.v2:" + "0" * 24
+    stale["universe_constraint_set_key"] = (
+        "ledger.universe_constraint_set.v2:" + "0" * 24
+    )
+    _rewrite_facts_file(out_dir, rows)
+
+    manifest_path = out_dir / "manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest["fact_row_count"] = 999
+    manifest["consumer_fact_schema_versions"] = ["ledger.consumer_fact.v999"]
+    manifest["profiles"]["test_profile"]["target_count"] = 999
+    manifest_path.write_text(json.dumps(manifest, sort_keys=True, indent=2) + "\n")
+
+    artifact = load_consumer_artifact(out_dir)
+    assert artifact.rows[0]["aggregate_fact_key"].endswith("0" * 24)
+    assert len(artifact.rows) == 3
+    assert artifact.manifest["fact_row_count"] == 999
+    assert len(artifact.profiles["test_profile"].targets) == 1
+    assert artifact.manifest["profiles"]["test_profile"]["target_count"] == 999
+
+
+def test_sol_counterexample_coordinated_profile_and_manifest_rewrite_is_accepted(
+    tmp_path,
+):
+    """A self-hash detects file-only tamper; no external pin authenticates both."""
+
+    facts_path, profile_path = _write_artifact_inputs(tmp_path)
+    out_dir = tmp_path / "artifact"
+    build_consumer_artifact(
+        out_dir, facts_path=facts_path, profile_paths=[profile_path]
+    )
+
+    profile_file = out_dir / "profiles" / "test_profile.json"
+    payload = json.loads(profile_file.read_text())
+    payload["label"] = "Coordinated rewrite"
+    profile_file.write_text(json.dumps(payload, sort_keys=True, indent=2) + "\n")
+    manifest_path = out_dir / "manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest["profiles"]["test_profile"]["sha256"] = hashlib.sha256(
+        profile_file.read_bytes()
+    ).hexdigest()
+    manifest_path.write_text(json.dumps(manifest, sort_keys=True, indent=2) + "\n")
+
+    artifact = load_consumer_artifact(out_dir)
+    assert artifact.profiles["test_profile"].label == "Coordinated rewrite"
+
+
+@pytest.mark.parametrize(
+    "nonfinite",
+    [float("nan"), float("inf"), float("-inf")],
+    ids=["nan", "positive-infinity", "negative-infinity"],
+)
+def test_sol_counterexample_nonstandard_json_numbers_pass_build_and_load(
+    tmp_path,
+    nonfinite,
+):
+    facts_path, profile_path = _write_artifact_inputs(tmp_path)
+    rows = _rows()
+    rows[0]["value"] = nonfinite
+    rows[0]["value_type"] = "number"
+    facts_path.write_text(
+        "".join(json.dumps(row, sort_keys=True) + "\n" for row in rows)
+    )
+    out_dir = tmp_path / "artifact"
+
+    build_consumer_artifact(
+        out_dir, facts_path=facts_path, profile_paths=[profile_path]
+    )
+    artifact = load_consumer_artifact(out_dir)
+
+    assert not math.isfinite(artifact.rows[0]["value"])
