@@ -13,6 +13,12 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Verify witnessed release chain
+        if: >-
+          github.event_name == 'push' &&
+          github.ref == 'refs/heads/codex/thesis-ledger-facts'
+        run: python3 scripts/verify_release_chain.py --full
+
       - name: Install uv
         uses: astral-sh/setup-uv@v5
 
@@ -65,8 +71,12 @@ jobs:
           tests/test_hierarchical_pipeline.py
           tests/test_supabase_client.py
           tests/test_policyengine_ledger.py
+          tests/test_release_chain.py
+          tests/test_thesis_append_adversarial.py
           scripts/check_thesis_facts_append.py
           scripts/canonical_json.py
+          scripts/cut_release_manifest.py
+          scripts/verify_release_chain.py
 
       - name: Test Arch surface
         run: >
@@ -90,6 +100,8 @@ jobs:
           tests/test_hierarchical_pipeline.py
           tests/test_supabase_client.py
           tests/test_policyengine_ledger.py
+          tests/test_release_chain.py
+          tests/test_thesis_append_adversarial.py
           -q
 
       - name: Build target input database

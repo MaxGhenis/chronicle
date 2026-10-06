@@ -3,8 +3,9 @@ name: Thesis facts append gate
 # Deterministic review for every change to the observation ledger. Resolver
 # appends arrive as pull requests targeting codex/thesis-ledger-facts; this
 # gate enforces the immutable frozen prefix, an append-only diff against the
-# PR base, per-row schema and binding requirements, and explicit supersede
-# semantics for corrections. Direct pushes get the same full-file checks.
+# PR base, the witnessed release chain, per-row schema and binding requirements,
+# and explicit supersede semantics for corrections. Direct pushes get the same
+# full-file checks.
 
 on:
   pull_request:
@@ -12,14 +13,23 @@ on:
       - codex/thesis-ledger-facts
     paths:
       - "ledger/**"
+      - "releases/**"
       - "scripts/check_thesis_facts_append.py"
       - "scripts/canonical_json.py"
+      - "scripts/cut_release_manifest.py"
+      - "scripts/verify_release_chain.py"
       - ".github/workflows/thesis-facts-append.yml"
   push:
     branches:
       - codex/thesis-ledger-facts
     paths:
       - "ledger/**"
+      - "releases/**"
+      - "scripts/check_thesis_facts_append.py"
+      - "scripts/canonical_json.py"
+      - "scripts/cut_release_manifest.py"
+      - "scripts/verify_release_chain.py"
+      - ".github/workflows/thesis-facts-append.yml"
 
 jobs:
   append-gate:
@@ -35,10 +45,11 @@ jobs:
       - name: Enforce append-only ledger invariants
         run: |
           set -euo pipefail
-          if [ -n "${{ github.base_ref }}" ]; then
-            git fetch origin "${{ github.base_ref }}" --depth=1
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            base_sha="${{ github.event.pull_request.base.sha }}"
+            git cat-file -e "${base_sha}^{commit}"
             python3 scripts/check_thesis_facts_append.py \
-              --base-ref "origin/${{ github.base_ref }}"
+              --base-ref "$base_sha"
           else
             python3 scripts/check_thesis_facts_append.py
           fi
@@ -55,4 +66,9 @@ jobs:
         run: uv sync --locked --all-extras
 
       - name: Ledger observation invariants
-        run: uv run pytest tests/test_policyengine_ledger.py -q
+        run: >
+          uv run pytest
+          tests/test_policyengine_ledger.py
+          tests/test_release_chain.py
+          tests/test_thesis_append_adversarial.py
+          -q

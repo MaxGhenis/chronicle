@@ -116,7 +116,11 @@ def _write_checker_fixture(path: Path, ledger_text: str, manifest: dict) -> None
     )
     scripts_dir = path / "scripts"
     scripts_dir.mkdir(exist_ok=True)
-    for name in ("check_thesis_facts_append.py", "canonical_json.py"):
+    for name in (
+        "check_thesis_facts_append.py",
+        "canonical_json.py",
+        "verify_release_chain.py",
+    ):
         (scripts_dir / name).write_text(
             (ROOT / "scripts" / name).read_text(encoding="utf-8"),
             encoding="utf-8",
@@ -177,14 +181,20 @@ def test_base_check_rejects_an_existing_line_rewrite():
     rewritten["value"] += 1
     candidate = [*lines[:-1], _json_line(rewritten)]
 
-    with pytest.raises(AppendError, match="rewrites existing line 128"):
+    with pytest.raises(
+        AppendError,
+        match=rf"rewrites existing line {len(lines)}",
+    ):
         check_append_only("HEAD", candidate)
 
 
 def test_base_check_rejects_truncation():
     lines = _read_lines()
 
-    with pytest.raises(AppendError, match="truncates the ledger: 128 -> 127"):
+    with pytest.raises(
+        AppendError,
+        match=rf"truncates the ledger: {len(lines)} -> {len(lines) - 1}",
+    ):
         check_append_only("HEAD", lines[:-1])
 
 

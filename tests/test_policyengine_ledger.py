@@ -146,7 +146,11 @@ def test_a_rewritten_prefix_line_is_detected(tmp_path):
     (ledger_dir / "immutable_prefix.json").write_text(PREFIX_PATH.read_text())
     scripts_dir = tmp_path / "scripts"
     scripts_dir.mkdir()
-    for name in ("check_thesis_facts_append.py", "canonical_json.py"):
+    for name in (
+        "check_thesis_facts_append.py",
+        "canonical_json.py",
+        "verify_release_chain.py",
+    ):
         (scripts_dir / name).write_text((ROOT / "scripts" / name).read_text())
 
     completed = subprocess.run(
