@@ -57,6 +57,7 @@ from chronicle.registration import (
     HASH_SOURCE_CONSUMER_PIN,
     MANIFEST_KINDS,
     ArtifactRegistrationReport,
+    HashOnlyRegistrationError,
     ManifestAccessError,
     register_hash_only_artifact,
 )
@@ -939,7 +940,7 @@ def main(argv: list[str] | None = None) -> int:
     scaffold_parser.add_argument(
         "--manifest",
         default="manifest.yaml",
-        help="Artifact manifest filename",
+        help="Reserved artifact manifest filename (manifest*.yaml or manifest*.yml)",
     )
     scaffold_parser.add_argument(
         "--replace",
@@ -984,7 +985,8 @@ def main(argv: list[str] | None = None) -> int:
         help=(
             "Manifest filename inside --out-dir. A publisher directory that "
             "feeds several source packages keeps one manifest each, and the "
-            "entry being revised lives in exactly one of them. Defaults to "
+            "entry being revised lives in exactly one of them. Names must "
+            "match manifest*.yaml or manifest*.yml. Defaults to "
             f"{DEFAULT_MANIFEST_FILENAME}."
         ),
     )
@@ -1155,7 +1157,10 @@ def main(argv: list[str] | None = None) -> int:
     registration_parser.add_argument(
         "--manifest",
         default=DEFAULT_MANIFEST_FILENAME,
-        help="Manifest filename inside --out-dir.",
+        help=(
+            "Reserved manifest filename inside --out-dir "
+            "(manifest*.yaml or manifest*.yml)."
+        ),
     )
     registration_parser.add_argument(
         "--filename",
@@ -1170,7 +1175,8 @@ def main(argv: list[str] | None = None) -> int:
     registration_parser.add_argument(
         "--size-bytes",
         type=int,
-        help="Size of the publisher bytes, when known.",
+        required=True,
+        help="Reviewed non-negative size of the publisher bytes.",
     )
     registration_parser.add_argument(
         "--vintage",
@@ -1218,7 +1224,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     registration_parser.add_argument(
         "--publisher",
-        help="Publishing body, when it differs from the source ID.",
+        required=True,
+        help="Publishing body asserting the release.",
     )
     registration_parser.add_argument(
         "--fetched-at",
@@ -1290,7 +1297,7 @@ def main(argv: list[str] | None = None) -> int:
     artifact_inventory_parser.add_argument(
         "--manifest",
         default="manifest.yaml",
-        help="Manifest filename to scan for.",
+        help="Reserved manifest*.yaml or manifest*.yml filename to scan for.",
     )
 
     raw_publish_parser = subparsers.add_parser(
@@ -1306,7 +1313,7 @@ def main(argv: list[str] | None = None) -> int:
     raw_publish_parser.add_argument(
         "--manifest",
         default="manifest.yaml",
-        help="Manifest filename to scan for.",
+        help="Reserved manifest*.yaml or manifest*.yml filename to scan for.",
     )
     raw_publish_parser.add_argument(
         "--skip-hash-only",
@@ -1756,36 +1763,40 @@ def main(argv: list[str] | None = None) -> int:
                 "path": args.pinned_from_path,
                 "commit": args.pinned_from_commit,
             }
-        registration = register_artifact_file(
-            source_id=args.source_id,
-            package_id=args.package_id,
-            year=args.year,
-            output_dir=args.out_dir,
-            manifest_filename=args.manifest,
-            filename=args.filename,
-            sha256=args.sha256,
-            licence=args.licence,
-            access=args.access,
-            vintage=args.vintage,
-            size_bytes=args.size_bytes,
-            source_page=args.source_page,
-            source_url=args.source_url,
-            access_route=args.access_route,
-            doi=args.doi,
-            study=args.study,
-            dataset=args.dataset,
-            table=args.table,
-            publisher=args.publisher,
-            fetched_at=args.fetched_at,
-            verified_at=args.verified_at,
-            hash_source=args.hash_source,
-            attested_by=args.attested_by,
-            attestation_evidence=args.attestation_evidence,
-            pinned_from=pinned_from,
-            supersede_public_object=args.supersede_public_object,
-            notes=args.notes,
-            allow_reissue=args.allow_reissue,
-        )
+        try:
+            registration = register_artifact_file(
+                source_id=args.source_id,
+                package_id=args.package_id,
+                year=args.year,
+                output_dir=args.out_dir,
+                manifest_filename=args.manifest,
+                filename=args.filename,
+                sha256=args.sha256,
+                licence=args.licence,
+                access=args.access,
+                vintage=args.vintage,
+                size_bytes=args.size_bytes,
+                source_page=args.source_page,
+                source_url=args.source_url,
+                access_route=args.access_route,
+                doi=args.doi,
+                study=args.study,
+                dataset=args.dataset,
+                table=args.table,
+                publisher=args.publisher,
+                fetched_at=args.fetched_at,
+                verified_at=args.verified_at,
+                hash_source=args.hash_source,
+                attested_by=args.attested_by,
+                attestation_evidence=args.attestation_evidence,
+                pinned_from=pinned_from,
+                supersede_public_object=args.supersede_public_object,
+                notes=args.notes,
+                allow_reissue=args.allow_reissue,
+            )
+        except (HashOnlyRegistrationError, ManifestAccessError) as error:
+            print(f"error: {error}", file=sys.stderr)
+            return 1
         print(json.dumps(registration.to_dict(), indent=2, sort_keys=True))
         return 0 if registration.valid else 1
     if args.command == "inventory-artifacts":

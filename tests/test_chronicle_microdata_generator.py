@@ -62,7 +62,13 @@ def test_selection_matches_all_19_reviewed_origin_main_pins():
     }
 
 
-def test_emit_matches_golden_and_writes_consumer_pin_attestations(tmp_path):
+def test_emit_matches_golden_and_writes_consumer_pin_attestations(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setenv(
+        "CHRONICLE_SOURCE_ARTIFACT_CACHE_DIR",
+        str(tmp_path / "empty-source-cache"),
+    )
     golden = _golden()
     expected = golden["registrations"]
     resolved = generator.resolve(

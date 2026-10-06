@@ -1755,11 +1755,30 @@ def _validate_existing_manifest_before_fetch(
                     f"{manifest_path} entry {year!r} filename={filename!r} is invalid: "
                     f"{', '.join(entry_errors)}."
                 )
-            _validated_recorded_r2(
+            recorded_r2_object = _validated_recorded_r2(
                 spec,
                 manifest_path=manifest_path,
                 year=year,
             )
+            if (
+                kind == MICRODATA_RELEASE_KIND
+                and effective_entry_access(spec, kind=kind) == ACCESS_PUBLIC
+                and recorded_r2_object is None
+            ):
+                raise SourceArtifactManifestError(
+                    f"{manifest_path} entry {year!r} is public microdata but "
+                    "records no storage.r2 object. Existing public microdata "
+                    "must already have completed its transient R2 upload."
+                )
+            identity_errors = _recorded_r2_identity_errors(
+                recorded_r2_object,
+                spec=spec,
+            )
+            if identity_errors:
+                raise SourceArtifactManifestError(
+                    f"{manifest_path} entry {year!r} has an R2 identity that "
+                    f"disagrees with its manifest: {', '.join(identity_errors)}."
+                )
 
 
 def _validate_manifest_identity_before_fetch(
@@ -1956,6 +1975,34 @@ def _validated_recorded_r2(
         sha256=segments[-2],
         filename=segments[-1],
     )
+
+
+def _recorded_r2_identity_errors(
+    recorded: RecordedR2Object | None,
+    *,
+    spec: Mapping[str, Any],
+) -> tuple[str, ...]:
+    """Cross-check a valid locator against its manifest entry identity."""
+    if recorded is None:
+        return ()
+    errors: list[str] = []
+    declared_sha256 = spec.get("sha256")
+    try:
+        declared_filename = canonical_artifact_filename(spec.get("filename"))
+    except ManifestAccessError:
+        declared_filename = None
+    if recorded.sha256 != declared_sha256:
+        errors.append(
+            "recorded_r2_sha256_identity_mismatch:"
+            f"recorded={recorded.sha256}:declared={declared_sha256}"
+        )
+    if recorded.filename != declared_filename:
+        errors.append(
+            "recorded_r2_filename_identity_mismatch:"
+            f"recorded={recorded.filename}:declared={declared_filename}"
+        )
+
+    return tuple(errors)
 
 
 def _recorded_identity(
@@ -2488,11 +2535,12 @@ def _assert_microdata_package_is_manifest_only(
     """Refuse every payload file beside a package containing microdata."""
     if not manifest_path.parent.exists():
         return
-    allowed = {candidate.resolve() for candidate in allowed_manifests}
+    allowed = {candidate.absolute() for candidate in allowed_manifests}
     payloads = sorted(
         candidate
         for candidate in manifest_path.parent.rglob("*")
-        if candidate.is_file() and candidate.resolve() not in allowed
+        if (candidate.is_file() or candidate.is_symlink())
+        and candidate.absolute() not in allowed
     )
     if payloads:
         relative = ", ".join(

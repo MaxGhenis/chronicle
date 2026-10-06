@@ -442,6 +442,36 @@ def test_conflicting_public_and_gated_exact_basenames_are_a_collision():
     )
 
 
+def test_manifest_filename_collisions_compare_every_prior_reissue():
+    manifest = {
+        "kind": "microdata_release",
+        "files": {
+            2024: [
+                {
+                    "filename": "adult.tab",
+                    "access": "licensed",
+                    "sha256": "a" * 64,
+                },
+                {
+                    "filename": "adult.tab",
+                    "access": "licensed",
+                    "sha256": "b" * 64,
+                },
+                {
+                    "filename": "adult.tab",
+                    "access": "licensed",
+                    "sha256": "b" * 64,
+                },
+            ]
+        },
+    }
+
+    assert any(
+        error.startswith("filename_identity_collision:adult.tab")
+        for error in manifest_filename_errors(manifest)
+    )
+
+
 def test_numeric_and_string_year_keys_resolve_to_the_existing_key():
     assert resolve_year_key({"2023": {}}, 2023) == "2023"
     assert resolve_year_key({2023: {}}, "2023") == 2023
@@ -1666,6 +1696,52 @@ def test_cli_register_artifact_round_trips(tmp_path, capsys):
     assert not (output_dir / "put2223uk.tab").exists()
 
 
+def test_cli_register_artifact_reports_a_clean_refusal(tmp_path, capsys):
+    exit_code = harness_main(
+        [
+            "register-artifact",
+            "--source-id",
+            "dwp",
+            "--package-id",
+            "dwp-frs-2024-25",
+            "--year",
+            "2024",
+            "--out-dir",
+            str(tmp_path / "pkg"),
+            "--filename",
+            "adult.tab",
+            "--sha256",
+            "NOT-A-SHA256",
+            "--size-bytes",
+            "1",
+            "--vintage",
+            "2024_25",
+            "--licence",
+            "UK Data Service End User Licence",
+            "--access",
+            "licensed",
+            "--publisher",
+            "Department for Work and Pensions",
+            "--doi",
+            "10.5255/UKDA-SN-9563-1",
+            "--verified-at",
+            "2026-09-03",
+            "--hash-source",
+            "consumer_attested",
+            "--attested-by",
+            "fixture-consumer",
+            "--attestation-evidence",
+            "https://example.test/hash-attestation",
+        ]
+    )
+    captured = capsys.readouterr()
+
+    assert exit_code == 1
+    assert captured.out == ""
+    assert "lowercase 64-character SHA-256" in captured.err
+    assert not (tmp_path / "pkg").exists()
+
+
 def test_cli_register_artifact_updates_the_named_manifest(tmp_path, capsys):
     output_dir = tmp_path / "pkg"
     output_dir.mkdir()
@@ -2439,6 +2515,48 @@ def test_register_refuses_cached_bytes_during_public_to_gated_reclassification(
     assert cached_artifact.exists()
 
 
+def test_fetch_refuses_existing_public_microdata_without_r2_before_io(
+    tmp_path, monkeypatch
+):
+    package = tmp_path / "pkg"
+    manifest_path = _write_public_microdata_manifest(
+        package,
+        sha256=FIXTURE_SHA,
+        size_bytes=1,
+        hash_source="consumer_pin",
+    )
+    before = manifest_path.read_bytes()
+    monkeypatch.setattr(
+        "chronicle.artifacts._read_artifact",
+        lambda _url: (_ for _ in ()).throw(AssertionError("must not read bytes")),
+    )
+
+    with pytest.raises(SourceArtifactManifestError, match="records no storage.r2"):
+        fetch_source_artifact(
+            "https://example.test/releases/adult.tab",
+            source_id="census_acs",
+            package_id="census-acs-pums-2024",
+            year=2024,
+            output_dir=package,
+            filename="adult.tab",
+            kind="microdata_release",
+            access="public",
+            licence="US-GOVERNMENT-WORK-17-USC-105",
+            licence_evidence=_public_licence_evidence(
+                FIXTURE_SHA,
+                issuer="U.S. Census Bureau",
+            ),
+            expected_sha256=FIXTURE_SHA,
+            expected_size_bytes=1,
+            publisher="U.S. Census Bureau",
+            vintage="2024",
+            upload_r2=True,
+            staging_dir=tmp_path / "staging",
+        )
+
+    assert manifest_path.read_bytes() == before
+
+
 @pytest.mark.parametrize(
     ("hash_source", "consumer_only_field"),
     [
@@ -2460,6 +2578,7 @@ def test_public_fetch_removes_stale_consumer_attestation_fields(
         sha256=checksum,
         size_bytes=len(content),
         hash_source=hash_source,
+        storage=_recorded_r2_storage(checksum),
     )
     source = tmp_path / "publisher/adult.tab"
     source.parent.mkdir()
@@ -2642,6 +2761,90 @@ def test_register_requires_a_publisher_and_sane_size(tmp_path, overrides, messag
         _register(tmp_path / "pkg", **overrides)
 
     assert not (tmp_path / "pkg").exists()
+
+
+def test_microdata_size_rejects_boolean_values():
+    entry = {
+        "filename": "adult.tab",
+        "access": "licensed",
+        "licence": "UK Data Service End User Licence",
+        "vintage": "2024",
+        "sha256": FIXTURE_SHA,
+        "size_bytes": True,
+        "doi": "10.5255/UKDA-SN-9563-1",
+        "verified_at": "2026-09-03",
+        "hash_source": "consumer_attested",
+        "attested_by": "fixture-consumer",
+        "attestation_evidence": "https://example.test/hash-attestation",
+    }
+
+    assert "invalid_size_bytes" in validate_file_entry(
+        entry,
+        kind="microdata_release",
+        manifest={
+            "source_id": "dwp",
+            "package_id": "dwp-frs-2024-25",
+            "publisher": "Department for Work and Pensions",
+        },
+        local_file_exists=False,
+    )
+
+
+def test_register_refuses_to_preserve_an_invalid_existing_registration(tmp_path):
+    package = tmp_path / "pkg"
+    _register(package)
+    manifest_path = package / "manifest.yaml"
+    payload = yaml.safe_load(manifest_path.read_text())
+    payload["files"][2023][0].pop("hash_source")
+    manifest_path.write_text(yaml.safe_dump(payload, sort_keys=False))
+    before = manifest_path.read_bytes()
+
+    with pytest.raises(HashOnlyRegistrationError, match="missing_hash_source"):
+        _register(package, filename="child.tab", sha256="c" * 64)
+
+    assert manifest_path.read_bytes() == before
+
+
+@pytest.mark.parametrize("malformed_year_spec", [None, "adult.tab"])
+def test_register_refuses_malformed_existing_year_shape_without_rewriting(
+    tmp_path, malformed_year_spec
+):
+    package = tmp_path / "pkg"
+    package.mkdir()
+    manifest_path = package / "manifest.yaml"
+    manifest_path.write_text(
+        yaml.safe_dump(
+            {
+                "source_id": "dwp",
+                "package_id": "dwp-frs-2023-24",
+                "kind": "microdata_release",
+                "publisher": "Department for Work and Pensions",
+                "files": {2023: malformed_year_spec},
+            }
+        )
+    )
+    before = manifest_path.read_bytes()
+
+    with pytest.raises(HashOnlyRegistrationError, match="entry structure"):
+        _register(package)
+
+    assert manifest_path.read_bytes() == before
+
+
+def test_manifest_only_guard_rejects_a_nonmanifest_symlink(tmp_path):
+    package = tmp_path / "pkg"
+    _register(package)
+    alias = package / "metadata-alias.yaml"
+    alias.symlink_to("manifest.yaml")
+    before = (package / "manifest.yaml").read_bytes()
+
+    inventory = inventory_source_artifacts(package)
+    assert not inventory.valid
+    assert alias.name in repr(inventory.to_dict())
+    with pytest.raises(HashOnlyRegistrationError, match=alias.name):
+        _register(package, filename="child.tab", sha256="c" * 64)
+
+    assert (package / "manifest.yaml").read_bytes() == before
 
 
 @pytest.mark.parametrize(
@@ -2883,6 +3086,7 @@ def test_fetch_refuses_a_prospective_cross_year_public_microdata_collision_befor
         package,
         sha256="b" * 64,
         size_bytes=1,
+        storage=_recorded_r2_storage("b" * 64),
     )
     before = manifest_path.read_bytes()
     monkeypatch.setattr(
@@ -2931,18 +3135,27 @@ def test_every_tracked_microdata_package_is_manifest_only():
         for name in completed.stdout.decode("utf-8").split("\0")
         if name
     )
-    microdata_packages = {
-        path.parent
-        for path in tracked
-        if path.name.startswith("manifest")
-        and path.suffix in {".yaml", ".yml"}
-        and yaml.safe_load(path.read_text()).get("kind") == "microdata_release"
-    }
+    microdata_packages: set[Path] = set()
+    manifest_symlinks: list[str] = []
+    for path in tracked:
+        if not path.name.startswith("manifest") or path.suffix not in {
+            ".yaml",
+            ".yml",
+        }:
+            continue
+        if path.is_symlink():
+            manifest_symlinks.append(str(path.relative_to(REPO_ROOT)))
+            continue
+        if yaml.safe_load(path.read_text()).get("kind") == "microdata_release":
+            microdata_packages.add(path.parent)
 
-    unexpected: list[str] = []
+    unexpected = list(manifest_symlinks)
     for package in sorted(microdata_packages):
         for path in tracked:
             if not path.is_relative_to(package):
+                continue
+            if path.parent != package or path.is_symlink():
+                unexpected.append(str(path.relative_to(REPO_ROOT)))
                 continue
             try:
                 canonical_manifest_filename(path.name)

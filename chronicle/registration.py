@@ -367,7 +367,7 @@ def manifest_filename_errors(manifest: Mapping[str, Any] | None) -> tuple[str, .
 
     errors: list[str] = []
     kind, _kind_error = safe_manifest_kind(manifest)
-    seen: dict[str, tuple[str, Any, Mapping[str, Any]]] = {}
+    seen: dict[str, list[tuple[str, Any, Mapping[str, Any]]]] = {}
     for year, year_spec in files.items():
         entries = year_spec if isinstance(year_spec, list) else (year_spec,)
         for spec in entries:
@@ -384,14 +384,15 @@ def manifest_filename_errors(manifest: Mapping[str, Any] | None) -> tuple[str, .
                 if not text:
                     continue
                 canonical = text.replace("\\", "/").rsplit("/", 1)[-1]
-            previous = seen.get(canonical)
             raw_text = str(raw)
-            if previous is not None and previous[0] != raw_text:
-                errors.append(
-                    "filename_alias_collision:"
-                    f"{canonical}:{previous[1]}:{previous[0]}:{year}:{raw_text}"
-                )
-            elif previous is not None:
+            previous_entries = seen.setdefault(canonical, [])
+            for previous in previous_entries:
+                if previous[0] != raw_text:
+                    errors.append(
+                        "filename_alias_collision:"
+                        f"{canonical}:{previous[1]}:{previous[0]}:{year}:{raw_text}"
+                    )
+                    continue
                 previous_spec = previous[2]
                 previous_sha = _text(previous_spec.get("sha256"))
                 current_sha = _text(spec.get("sha256"))
@@ -417,8 +418,7 @@ def manifest_filename_errors(manifest: Mapping[str, Any] | None) -> tuple[str, .
                         f"{canonical}:{previous[1]}:{previous_sha}:"
                         f"{year}:{current_sha}"
                     )
-            else:
-                seen.setdefault(canonical, (raw_text, year, spec))
+            previous_entries.append((raw_text, year, spec))
     return tuple(_dedupe(errors))
 
 
@@ -582,7 +582,7 @@ def validate_file_entry(
     if isinstance(spec, ListSpecRejected):
         return ("list_file_spec_requires_microdata_release_kind",)
     if not isinstance(spec, Mapping):
-        return ()
+        return ("file_spec_must_be_mapping",)
 
     errors: list[str] = []
     if "filename" in spec:
@@ -611,7 +611,11 @@ def validate_file_entry(
             errors.append("malformed_sha256")
         if spec.get("size_bytes") is None:
             errors.append("missing_size_bytes")
-        elif not isinstance(spec.get("size_bytes"), int) or spec["size_bytes"] < 0:
+        elif (
+            not isinstance(spec.get("size_bytes"), int)
+            or isinstance(spec.get("size_bytes"), bool)
+            or spec["size_bytes"] < 0
+        ):
             errors.append("invalid_size_bytes")
         if not _text(spec.get("vintage")):
             errors.append("missing_vintage")
@@ -653,6 +657,7 @@ def validate_file_entry(
                 local_file_exists=local_file_exists,
             )
         )
+    errors.extend(recorded_r2_shape_errors(spec))
     return tuple(_dedupe(errors))
 
 
@@ -773,6 +778,90 @@ def has_recorded_r2(spec: Any) -> bool:
         return False
     storage = spec.get("storage")
     return isinstance(storage, Mapping) and "r2" in storage
+
+
+def recorded_r2_shape_errors(
+    spec: Any,
+) -> tuple[str, ...]:
+    """Return errors when a recorded R2 block does not name one identity."""
+    if not isinstance(spec, Mapping) or "storage" not in spec:
+        return ()
+    storage = spec.get("storage")
+    if not isinstance(storage, Mapping):
+        return ("storage_must_be_mapping",)
+    if "r2" not in storage:
+        return ()
+    block = storage.get("r2")
+    if not isinstance(block, Mapping):
+        return ("storage_r2_must_be_mapping",)
+
+    errors: list[str] = []
+    supplied: dict[str, str] = {}
+    for field in ("provider", "bucket", "key", "uri"):
+        value = block.get(field)
+        if value is None:
+            continue
+        text = _text(value) if isinstance(value, str) else None
+        if text is None:
+            errors.append(f"storage_r2_invalid_{field}")
+        else:
+            supplied[field] = text
+
+    provider = supplied.get("provider")
+    bucket = supplied.get("bucket")
+    key = supplied.get("key")
+    uri = supplied.get("uri")
+    if uri is not None:
+        parsed = urlparse(uri)
+        uri_key = parsed.path.removeprefix("/")
+        if (
+            not parsed.scheme
+            or not parsed.netloc
+            or not uri_key
+            or parsed.params
+            or parsed.query
+            or parsed.fragment
+            or parsed.username is not None
+            or parsed.password is not None
+        ):
+            errors.append("storage_r2_invalid_uri")
+        else:
+            for field, value, uri_value in (
+                ("provider", provider, parsed.scheme),
+                ("bucket", bucket, parsed.netloc),
+                ("key", key, uri_key),
+            ):
+                if value is not None and value != uri_value:
+                    errors.append(f"storage_r2_{field}_contradicts_uri")
+            provider = provider or parsed.scheme
+            bucket = bucket or parsed.netloc
+            key = key or uri_key
+
+    for field, value in (("provider", provider), ("bucket", bucket), ("key", key)):
+        if value is None:
+            errors.append(f"storage_r2_missing_{field}")
+    if provider is not None and provider != "r2":
+        errors.append("storage_r2_provider_must_be_r2")
+
+    if key is not None:
+        segments = key.split("/")
+        if (
+            len(segments) < 2
+            or not all(segments)
+            or not _SHA256_RE.fullmatch(segments[-2])
+        ):
+            errors.append("storage_r2_key_not_content_addressed")
+        else:
+            entry_sha256 = _text(spec.get("sha256"))
+            if entry_sha256 is not None and segments[-2] != entry_sha256:
+                errors.append("storage_r2_sha256_identity_mismatch")
+            try:
+                entry_filename = canonical_artifact_filename(spec.get("filename"))
+            except ManifestAccessError:
+                entry_filename = None
+            if entry_filename is not None and segments[-1] != entry_filename:
+                errors.append("storage_r2_filename_identity_mismatch")
+    return tuple(_dedupe(errors))
 
 
 @dataclass(frozen=True)
@@ -969,6 +1058,15 @@ def register_hash_only_artifact(
             f"{manifest_path} has unsafe artifact filenames: "
             f"{', '.join(filename_errors)}."
         )
+    structure_errors = _manifest_entry_structure_errors(
+        payload,
+        kind=MICRODATA_RELEASE_KIND,
+    )
+    if structure_errors:
+        raise HashOnlyRegistrationError(
+            f"{manifest_path} has invalid entry structure: "
+            f"{', '.join(structure_errors)}."
+        )
     local_path = output / artifact_name
     if local_path.exists():
         raise HashOnlyRegistrationError(
@@ -1089,6 +1187,7 @@ def register_hash_only_artifact(
         replacement = dict(existing)
         replacement.pop("attestation_evidence", None)
         replacement.pop("pinned_from", None)
+        replacement.pop("licence_evidence", None)
         replacement.update(entry)
         entries[target_index] = replacement
     if not replaced:
@@ -1114,6 +1213,17 @@ def register_hash_only_artifact(
         raise HashOnlyRegistrationError(
             f"{manifest_path} would contain unsafe artifact filenames: "
             f"{', '.join(final_filename_errors)}."
+        )
+    prospective_errors = _strict_manifest_entry_errors(
+        payload,
+        manifest_path=manifest_path,
+        kind=MICRODATA_RELEASE_KIND,
+        require_public_microdata_r2=True,
+    )
+    if prospective_errors:
+        raise HashOnlyRegistrationError(
+            f"{manifest_path} would remain invalid after registration: "
+            f"{', '.join(prospective_errors)}."
         )
     output.mkdir(parents=True, exist_ok=True)
     manifest_path.write_text(
@@ -1190,6 +1300,100 @@ def _existing_entries(files: Any, year: Any) -> list[Any]:
     return [spec]
 
 
+def _strict_manifest_entry_errors(
+    payload: Mapping[str, Any],
+    *,
+    manifest_path: Path,
+    kind: str,
+    require_public_microdata_r2: bool,
+) -> tuple[str, ...]:
+    """Validate every entry before a registration can rewrite its manifest."""
+    files = payload.get("files")
+    if not isinstance(files, Mapping):
+        return (f"files_must_be_mapping:{type(files).__name__}",)
+    errors: list[str] = []
+    try:
+        for year in files:
+            resolve_year_key(files, year)
+    except ManifestAccessError as exc:
+        errors.append(str(exc))
+
+    for entry_year, year_spec in files.items():
+        for spec in iter_file_specs(year_spec, kind=kind):
+            if isinstance(spec, ListSpecRejected):
+                errors.append(
+                    f"entry_{entry_year!r}:list_requires_microdata_release_kind"
+                )
+                continue
+            if not isinstance(spec, Mapping):
+                errors.append(
+                    f"entry_{entry_year!r}:file_spec_must_be_mapping:"
+                    f"{type(spec).__name__}"
+                )
+                continue
+            try:
+                filename = canonical_artifact_filename(spec.get("filename"))
+            except ManifestAccessError:
+                filename = None
+            local_file_exists = bool(filename) and (
+                (manifest_path.parent / filename).exists()
+                or (manifest_path.parent / filename).is_symlink()
+            )
+            entry_errors = list(
+                validate_file_entry(
+                    spec,
+                    kind=kind,
+                    manifest=payload,
+                    local_file_exists=local_file_exists,
+                )
+            )
+            entry_errors.extend(
+                recorded_r2_shape_errors(
+                    spec,
+                )
+            )
+            if (
+                require_public_microdata_r2
+                and kind == MICRODATA_RELEASE_KIND
+                and effective_entry_access(spec, kind=kind) == ACCESS_PUBLIC
+                and not has_recorded_r2(spec)
+            ):
+                entry_errors.append("public_microdata_missing_r2_location")
+            errors.extend(
+                f"entry_{entry_year!r}:{error}" for error in _dedupe(entry_errors)
+            )
+    return tuple(_dedupe(errors))
+
+
+def _manifest_entry_structure_errors(
+    payload: Mapping[str, Any],
+    *,
+    kind: str,
+) -> tuple[str, ...]:
+    """Return shape errors that cannot be repaired by replacing one identity."""
+    if "files" not in payload:
+        return ()
+    files = payload.get("files")
+    if not isinstance(files, Mapping):
+        return (f"files_must_be_mapping:{type(files).__name__}",)
+    errors: list[str] = []
+    try:
+        for year in files:
+            resolve_year_key(files, year)
+    except ManifestAccessError as exc:
+        errors.append(str(exc))
+    for year, year_spec in files.items():
+        for spec in iter_file_specs(year_spec, kind=kind):
+            if isinstance(spec, ListSpecRejected):
+                errors.append(f"entry_{year!r}:list_requires_microdata_release_kind")
+            elif not isinstance(spec, Mapping):
+                errors.append(
+                    f"entry_{year!r}:file_spec_must_be_mapping:"
+                    f"{type(spec).__name__}"
+                )
+    return tuple(_dedupe(errors))
+
+
 def _load_manifest(manifest_path: Path) -> dict[str, Any]:
     """Load a manifest mapping, refusing malformed or non-mapping YAML."""
     if manifest_path.is_symlink():
@@ -1233,7 +1437,7 @@ def _registration_sibling_manifests(
         sibling = _load_manifest(candidate)
         raw = candidate.read_bytes()
         try:
-            strict_manifest_kind(
+            kind = strict_manifest_kind(
                 sibling,
                 manifest_locator=candidate,
                 manifest_bytes=raw,
@@ -1246,6 +1450,16 @@ def _registration_sibling_manifests(
                 f"{candidate} has unsafe artifact filenames: "
                 f"{', '.join(filename_errors)}."
             )
+        entry_errors = _strict_manifest_entry_errors(
+            sibling,
+            manifest_path=candidate,
+            kind=kind,
+            require_public_microdata_r2=True,
+        )
+        if entry_errors:
+            raise HashOnlyRegistrationError(
+                f"{candidate} has invalid entries: {', '.join(entry_errors)}."
+            )
         siblings.append((candidate, sibling))
     return tuple(siblings)
 
@@ -1257,13 +1471,14 @@ def _assert_hash_only_package_boundary(
     filename: str,
 ) -> None:
     """Keep a microdata package manifest-only and honor sibling identities."""
-    allowed = {manifest_path.resolve()}
-    allowed.update(path.resolve() for path, _ in sibling_manifests)
+    allowed = {manifest_path.absolute()}
+    allowed.update(path.absolute() for path, _ in sibling_manifests)
     payloads = (
         sorted(
             candidate
             for candidate in manifest_path.parent.rglob("*")
-            if candidate.is_file() and candidate.resolve() not in allowed
+            if (candidate.is_file() or candidate.is_symlink())
+            and candidate.absolute() not in allowed
         )
         if manifest_path.parent.exists()
         else []
@@ -1279,7 +1494,11 @@ def _assert_hash_only_package_boundary(
 
     for sibling_path, sibling in sibling_manifests:
         files = sibling.get("files")
-        assert isinstance(files, dict)
+        if not isinstance(files, Mapping):
+            raise HashOnlyRegistrationError(
+                f"{sibling_path} files must be a mapping, not "
+                f"{type(files).__name__}."
+            )
         for sibling_year, year_spec in files.items():
             for spec in year_spec if isinstance(year_spec, list) else (year_spec,):
                 if not isinstance(spec, Mapping):

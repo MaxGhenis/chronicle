@@ -69,6 +69,7 @@ uv run chronicle register-artifact \
   --package-id dwp-frs-2024-25 \
   --year 2024 \
   --out-dir db/data/dwp/frs_2024_25 \
+  --publisher "Department for Work and Pensions" \
   --filename adult.tab \
   --sha256 4eaea0809a7ccca0fddeb98e358771e4a6e5ebb81b21c4fac4070fc9d227658d \
   --size-bytes 34885825 \

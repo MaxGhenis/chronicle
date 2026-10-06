@@ -34,6 +34,7 @@ from chronicle.core import (
 from chronicle.env import env_flag, env_value
 from chronicle.registration import (
     ACCESS_PUBLIC,
+    ListSpecRejected,
     ManifestAccessError,
     MicrodataReleaseNotParseableError,
     PUBLISHER_TABLE_KIND,
@@ -937,11 +938,29 @@ class SourceArtifactSpec:
         for manifest_name, payload, kind in manifests:
             files_by_year = payload.get("files")
             if not isinstance(files_by_year, dict):
-                continue
+                raise ManifestAccessError(
+                    f"Artifact manifest {self.resource_directory}/{manifest_name} "
+                    f"files must be a mapping, not {type(files_by_year).__name__}."
+                )
             for year, year_spec in files_by_year.items():
                 for spec in iter_file_specs(year_spec, kind=kind):
-                    if not isinstance(spec, dict) or "filename" not in spec:
-                        continue
+                    if isinstance(spec, ListSpecRejected):
+                        raise ManifestAccessError(
+                            f"Artifact manifest {self.resource_directory}/"
+                            f"{manifest_name} entry {year!r} is a list, but "
+                            "kind='publisher_table' requires one mapping."
+                        )
+                    if not isinstance(spec, dict):
+                        raise ManifestAccessError(
+                            f"Artifact manifest {self.resource_directory}/"
+                            f"{manifest_name} entry {year!r} must be a mapping, "
+                            f"not {type(spec).__name__}."
+                        )
+                    if "filename" not in spec:
+                        raise ManifestAccessError(
+                            f"Artifact manifest {self.resource_directory}/"
+                            f"{manifest_name} entry {year!r} has no filename."
+                        )
                     filename = canonical_artifact_filename(spec.get("filename"))
                     sha256 = spec.get("sha256")
                     sha256 = str(sha256).strip() if sha256 is not None else None
@@ -1489,6 +1508,7 @@ def scaffold_source_package(
     replace_existing: bool = False,
 ) -> SourcePackageScaffoldReport:
     """Write a starter declarative source package."""
+    manifest_name = canonical_manifest_filename(manifest)
     package_path = Path(output_dir)
     source_package_path = package_path / SOURCE_PACKAGE_FILENAME
     replaced = source_package_path.exists()
@@ -1502,7 +1522,7 @@ def scaffold_source_package(
             source_table=source_table or "TODO source table title",
             resource_package=resource_package,
             resource_directory=(resource_directory or f"data/{source_id}/TODO_table"),
-            manifest=manifest,
+            manifest=manifest_name,
         ),
         encoding="utf-8",
     )

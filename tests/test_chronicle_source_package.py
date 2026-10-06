@@ -27,6 +27,7 @@ from chronicle.source_package import (
     _render_string,
     _source_artifact_cache_path,
     load_source_package,
+    scaffold_source_package,
     validate_source_package,
 )
 from chronicle.sources.cells import build_source_cell_key, validate_source_cells
@@ -812,6 +813,85 @@ def test_source_package_refuses_gated_sibling_claim_before_reading_bytes(
 
     with pytest.raises(ManifestAccessError, match="conflicting package basename"):
         spec._artifact_content(2024)
+
+
+def test_source_package_refuses_list_shaped_publisher_sibling_before_bytes(
+    tmp_path, monkeypatch
+):
+    package = tmp_path / "fixture_package"
+    package.mkdir()
+    for name, files in (
+        (
+            "manifest.yaml",
+            {
+                2024: {
+                    "filename": "shared.csv",
+                    "source_url": "https://example.test/public/shared.csv",
+                    "access": "public",
+                    "sha256": "a" * 64,
+                }
+            },
+        ),
+        (
+            "manifest-licensed.yaml",
+            {
+                2024: [
+                    {
+                        "filename": "shared.csv",
+                        "source_url": "https://example.test/licensed/shared.csv",
+                        "access": "licensed",
+                        "sha256": "b" * 64,
+                    }
+                ]
+            },
+        ),
+    ):
+        (package / name).write_text(
+            yaml.safe_dump(
+                {
+                    "source_id": "publisher",
+                    "package_id": "release",
+                    "kind": "publisher_table",
+                    "files": files,
+                }
+            )
+        )
+    monkeypatch.setattr("chronicle.source_package.files", lambda _package: tmp_path)
+    monkeypatch.setattr(
+        "chronicle.source_package._read_source_artifact_content",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("a malformed sibling must refuse before byte reads")
+        ),
+    )
+    spec = SourceArtifactSpec(
+        source_name="publisher",
+        source_table="Public table",
+        resource_package="fixture_resources",
+        resource_directory="fixture_package",
+        manifest="manifest.yaml",
+        vintage="2024",
+        extracted_at="2026-09-03",
+        extraction_method="fixture",
+        parser="delimited_text_full_rows",
+        artifact_year=2024,
+    )
+
+    with pytest.raises(ManifestAccessError, match="requires one mapping"):
+        spec._artifact_content(2024)
+
+
+def test_scaffold_refuses_a_nonreserved_manifest_before_creating_files(tmp_path):
+    output = tmp_path / "source-package"
+
+    with pytest.raises(ManifestAccessError, match=r"manifest\*\.yaml"):
+        scaffold_source_package(
+            output,
+            source_id="publisher",
+            package_id="release",
+            manifest="secret.yaml",
+        )
+
+    assert not output.exists()
 
 
 def test_source_package_path_builds_valid_soi_table_1_4_facts():

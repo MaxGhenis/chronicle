@@ -1472,6 +1472,36 @@ def test_a_malformed_storage_block_is_not_treated_as_absent(tmp_path):
     assert manifest_path.read_bytes() == recorded
 
 
+def test_fetch_refuses_r2_entry_identity_mismatch_before_reading_publisher(
+    tmp_path, monkeypatch
+):
+    package, source, _ = _recorded_package(tmp_path)
+
+    def retarget_consistently(storage):
+        other_sha = _other_sha256()
+        storage["r2"]["key"] = storage["r2"]["key"].replace(
+            storage["r2"]["key"].split("/")[-2],
+            other_sha,
+        )
+        storage["r2"]["uri"] = (
+            f"r2://{storage['r2']['bucket']}/{storage['r2']['key']}"
+        )
+
+    manifest_path = _rewrite_recorded_r2(package, retarget_consistently)
+    recorded = manifest_path.read_bytes()
+    monkeypatch.setattr(
+        "chronicle.artifacts._read_artifact",
+        lambda _url: (_ for _ in ()).throw(
+            AssertionError("an inconsistent manifest must refuse before I/O")
+        ),
+    )
+
+    with pytest.raises(SourceArtifactManifestError, match="R2 identity.*disagrees"):
+        _fetch_local(package, source, upload_r2=False)
+
+    assert manifest_path.read_bytes() == recorded
+
+
 def test_publish_raw_refuses_a_contradictory_recorded_block(tmp_path):
     """Nothing is uploaded under a block that does not name one object."""
     package, _, _ = _recorded_package(tmp_path)
